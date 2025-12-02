@@ -74,114 +74,103 @@ class StravaApiService {
     return `${STRAVA_CONFIG.AUTH_URL}?${params.toString()}`;
   }
 
-  // Exchange authorization code for tokens
+  // Exchange authorization code for tokens using Edge Function
   async exchangeCodeForTokens(code: string): Promise<AuthTokens> {
-    const clientId = import.meta.env.VITE_STRAVA_CLIENT_ID;
-    const clientSecret = import.meta.env.VITE_STRAVA_CLIENT_SECRET;
-    
-    // Security warning for production
-    if (import.meta.env.PROD) {
-      console.warn('🚨 SECURITY WARNING: Strava client secret is exposed in frontend! Move token exchange to backend before production deployment.');
-    }
-    
-    console.log('Token exchange attempt:', {
-      clientId: clientId ? 'present' : 'missing',
-      clientSecret: clientSecret ? 'present' : 'missing',
+    const redirectUri = import.meta.env.VITE_STRAVA_REDIRECT_URI;
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+    console.log('Token exchange attempt via Edge Function:', {
       code: code ? 'present' : 'missing',
       codeLength: code ? code.length : 0,
-      codePreview: code ? code.substring(0, 10) + '...' : 'none'
+      redirectUri: redirectUri ? 'present' : 'missing'
     });
-    
-    if (!clientId || clientId === 'your_strava_client_id') {
-      throw new Error('VITE_STRAVA_CLIENT_ID not configured in .env file');
-    }
-    
-    if (!clientSecret || clientSecret === 'your_strava_client_secret') {
-      throw new Error('VITE_STRAVA_CLIENT_SECRET not configured in .env file');
-    }
-    
+
     if (!code || code.trim().length === 0) {
       throw new Error('Authorization code is empty or invalid');
     }
 
-    const requestData = {
-      client_id: clientId,
-      client_secret: clientSecret,
+    if (!redirectUri) {
+      throw new Error('Redirect URI not configured');
+    }
+
+    if (!supabaseUrl) {
+      throw new Error('Supabase URL not configured');
+    }
+
+    const edgeFunctionUrl = `${supabaseUrl}/functions/v1/strava-oauth-exchange`;
+    const params = new URLSearchParams({
       code: code.trim(),
-      grant_type: 'authorization_code',
-    };
-
-    console.log('Sending token exchange request:', {
-      url: STRAVA_CONFIG.TOKEN_URL,
-      data: {
-        ...requestData,
-        client_secret: '[HIDDEN]'
-      }
+      redirect_uri: redirectUri,
     });
-    
+
+    console.log('Calling Edge Function:', edgeFunctionUrl);
+
     try {
-      const response = await axios.post(STRAVA_CONFIG.TOKEN_URL, requestData);
+      const response = await fetch(`${edgeFunctionUrl}?${params.toString()}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
 
-      console.log('Token exchange response:', response.status, response.data);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: response.statusText }));
+        throw new Error(`Token exchange failed: ${errorData.error || response.statusText}`);
+      }
 
-      if (!response.data.access_token) {
+      const data = await response.json();
+      console.log('Token exchange successful via Edge Function');
+
+      if (!data.access_token) {
         throw new Error('No access token received from Strava');
       }
 
-      const tokens: AuthTokens = response.data;
+      const tokens: AuthTokens = data;
       this.setTokens(tokens);
       console.log('Successfully obtained Strava tokens');
       return tokens;
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        console.error('Strava API error details:', {
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-          data: error.response?.data,
-          message: error.message,
-          headers: error.response?.headers,
-          config: {
-            url: error.config?.url,
-            method: error.config?.method,
-            data: error.config?.data ? '[DATA PRESENT]' : '[NO DATA]'
-          }
-        });
-        
-        // Handle specific Strava API error responses
-        if (error.response?.status === 400) {
-          const errorData = error.response.data;
-          if (errorData?.errors) {
-            const errorDetails = errorData.errors.map((err: any) => 
-              `${err.field}: ${err.code} - ${err.resource}`
-            ).join(', ');
-            throw new Error(`Token exchange failed (400): ${errorDetails}`);
-          } else if (errorData?.message) {
-            throw new Error(`Token exchange failed (400): ${errorData.message}`);
-          } else {
-            throw new Error(`Token exchange failed (400): Invalid request. Check your client credentials and authorization code.`);
-          }
-        }
-        
-        const errorMessage = error.response?.data?.message || 
-                           error.response?.data?.error || 
-                           error.response?.statusText || 
-                           error.message;
-        throw new Error(`Token exchange failed (${error.response?.status}): ${errorMessage}`);
-      }
+      console.error('Edge Function token exchange error:', error);
       throw error;
     }
   }
 
-  // Refresh access token
+  // Refresh access token using Edge Function
   async refreshTokens(refreshToken: string): Promise<AuthTokens> {
-    const response = await axios.post(STRAVA_CONFIG.TOKEN_URL, {
-      client_id: import.meta.env.VITE_STRAVA_CLIENT_ID,
-      client_secret: import.meta.env.VITE_STRAVA_CLIENT_SECRET,
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token',
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Supabase configuration not found');
+    }
+
+    const edgeFunctionUrl = `${supabaseUrl}/functions/v1/strava-refresh-token`;
+
+    const response = await fetch(edgeFunctionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+      },
+      body: JSON.stringify({
+        refresh_token: refreshToken,
+      }),
     });
 
-    const tokens: AuthTokens = response.data;
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error(`Token refresh failed: ${errorData.error || response.statusText}`);
+    }
+
+    const data = await response.json();
+    const tokens: AuthTokens = {
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      expires_at: data.expires_at,
+      expires_in: data.expires_in,
+      token_type: data.token_type,
+    };
+
     this.setTokens(tokens);
     return tokens;
   }
