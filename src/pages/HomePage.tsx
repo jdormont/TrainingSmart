@@ -5,20 +5,20 @@ import { Activity, Brain, Calendar, Shield } from 'lucide-react';
 import { Button } from '../components/common/Button';
 import { ContentFeed } from '../components/home/ContentFeed';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
+import { useAuth } from '../contexts/AuthContext';
 import { stravaApi } from '../services/stravaApi';
 import type { StravaActivity } from '../types';
 import { ROUTES } from '../utils/constants';
 
 export const HomePage: React.FC = () => {
-  const isAuthenticated = stravaApi.isAuthenticated();
+  const { user } = useAuth();
+  const isStravaAuthenticated = stravaApi.isAuthenticated();
   const [activities, setActivities] = useState<StravaActivity[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
-  
-  console.log('HomePage render - isAuthenticated:', isAuthenticated);
 
   // Load activities for content feed when authenticated
   useEffect(() => {
-    if (isAuthenticated) {
+    if (user && isStravaAuthenticated) {
       const loadActivities = async () => {
         try {
           setLoadingActivities(true);
@@ -32,10 +32,10 @@ export const HomePage: React.FC = () => {
       };
       loadActivities();
     }
-  }, [isAuthenticated]);
-  
-  // If user is already authenticated, show different content
-  if (isAuthenticated) {
+  }, [user, isStravaAuthenticated]);
+
+  // If user is logged in and has Strava connected
+  if (user && isStravaAuthenticated) {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -111,16 +111,24 @@ export const HomePage: React.FC = () => {
             to provide AI-powered coaching advice and intelligent training plans.
           </p>
 
-          <Button
-            onClick={handleConnectStrava}
-            size="lg"
-            className="text-lg px-8 py-4"
-          >
-            Connect with Strava
-          </Button>
-          
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link to="/login">
+              <Button size="lg" className="text-lg px-8 py-4">
+                Sign In / Sign Up
+              </Button>
+            </Link>
+            <Button
+              onClick={handleConnectStrava}
+              variant="outline"
+              size="lg"
+              className="text-lg px-8 py-4"
+            >
+              Connect with Strava
+            </Button>
+          </div>
+
           <p className="text-sm text-gray-500 mt-4">
-            Connect your Strava account to get started with personalized training insights
+            Create an account to save your training data and get personalized insights
           </p>
           
           <div className="mt-4">

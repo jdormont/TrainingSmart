@@ -1,12 +1,31 @@
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Activity, MessageCircle, Calendar, Settings, User } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Activity, MessageCircle, Calendar, Settings, User, LogOut } from 'lucide-react';
 import { ROUTES } from '../../utils/constants';
-import { stravaApi } from '../../services/stravaApi';
+import { useAuth } from '../../contexts/AuthContext';
 
 export const Header: React.FC = () => {
   const location = useLocation();
-  const isAuthenticated = stravaApi.isAuthenticated();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowUserMenu(false);
+      }
+    };
+
+    if (showUserMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showUserMenu]);
 
   const navigation = [
     { name: 'Dashboard', href: ROUTES.DASHBOARD, icon: Activity },
@@ -15,7 +34,12 @@ export const Header: React.FC = () => {
     { name: 'Settings', href: ROUTES.SETTINGS, icon: Settings },
   ];
 
-  if (!isAuthenticated) {
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/');
+  };
+
+  if (!user) {
     return null;
   }
 
@@ -53,10 +77,31 @@ export const Header: React.FC = () => {
           </nav>
 
           {/* User Menu */}
-          <div className="flex items-center">
-            <button className="p-2 rounded-full text-gray-600 hover:text-gray-900 hover:bg-gray-100">
+          <div className="relative flex items-center" ref={menuRef}>
+            <button
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="p-2 rounded-full text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+            >
               <User className="w-5 h-5" />
             </button>
+
+            {showUserMenu && (
+              <div className="absolute right-0 top-12 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                <div className="px-4 py-3 border-b border-gray-200">
+                  <p className="text-sm font-medium text-gray-900">
+                    {user.user_metadata?.full_name || 'User'}
+                  </p>
+                  <p className="text-sm text-gray-500 truncate">{user.email}</p>
+                </div>
+                <button
+                  onClick={handleSignOut}
+                  className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
