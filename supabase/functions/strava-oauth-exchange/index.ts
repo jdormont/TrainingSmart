@@ -33,6 +33,12 @@ Deno.serve(async (req: Request) => {
     const code = url.searchParams.get("code");
     const redirectUri = url.searchParams.get("redirect_uri");
 
+    console.log("Token exchange request received:", {
+      hasCode: !!code,
+      hasRedirectUri: !!redirectUri,
+      redirectUri
+    });
+
     if (!code) {
       throw new Error("Authorization code is required");
     }
@@ -43,6 +49,12 @@ Deno.serve(async (req: Request) => {
 
     const clientId = Deno.env.get("STRAVA_CLIENT_ID");
     const clientSecret = Deno.env.get("STRAVA_CLIENT_SECRET");
+
+    console.log("Environment check:", {
+      hasClientId: !!clientId,
+      hasClientSecret: !!clientSecret,
+      clientId: clientId ? `${clientId.substring(0, 4)}...` : "missing"
+    });
 
     if (!clientId || !clientSecret) {
       throw new Error("Strava credentials not configured");
@@ -57,6 +69,12 @@ Deno.serve(async (req: Request) => {
       redirect_uri: redirectUri,
     });
 
+    console.log("Calling Strava API:", {
+      url: tokenUrl,
+      clientId: clientId.substring(0, 4) + "...",
+      redirectUri
+    });
+
     const response = await fetch(tokenUrl, {
       method: "POST",
       headers: {
@@ -65,10 +83,20 @@ Deno.serve(async (req: Request) => {
       body: params.toString(),
     });
 
+    console.log("Strava API response:", {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok
+    });
+
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Strava token exchange failed:", errorText);
-      throw new Error(`Token exchange failed: ${response.statusText}`);
+      console.error("Strava token exchange failed:", {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorText
+      });
+      throw new Error(`Token exchange failed: ${errorText || response.statusText}`);
     }
 
     const tokenData: TokenResponse = await response.json();
