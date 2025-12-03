@@ -2,20 +2,9 @@
 
 A personal training assistant web app that integrates Strava activity data with AI-powered training advice and personalized content recommendations.
 
-## 🚨 SECURITY NOTICE
+## 🔒 Security
 
-**IMPORTANT: This application currently exposes API keys in the frontend for development purposes. Before deploying to production, you MUST implement proper security measures.**
-
-### Critical Security Issues:
-- ❌ **OpenAI API Key exposed** - Anyone can use your key and rack up charges
-- ❌ **Strava Client Secret exposed** - Should be server-side only  
-- ❌ **YouTube API Key exposed** - Can be abused to exhaust your quota
-
-### Required Before Production:
-1. **Move API calls to backend/serverless functions**
-2. **Never commit `.env` files with real keys**
-3. **Use server-side environment variables**
-4. **Implement proper authentication**
+This application uses Supabase Edge Functions to securely handle all OpenAI API calls on the backend. API keys are stored as Supabase secrets and never exposed to the frontend.
 
 ## Features
 
