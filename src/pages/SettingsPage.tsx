@@ -6,6 +6,8 @@ import { stravaApi } from '../services/stravaApi';
 import { stravaCacheService } from '../services/stravaCacheService';
 import { ouraApi } from '../services/ouraApi';
 import { googleCalendarService } from '../services/googleCalendarService';
+import { AdminDashboard } from '../components/admin/AdminDashboard';
+import { useAuth } from '../contexts/AuthContext';
 import { STORAGE_KEYS } from '../utils/constants';
 
 const DEFAULT_SYSTEM_PROMPT = `You are an expert personal running and cycling coach with access to the user's real Strava training data. 
@@ -39,6 +41,7 @@ EXERCISE VIDEO GUIDELINES:
 Respond conversationally as their personal coach who knows their training history intimately.`;
 
 export const SettingsPage: React.FC = () => {
+  const { userProfile } = useAuth();
   const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -227,6 +230,12 @@ export const SettingsPage: React.FC = () => {
         </div>
 
         <div className="space-y-8">
+          {/* Admin Dashboard */}
+          {userProfile?.is_admin && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <AdminDashboard />
+            </div>
+          )}
           {/* Strava Connection */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
