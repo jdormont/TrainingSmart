@@ -28,13 +28,12 @@ interface TrainingContext {
 }
 
 class OpenAIService {
-  private apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-  private baseURL = 'https://api.openai.com/v1';
+  private supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  private supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
   constructor() {
-    // Security warning for production
-    if (import.meta.env.PROD && this.apiKey) {
-      console.error('🚨 CRITICAL SECURITY WARNING: OpenAI API key is exposed in frontend bundle! This allows anyone to use your API key and rack up charges. Move OpenAI calls to backend immediately!');
+    if (!this.supabaseUrl || !this.supabaseAnonKey) {
+      console.error('Supabase configuration missing. OpenAI features will not work.');
     }
   }
 
@@ -132,43 +131,30 @@ Use the coaching style and personality defined above, while incorporating this r
     messages: ChatMessage[],
     context: TrainingContext
   ): Promise<string> {
-    if (!this.apiKey) {
-      throw new Error('OpenAI API key not configured. For security, this should be handled by a backend service in production.');
-    }
-
-    // Additional security check
-    if (import.meta.env.PROD) {
-      throw new Error('🚨 SECURITY: OpenAI API calls blocked in production. Move to backend service to protect your API key!');
+    if (!this.supabaseUrl || !this.supabaseAnonKey) {
+      throw new Error('Supabase configuration not found. Please check your environment variables.');
     }
 
     const systemPrompt = this.buildSystemPrompt(context);
-    
-    const openAIMessages = [
-      { role: 'system', content: systemPrompt },
-      ...messages.map(msg => ({
-        role: msg.role,
-        content: msg.content
-      }))
-    ];
 
     try {
       const response = await axios.post(
-        `${this.baseURL}/chat/completions`,
+        `${this.supabaseUrl}/functions/v1/openai-chat`,
         {
-          model: OPENAI_CONFIG.MODEL,
-          messages: openAIMessages,
-          max_tokens: OPENAI_CONFIG.MAX_TOKENS,
+          messages,
+          systemPrompt,
+          maxTokens: OPENAI_CONFIG.MAX_TOKENS,
           temperature: OPENAI_CONFIG.TEMPERATURE,
         },
         {
           headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
+            'Authorization': `Bearer ${this.supabaseAnonKey}`,
             'Content-Type': 'application/json',
           },
         }
       );
 
-      return response.data.choices[0].message.content;
+      return response.data.content;
     } catch (error) {
       console.error('OpenAI API error:', error);
       
@@ -193,196 +179,34 @@ Use the coaching style and personality defined above, while incorporating this r
     timeframe: string,
     preferences: string
   ): Promise<{ description: string; workouts: any[] }> {
-    if (!this.apiKey) {
-      throw new Error('OpenAI API key not configured. For security, this should be handled by a backend service in production.');
+    if (!this.supabaseUrl || !this.supabaseAnonKey) {
+      throw new Error('Supabase configuration not found. Please check your environment variables.');
     }
-
-    if (import.meta.env.PROD) {
-      throw new Error('🚨 SECURITY: OpenAI API calls blocked in production. Move to backend service to protect your API key!');
-    }
-
-    const prompt = `Based on ${context.athlete.firstname}'s CYCLING training data, create a detailed ${timeframe} CYCLING training plan for their goal: "${goal}".
-
-CURRENT FITNESS LEVEL:
-- Recent weekly cycling volume: ${context.weeklyVolume.distance / 1000}km
-- Recent cycling activities: ${context.recentActivities.length} rides
-- Average ride distance: ${context.recentActivities.length > 0 ? Math.round(context.recentActivities.reduce((sum, a) => sum + a.distance, 0) / context.recentActivities.length / 1000) : 0}km
-- Average ride speed: ${context.recentActivities.length > 0 ? Math.round(context.recentActivities.reduce((sum, a) => sum + a.average_speed * 3.6, 0) / context.recentActivities.length) : 0}km/h
-- Training consistency: ${context.recentActivities.length} activities in recent data
-
-PREFERENCES: ${preferences}
-
-RESPONSE FORMAT:
-You must respond with TWO sections:
-
-1. OVERVIEW: A markdown-formatted overview of the plan including philosophy, progression strategy, and key focus areas.
-
-2. WORKOUTS: A JSON array of structured workouts. Wrap in \`\`\`json code block.
-
-JSON FORMAT EXAMPLE:
-\`\`\`json
-[
-  {
-    "name": "Easy Recovery Ride",
-    "type": "bike",
-    "description": "Zone 1-2 easy spinning. Focus on smooth pedaling. [Video](https://youtube.com/watch?v=xyz) by GCN",
-    "duration": 45,
-    "distance": 15,
-    "intensity": "easy",
-    "dayOfWeek": 1
-  },
-  {
-    "name": "Rest Day",
-    "type": "rest",
-    "description": "Complete rest or light stretching/yoga",
-    "duration": 0,
-    "intensity": "recovery",
-    "dayOfWeek": 2
-  }
-]
-\`\`\`
-
-WORKOUT STRUCTURE:
-- name: Short descriptive name
-- type: "bike", "run", "swim", "strength", or "rest"
-- description: Detailed instructions with YouTube links for exercises
-- duration: Number in minutes
-- distance: Number in miles (optional, omit for rest/strength)
-- intensity: "easy", "moderate", "hard", or "recovery"
-- dayOfWeek: 0=Monday through 6=Sunday (spread workouts throughout the week)
-
-Create ${timeframe === '1 week' ? '7' : timeframe === '2 weeks' ? '14' : timeframe === '4 weeks' ? '28' : '56'} workouts with a balanced weekly structure.`;
 
     try {
-      console.log('Sending training plan request to OpenAI...');
+      console.log('Sending training plan request to Edge Function...');
       const response = await axios.post(
-        `${this.baseURL}/chat/completions`,
+        `${this.supabaseUrl}/functions/v1/openai-training-plan`,
         {
-          model: OPENAI_CONFIG.MODEL,
-          messages: [
-            { role: 'system', content: `You are an expert cycling coach creating personalized cycling training plans.
-
-CRITICAL: You must respond with BOTH a markdown overview AND a JSON workout array.
-
-EXERCISE VIDEO INTEGRATION:
-- Include YouTube video links in workout descriptions
-- Use format: [Video Title](https://youtube.com/watch?v=VIDEO_ID) by Creator Name
-- Prioritize: GCN, TrainerRoad, Dylan Johnson, Cam Nicholls
-- Focus on videos with 100k+ views from established cycling channels` },
-            { role: 'user', content: prompt }
-          ],
-          max_tokens: 2500,
-          temperature: OPENAI_CONFIG.TEMPERATURE,
+          athleteName: context.athlete.firstname,
+          goal,
+          timeframe,
+          preferences,
+          weeklyVolume: context.weeklyVolume,
+          recentActivities: context.recentActivities,
         },
         {
           headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
+            'Authorization': `Bearer ${this.supabaseAnonKey}`,
             'Content-Type': 'application/json',
           },
-          timeout: 60000
+          timeout: 60000,
         }
       );
 
-      console.log('Received response from OpenAI');
-      const content = response.data.choices[0].message.content;
-      console.log('Raw AI response length:', content.length);
-      console.log('Raw AI response preview:', content.substring(0, 500));
+      console.log('Received response from Edge Function');
+      return response.data;
 
-      let jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
-      console.log('First regex match (```json):', jsonMatch ? 'found' : 'not found');
-
-      if (!jsonMatch) {
-        jsonMatch = content.match(/```\s*\n\s*\[\s*\{[\s\S]*?\}\s*\]\s*\n\s*```/);
-        console.log('Second regex match (``` with array):', jsonMatch ? 'found' : 'not found');
-      }
-
-      if (!jsonMatch) {
-        const startIndex = content.indexOf('[{');
-        const endIndex = content.lastIndexOf('}]');
-        console.log(`Looking for raw array: startIndex=${startIndex}, endIndex=${endIndex}`);
-        if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-          const jsonString = content.substring(startIndex, endIndex + 2);
-          jsonMatch = [content, jsonString];
-          console.log('Found raw array, length:', jsonString.length);
-        }
-      }
-
-      if (!jsonMatch) {
-        const startIndex = content.indexOf('[');
-        const endIndex = content.lastIndexOf(']');
-        console.log(`Looking for any array: startIndex=${startIndex}, endIndex=${endIndex}`);
-        if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-          const jsonString = content.substring(startIndex, endIndex + 1);
-          jsonMatch = [content, jsonString];
-          console.log('Found array with brackets, length:', jsonString.length);
-        }
-      }
-
-      let workouts = [];
-      let description = content;
-
-      if (jsonMatch) {
-        try {
-          const jsonString = jsonMatch[1] || jsonMatch[0];
-          const cleanedJson = jsonString
-            .replace(/^\s*```json?\s*/gm, '')
-            .replace(/\s*```\s*$/gm, '')
-            .trim();
-
-          console.log('Attempting to parse JSON, length:', cleanedJson.length);
-          console.log('JSON preview:', cleanedJson.substring(0, 300));
-          workouts = JSON.parse(cleanedJson);
-
-          if (!Array.isArray(workouts)) {
-            console.warn('Parsed JSON is not an array, wrapping it');
-            workouts = [workouts];
-          }
-
-          console.log(`Successfully parsed ${workouts.length} workouts from AI response`);
-
-          const workoutsHeaderIndex = content.toLowerCase().indexOf('workouts');
-          if (workoutsHeaderIndex !== -1) {
-            const beforeWorkouts = content.substring(0, workoutsHeaderIndex);
-            const afterWorkouts = content.substring(workoutsHeaderIndex);
-
-            const overviewEnd = afterWorkouts.search(/```|^\s*\[|\{.*"name":/m);
-            if (overviewEnd !== -1) {
-              description = beforeWorkouts + afterWorkouts.substring(0, overviewEnd);
-            } else {
-              description = beforeWorkouts;
-            }
-          } else {
-            description = content;
-          }
-
-          description = description
-            .replace(/```json\s*[\s\S]*?\s*```/g, '')
-            .replace(/```\s*[\s\S]*?\s*```/g, '')
-            .replace(/\`\`\`json[\s\S]*$/g, '')
-            .replace(/^\s*\`\`\`json\s*/gm, '')
-            .replace(/\[\s*\{[\s\S]*?\}\s*\]/g, '')
-            .replace(/\{\s*"name"[\s\S]*$/g, '')
-            .replace(/^Workouts:?\s*$/gim, '')
-            .replace(/^\s*\*\*json\s*/gim, '')
-            .trim();
-
-          console.log(`Successfully parsed ${workouts.length} workouts from AI response`);
-        } catch (parseError) {
-          console.error('Failed to parse workout JSON:', parseError);
-          console.error('JSON string that failed (first 500 chars):', (jsonMatch[1] || jsonMatch[0])?.substring(0, 500));
-          workouts = [];
-        }
-      } else {
-        console.warn('No JSON workout block found in AI response');
-        console.warn('Full content:', content);
-      }
-
-      if (workouts.length === 0) {
-        console.error('No workouts were successfully parsed from AI response');
-        throw new Error('AI did not return any workouts. Please try again with clearer requirements.');
-      }
-
-      return { description, workouts };
     } catch (error) {
       console.error('OpenAI API error:', error);
 
@@ -418,87 +242,37 @@ EXERCISE VIDEO INTEGRATION:
     context: TrainingContext,
     weekNumber: number
   ): Promise<any[]> {
-    if (!this.apiKey) {
-      throw new Error('OpenAI API key not configured. For security, this should be handled by a backend service in production.');
+    if (!this.supabaseUrl || !this.supabaseAnonKey) {
+      throw new Error('Supabase configuration not found. Please check your environment variables.');
     }
-
-    if (import.meta.env.PROD) {
-      throw new Error('🚨 SECURITY: OpenAI API calls blocked in production. Move to backend service to protect your API key!');
-    }
-
-    const workoutsJson = JSON.stringify(existingWorkouts, null, 2);
-    const prompt = `You are modifying Week ${weekNumber} of ${context.athlete.firstname}'s CYCLING training plan.
-
-CURRENT WEEK'S WORKOUTS:
-\`\`\`json
-${workoutsJson}
-\`\`\`
-
-ATHLETE'S CURRENT FITNESS:
-- Recent weekly volume: ${(context.weeklyVolume.distance / 1000).toFixed(1)}km
-- Recent activities: ${context.recentActivities.length} rides
-- Average ride: ${context.recentActivities.length > 0 ? Math.round(context.recentActivities.reduce((sum, a) => sum + a.distance, 0) / context.recentActivities.length / 1000) : 0}km
-
-${context.recovery ? `RECOVERY STATUS:
-- Sleep score: ${context.recovery.sleepScore || 'N/A'}/100
-- Readiness: ${context.recovery.readinessData?.score || 'N/A'}/100
-` : ''}
-
-MODIFICATION REQUEST:
-"${modificationRequest}"
-
-INSTRUCTIONS:
-1. Modify the workouts above to accommodate the athlete's request
-2. Maintain training principles (don't overload, respect recovery)
-3. Keep the same workout structure (same fields: name, type, description, duration, distance, intensity, dayOfWeek)
-4. If workouts need to move to different days, adjust dayOfWeek (0=Mon through 6=Sun)
-5. If reducing time/volume, prioritize key sessions over easier workouts
-6. Include YouTube video links in descriptions where helpful
-7. Return ONLY the modified JSON array wrapped in \`\`\`json code block
-
-Respond with the complete modified workout array for this week.`;
 
     try {
-      console.log('Sending plan modification request to OpenAI...');
+      console.log('Sending plan modification request to Edge Function...');
       const response = await axios.post(
-        `${this.baseURL}/chat/completions`,
+        `${this.supabaseUrl}/functions/v1/openai-modify-plan`,
         {
-          model: OPENAI_CONFIG.MODEL,
-          messages: [
-            {
-              role: 'system',
-              content: `You are an expert cycling coach modifying training plans.
-
-CRITICAL: Respond with ONLY a JSON array of modified workouts wrapped in \`\`\`json code block.
-Keep the same structure: name, type, description, duration, distance, intensity, dayOfWeek.
-Maintain training principles while accommodating the athlete's constraints.`
-            },
-            { role: 'user', content: prompt }
-          ],
-          max_tokens: 2000,
-          temperature: 0.7,
+          existingWorkouts,
+          modificationRequest,
+          athleteName: context.athlete.firstname,
+          weekNumber,
+          weeklyVolume: context.weeklyVolume,
+          recentActivities: context.recentActivities,
+          recovery: context.recovery ? {
+            sleepScore: context.recovery.sleepScore,
+            readinessScore: context.recovery.readinessData?.score,
+          } : undefined,
         },
         {
           headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
+            'Authorization': `Bearer ${this.supabaseAnonKey}`,
             'Content-Type': 'application/json',
           },
-          timeout: 30000
+          timeout: 30000,
         }
       );
 
-      console.log('Received modification response from OpenAI');
-      const content = response.data.choices[0].message.content;
-
-      const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
-      if (!jsonMatch) {
-        throw new Error('AI did not return properly formatted workout JSON');
-      }
-
-      const modifiedWorkouts = JSON.parse(jsonMatch[1]);
-      console.log(`Parsed ${modifiedWorkouts.length} modified workouts`);
-
-      return modifiedWorkouts;
+      console.log('Received modification response from Edge Function');
+      return response.data.workouts;
     } catch (error) {
       console.error('OpenAI API error during plan modification:', error);
 
