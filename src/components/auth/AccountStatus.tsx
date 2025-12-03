@@ -21,9 +21,13 @@ export function AccountStatus() {
         .from('user_profiles')
         .select('status')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
+      if (!data) {
+        console.error('No profile found for user');
+        return;
+      }
       setStatus(data.status as UserStatus);
     } catch (error) {
       console.error('Error loading status:', error);
