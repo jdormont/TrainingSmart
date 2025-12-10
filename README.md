@@ -6,6 +6,22 @@ A personal training assistant web app that integrates Strava activity data with 
 
 This application uses Supabase Edge Functions to securely handle all OpenAI API calls on the backend. API keys are stored as Supabase secrets and never exposed to the frontend.
 
+## 🛡️ Strava API Compliance & Privacy
+
+**This application is fully compliant with Strava's API Terms of Service.**
+
+- ✅ Strava data is NEVER used to train or improve AI models
+- ✅ Data is used only as runtime context for real-time inference
+- ✅ All AI processing uses OpenAI's Chat Completions API (inference only)
+- ✅ No fine-tuning, embeddings, or model training of any kind
+- ✅ User data is secured with row-level security policies
+
+**Documentation:**
+- 📄 [Full Compliance Documentation](./STRAVA_COMPLIANCE.md) - Technical details of our AI/ML usage
+- 🔒 [Privacy Policy](./src/pages/PrivacyPage.tsx) - User-facing privacy information
+
+All OpenAI edge functions include compliance comments documenting inference-only usage.
+
 ## Features
 
 - 🔗 **Strava Integration**: OAuth authentication and activity data sync

@@ -15,6 +15,7 @@ import { DirectAuth } from './components/auth/DirectAuth';
 import { OuraCallback } from './components/auth/OuraCallback';
 import { DirectOuraAuth } from './components/auth/DirectOuraAuth';
 import { DirectStravaAuth } from './components/auth/DirectStravaAuth';
+import PrivacyPage from './pages/PrivacyPage';
 import { ROUTES } from './utils/constants';
 
 function App() {
@@ -27,6 +28,7 @@ function App() {
             {/* Public routes */}
             <Route path="/" element={<HomePage />} />
             <Route path="/login" element={<AuthPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
             <Route path={ROUTES.AUTH_CALLBACK} element={<AuthCallback />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/auth/manual" element={<ManualAuth />} />

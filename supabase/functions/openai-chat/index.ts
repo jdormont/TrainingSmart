@@ -1,5 +1,20 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
+/*
+ * STRAVA API COMPLIANCE - AI/ML Usage
+ *
+ * This edge function is COMPLIANT with Strava's API Terms section 2.6.
+ *
+ * COMPLIANCE DETAILS:
+ * - Strava data is used ONLY as runtime context in chat messages
+ * - Data is passed to OpenAI Chat Completions API for INFERENCE ONLY
+ * - NO training, fine-tuning, or model improvement of any kind
+ * - Data is processed in real-time and discarded after response generation
+ * - OpenAI API requests are NOT used to train or improve AI models (per OpenAI policy)
+ *
+ * See /STRAVA_COMPLIANCE.md for full documentation.
+ */
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",

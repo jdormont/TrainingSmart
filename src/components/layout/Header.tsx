@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Activity, MessageCircle, Calendar, Settings, User, LogOut } from 'lucide-react';
+import { Activity, MessageCircle, Calendar, Settings, User, LogOut, Shield } from 'lucide-react';
 import { ROUTES } from '../../utils/constants';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -40,7 +40,33 @@ export const Header: React.FC = () => {
   };
 
   if (!user) {
-    return null;
+    return (
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <Link to="/" className="flex items-center space-x-2">
+              <Activity className="w-8 h-8 text-orange-500" />
+              <span className="text-xl font-bold text-gray-900">TrainingSmart</span>
+            </Link>
+            <div className="flex items-center space-x-4">
+              <Link
+                to="/privacy"
+                className="flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+              >
+                <Shield className="w-4 h-4" />
+                <span>Privacy</span>
+              </Link>
+              <Link
+                to="/login"
+                className="px-4 py-2 rounded-md text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 transition-colors"
+              >
+                Sign In
+              </Link>
+            </div>
+          </div>
+        </div>
+      </header>
+    );
   }
 
   return (
@@ -93,6 +119,14 @@ export const Header: React.FC = () => {
                   </p>
                   <p className="text-sm text-gray-500 truncate">{user.email}</p>
                 </div>
+                <Link
+                  to="/privacy"
+                  className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  onClick={() => setShowUserMenu(false)}
+                >
+                  <Shield className="w-4 h-4" />
+                  <span>Privacy & Data</span>
+                </Link>
                 <button
                   onClick={handleSignOut}
                   className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
