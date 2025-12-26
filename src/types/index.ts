@@ -251,3 +251,15 @@ export interface OuraActivityData {
   target_meters: number;
   total_calories: number;
 }
+
+export interface DailyMetric {
+  id?: string;
+  user_id: string;
+  date: string; // YYYY-MM-DD format
+  sleep_minutes: number;
+  resting_hr: number;
+  hrv: number;
+  recovery_score: number;
+  created_at?: string;
+  updated_at?: string;
+}
