@@ -26,28 +26,36 @@ interface DailyMetric {
   recovery_score: number;
 }
 
-function calculateRecoveryScore(sleep_minutes: number, hrv: number): number {
-  // Sleep Score: If sleep_minutes > 420 (7 hours), give 50 points. Else, scale it down.
-  let sleepScore = 0;
-  if (sleep_minutes >= 420) {
-    sleepScore = 50;
-  } else {
-    sleepScore = (sleep_minutes / 420) * 50;
+function calculateRecoveryScore(sleep_minutes: number, hrv: number, resting_hr: number): number {
+  const validScores: number[] = [];
+
+  // Sleep Score: Only calculate if sleep_minutes > 0
+  if (sleep_minutes > 0) {
+    const sleepScore = Math.min(100, (sleep_minutes / 480) * 100);
+    validScores.push(sleepScore);
   }
 
-  // HRV Score: If hrv > 50, give 50 points. Else, scale it (hrv / 50 * 50).
-  let hrvScore = 0;
-  if (hrv >= 50) {
-    hrvScore = 50;
-  } else {
-    hrvScore = (hrv / 50) * 50;
+  // HRV Score: Only calculate if hrv > 0
+  if (hrv > 0) {
+    const hrvScore = Math.min(100, (hrv / 80) * 100);
+    validScores.push(hrvScore);
   }
 
-  // Sum them together and round to nearest integer
-  const totalScore = Math.round(sleepScore + hrvScore);
-  
-  // Ensure score is between 0 and 100
-  return Math.max(0, Math.min(100, totalScore));
+  // RHR Score: Only calculate if resting_hr > 0
+  if (resting_hr > 0) {
+    const rhrScore = Math.max(0, 100 - ((resting_hr - 40) * 2));
+    validScores.push(rhrScore);
+  }
+
+  // Return 0 if no valid scores, otherwise return the average
+  if (validScores.length === 0) {
+    return 0;
+  }
+
+  const sum = validScores.reduce((acc, score) => acc + score, 0);
+  const average = sum / validScores.length;
+
+  return Math.round(average);
 }
 
 function getTodayDate(): string {
@@ -186,7 +194,8 @@ Deno.serve(async (req: Request) => {
     // Calculate recovery score
     const recovery_score = calculateRecoveryScore(
       payload.sleep_minutes,
-      payload.hrv
+      payload.hrv,
+      payload.resting_hr
     );
 
     // Prepare data for upsert
