@@ -168,34 +168,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Verify user exists in the database
-    const { data: userProfile, error: userError } = await supabase
-      .from('user_profiles')
-      .select('id')
-      .eq('id', payload.user_id)
-      .maybeSingle();
-
-    if (userError) {
-      console.error('User lookup error:', userError);
-      return new Response(
-        JSON.stringify({ error: 'Failed to verify user', details: userError.message }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
-    }
-
-    if (!userProfile) {
-      return new Response(
-        JSON.stringify({ error: 'User not found' }),
-        {
-          status: 404,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
-    }
-
     // Use provided date or default to today
     const date = payload.date || getTodayDate();
 
@@ -239,7 +211,14 @@ Deno.serve(async (req: Request) => {
     if (error) {
       console.error('Database error:', error);
       return new Response(
-        JSON.stringify({ error: 'Failed to save metrics', details: error.message }),
+        JSON.stringify({
+          error: 'Database upsert failed',
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+          raw_error: error
+        }),
         {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
