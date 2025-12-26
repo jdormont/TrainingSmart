@@ -133,6 +133,22 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
 
   const individualScores = dailyMetric ? dailyMetricsService.calculateIndividualScores(dailyMetric) : null;
 
+  const displayRecoveryScore = dailyMetric ? (() => {
+    if (dailyMetric.recovery_score > 0) {
+      return dailyMetric.recovery_score;
+    }
+
+    const scores: number[] = [];
+    if (individualScores?.sleepScore !== null) scores.push(individualScores.sleepScore!);
+    if (individualScores?.hrvScore !== null) scores.push(individualScores.hrvScore!);
+    if (individualScores?.rhrScore !== null) scores.push(individualScores.rhrScore!);
+
+    if (scores.length === 0) return 0;
+
+    const sum = scores.reduce((acc, score) => acc + score, 0);
+    return Math.round(sum / scores.length);
+  })() : 0;
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <div className="flex items-center justify-between mb-4">
@@ -192,12 +208,12 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
             <div className="text-xs text-gray-600">Readiness</div>
           </div>
         ) : usingDailyMetrics ? (
-          <div className={`text-center p-3 rounded-lg ${getScoreBgColor(dailyMetric!.recovery_score)}`}>
+          <div className={`text-center p-3 rounded-lg ${getScoreBgColor(displayRecoveryScore)}`}>
             <div className="flex items-center justify-center mb-1">
               <Battery className="w-4 h-4 mr-1 text-green-600" />
             </div>
-            <div className={`text-2xl font-bold ${getScoreColor(dailyMetric!.recovery_score)}`}>
-              {dailyMetric!.recovery_score}
+            <div className={`text-2xl font-bold ${getScoreColor(displayRecoveryScore)}`}>
+              {displayRecoveryScore}
             </div>
             <div className="text-xs text-gray-600">Recovery</div>
             <div className="text-xs text-gray-500">Calculated</div>

@@ -3,7 +3,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey, x-api-key',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-Client-Info, Apikey, x-api-key',
 };
 
 // Hardcoded API secret for webhook-style authentication
@@ -145,7 +145,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Validate ranges
+    // Validate ranges (allow 0 to indicate "no data")
     if (payload.sleep_minutes < 0) {
       return new Response(
         JSON.stringify({ error: 'sleep_minutes must be >= 0' }),
@@ -156,9 +156,9 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (payload.resting_hr < 30 || payload.resting_hr > 200) {
+    if (payload.resting_hr !== 0 && (payload.resting_hr < 30 || payload.resting_hr > 200)) {
       return new Response(
-        JSON.stringify({ error: 'resting_hr must be between 30 and 200' }),
+        JSON.stringify({ error: 'resting_hr must be 0 (no data) or between 30 and 200' }),
         {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
