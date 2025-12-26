@@ -1,23 +1,27 @@
 import React from 'react';
 import { Moon, Battery, Heart, Thermometer, Activity, TrendingUp, TrendingDown } from 'lucide-react';
-import type { OuraSleepData, OuraReadinessData } from '../../types';
+import type { OuraSleepData, OuraReadinessData, DailyMetric } from '../../types';
 import { calculateSleepScore, getSleepScoreColor, getSleepScoreBgColor } from '../../utils/sleepScoreCalculator';
+import { dailyMetricsService } from '../../services/dailyMetricsService';
 
 interface RecoveryCardProps {
   sleepData: OuraSleepData | null;
   readinessData: OuraReadinessData | null;
+  dailyMetric: DailyMetric | null;
   loading?: boolean;
 }
 
-export const RecoveryCard: React.FC<RecoveryCardProps> = ({ 
-  sleepData, 
-  readinessData, 
-  loading = false 
+export const RecoveryCard: React.FC<RecoveryCardProps> = ({
+  sleepData,
+  readinessData,
+  dailyMetric,
+  loading = false
 }) => {
   // Debug logging for data received
   console.log('=== RECOVERY CARD DEBUG ===');
   console.log('Sleep data received:', sleepData);
   console.log('Readiness data received:', readinessData);
+  console.log('Daily metric received:', dailyMetric);
   console.log('Loading state:', loading);
   
   if (sleepData) {
@@ -79,17 +83,20 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
     );
   }
 
-  if (!sleepData && !readinessData) {
+  if (!sleepData && !readinessData && !dailyMetric) {
     return (
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <div className="text-center text-gray-500">
           <Moon className="w-8 h-8 mx-auto mb-2 text-gray-300" />
           <p className="text-sm">No recovery data available</p>
-          <p className="text-xs">Connect your Oura Ring to see sleep and readiness metrics</p>
+          <p className="text-xs">Connect your Oura Ring or sync health data to see recovery metrics</p>
         </div>
       </div>
     );
   }
+
+  const hasOuraData = sleepData || readinessData;
+  const usingDailyMetrics = !hasOuraData && dailyMetric;
 
   const formatDuration = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
@@ -117,12 +124,14 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
 
   // Calculate sleep score using our algorithm
   const sleepScore = sleepData ? calculateSleepScore(sleepData) : null;
-  
+
   console.log('Sleep score calculation:', {
     hasSleepData: !!sleepData,
     sleepScore: sleepScore,
     totalScore: sleepScore?.totalScore
   });
+
+  const individualScores = dailyMetric ? dailyMetricsService.calculateIndividualScores(dailyMetric) : null;
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -136,11 +145,16 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
             {new Date(sleepData.day).toLocaleDateString()}
           </span>
         )}
+        {usingDailyMetrics && dailyMetric && (
+          <span className="text-xs text-gray-500">
+            {new Date(dailyMetric.date).toLocaleDateString()}
+          </span>
+        )}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {/* Sleep Score */}
-        {sleepData && (
+        {/* Sleep Score - Oura or Daily Metrics */}
+        {sleepData ? (
           <div className={`text-center p-3 rounded-lg ${sleepScore ? getSleepScoreBgColor(sleepScore.totalScore) : 'bg-purple-50'}`}>
             <div className="flex items-center justify-center mb-1">
               <Moon className="w-4 h-4 mr-1 text-purple-600" />
@@ -153,10 +167,21 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
               {sleepScore ? 'Calculated' : `Delta: ${safeNumber(sleepData.sleep_score_delta, '0')}`}
             </div>
           </div>
-        )}
+        ) : usingDailyMetrics && individualScores?.sleepScore !== null ? (
+          <div className={`text-center p-3 rounded-lg ${getScoreBgColor(individualScores.sleepScore!)}`}>
+            <div className="flex items-center justify-center mb-1">
+              <Moon className="w-4 h-4 mr-1 text-purple-600" />
+            </div>
+            <div className={`text-2xl font-bold ${getScoreColor(individualScores.sleepScore!)}`}>
+              {individualScores.sleepScore}
+            </div>
+            <div className="text-xs text-gray-600">Sleep Score</div>
+            <div className="text-xs text-gray-500">{Math.round(dailyMetric!.sleep_minutes / 60)}h {dailyMetric!.sleep_minutes % 60}m</div>
+          </div>
+        ) : null}
 
-        {/* Readiness Score */}
-        {readinessData && (
+        {/* Recovery Score - Daily Metrics or Readiness - Oura */}
+        {readinessData ? (
           <div className={`text-center p-3 rounded-lg ${getScoreBgColor(readinessData.score)}`}>
             <div className="flex items-center justify-center mb-1">
               <Battery className="w-4 h-4 mr-1 text-green-600" />
@@ -166,10 +191,35 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
             </div>
             <div className="text-xs text-gray-600">Readiness</div>
           </div>
+        ) : usingDailyMetrics ? (
+          <div className={`text-center p-3 rounded-lg ${getScoreBgColor(dailyMetric!.recovery_score)}`}>
+            <div className="flex items-center justify-center mb-1">
+              <Battery className="w-4 h-4 mr-1 text-green-600" />
+            </div>
+            <div className={`text-2xl font-bold ${getScoreColor(dailyMetric!.recovery_score)}`}>
+              {dailyMetric!.recovery_score}
+            </div>
+            <div className="text-xs text-gray-600">Recovery</div>
+            <div className="text-xs text-gray-500">Calculated</div>
+          </div>
+        ) : null}
+
+        {/* HRV Score - Daily Metrics */}
+        {usingDailyMetrics && individualScores?.hrvScore !== null && (
+          <div className={`text-center p-3 rounded-lg ${getScoreBgColor(individualScores.hrvScore!)}`}>
+            <div className="flex items-center justify-center mb-1">
+              <Activity className="w-4 h-4 mr-1 text-blue-600" />
+            </div>
+            <div className={`text-2xl font-bold ${getScoreColor(individualScores.hrvScore!)}`}>
+              {individualScores.hrvScore}
+            </div>
+            <div className="text-xs text-gray-600">HRV Score</div>
+            <div className="text-xs text-gray-500">{dailyMetric!.hrv}ms</div>
+          </div>
         )}
 
-        {/* Sleep Duration */}
-        {sleepData && (
+        {/* Sleep Duration or Resting HR */}
+        {sleepData ? (
           <div className="text-center p-3 rounded-lg bg-blue-50">
             <div className="flex items-center justify-center mb-1">
               <Activity className="w-4 h-4 mr-1 text-blue-600" />
@@ -179,9 +229,20 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
             </div>
             <div className="text-xs text-gray-600">Sleep Time</div>
           </div>
-        )}
+        ) : usingDailyMetrics && individualScores?.rhrScore !== null ? (
+          <div className={`text-center p-3 rounded-lg ${getScoreBgColor(individualScores.rhrScore!)}`}>
+            <div className="flex items-center justify-center mb-1">
+              <Heart className="w-4 h-4 mr-1 text-red-600" />
+            </div>
+            <div className={`text-2xl font-bold ${getScoreColor(individualScores.rhrScore!)}`}>
+              {individualScores.rhrScore}
+            </div>
+            <div className="text-xs text-gray-600">RHR Score</div>
+            <div className="text-xs text-gray-500">{dailyMetric!.resting_hr} bpm</div>
+          </div>
+        ) : null}
 
-        {/* Resting Heart Rate */}
+        {/* Resting Heart Rate - Oura only */}
         {sleepData && (
           <div className="text-center p-3 rounded-lg bg-red-50">
             <div className="flex items-center justify-center mb-1">
