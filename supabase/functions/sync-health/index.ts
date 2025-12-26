@@ -3,10 +3,14 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey, x-api-key',
 };
 
+// Hardcoded API secret for webhook-style authentication
+const API_SECRET = 'Demo-1234';
+
 interface HealthPayload {
+  user_id: string;
   sleep_minutes: number;
   resting_hr: number;
   hrv: number;
@@ -75,11 +79,11 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Get authorization header
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
+    // Check for API key in headers
+    const apiKey = req.headers.get('x-api-key');
+    if (!apiKey) {
       return new Response(
-        JSON.stringify({ error: 'Missing Authorization header' }),
+        JSON.stringify({ error: 'Missing x-api-key header' }),
         {
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -87,31 +91,36 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Create Supabase client with user's JWT
+    // Verify API key
+    if (apiKey !== API_SECRET) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid API key' }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // Create Supabase admin client with service role key (bypasses RLS)
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      global: {
-        headers: { Authorization: authHeader },
-      },
-    });
-
-    // Verify user is authenticated
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
-    }
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Parse request body
     const payload: HealthPayload = await req.json();
 
     // Validate required fields
+    if (!payload.user_id || typeof payload.user_id !== 'string') {
+      return new Response(
+        JSON.stringify({ error: 'Missing or invalid user_id field' }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
     if (
       typeof payload.sleep_minutes !== 'number' ||
       typeof payload.resting_hr !== 'number' ||
@@ -119,7 +128,7 @@ Deno.serve(async (req: Request) => {
     ) {
       return new Response(
         JSON.stringify({
-          error: 'Invalid payload. Required fields: sleep_minutes (number), resting_hr (number), hrv (number)',
+          error: 'Invalid payload. Required fields: user_id (string), sleep_minutes (number), resting_hr (number), hrv (number)',
         }),
         {
           status: 400,
@@ -159,6 +168,34 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Verify user exists in the database
+    const { data: userProfile, error: userError } = await supabase
+      .from('user_profiles')
+      .select('id')
+      .eq('id', payload.user_id)
+      .maybeSingle();
+
+    if (userError) {
+      console.error('User lookup error:', userError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to verify user', details: userError.message }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    if (!userProfile) {
+      return new Response(
+        JSON.stringify({ error: 'User not found' }),
+        {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
     // Use provided date or default to today
     const date = payload.date || getTodayDate();
 
@@ -182,7 +219,7 @@ Deno.serve(async (req: Request) => {
 
     // Prepare data for upsert
     const metricData: DailyMetric = {
-      user_id: user.id,
+      user_id: payload.user_id,
       date,
       sleep_minutes: payload.sleep_minutes,
       resting_hr: payload.resting_hr,
@@ -197,7 +234,7 @@ Deno.serve(async (req: Request) => {
         onConflict: 'user_id,date',
       })
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error('Database error:', error);
