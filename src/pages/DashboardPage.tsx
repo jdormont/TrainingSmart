@@ -473,7 +473,11 @@ export const DashboardPage: React.FC = () => {
         {/* Training Trends Chart */}
         {activities.length > 0 && (
           <div className="mb-8">
-            <TrainingTrendsChart activities={activities} />
+            <TrainingTrendsChart
+              activities={activities}
+              athlete={athlete}
+              healthMetrics={healthMetrics}
+            />
           </div>
         )}
 

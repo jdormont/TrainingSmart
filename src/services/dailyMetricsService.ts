@@ -50,6 +50,32 @@ export const dailyMetricsService = {
     return data;
   },
 
+  async getMetricsForDateRange(startDate: Date, endDate: Date): Promise<DailyMetric[]> {
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    const startDateStr = startDate.toISOString().split('T')[0];
+    const endDateStr = endDate.toISOString().split('T')[0];
+
+    const { data, error } = await supabase
+      .from('daily_metrics')
+      .select('*')
+      .eq('user_id', user.id)
+      .gte('date', startDateStr)
+      .lte('date', endDateStr)
+      .order('date', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching daily metrics for date range:', error);
+      throw error;
+    }
+
+    return data || [];
+  },
+
   async getMostRecentMetric(): Promise<DailyMetric | null> {
     const { data: { user } } = await supabase.auth.getUser();
 
