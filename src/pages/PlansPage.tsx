@@ -3,13 +3,14 @@ import { Calendar, Target, Clock, MapPin, Plus, Trash2, CreditCard as Edit3, Lis
 import { Link } from 'react-router-dom';
 import { Button } from '../components/common/Button';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
-import { stravaApi } from '../services/stravaApi';
+import { stravaCacheService } from '../services/stravaCacheService';
 import { openaiService } from '../services/openaiApi';
 import { trainingPlansService } from '../services/trainingPlansService';
-import type { StravaActivity, StravaAthlete, TrainingPlan, Workout } from '../types';
+import type { StravaActivity, StravaAthlete, TrainingPlan, Workout, WeeklyStats } from '../types';
 import { calculateWeeklyStats } from '../utils/dataProcessing';
 import { formatDistance, formatDuration } from '../utils/formatters';
 import { convertMarkdownToHtml } from '../utils/markdownToHtml';
+import { StatsSummary } from '../components/dashboard/StatsSummary';
 import WorkoutCard from '../components/plans/WorkoutCard';
 import WeeklyPlanView from '../components/plans/WeeklyPlanView';
 import PlanModificationModal from '../components/plans/PlanModificationModal';
@@ -19,6 +20,7 @@ import { ouraApi } from '../services/ouraApi';
 export const PlansPage: React.FC = () => {
   const [athlete, setAthlete] = useState<StravaAthlete | null>(null);
   const [activities, setActivities] = useState<StravaActivity[]>([]);
+  const [weeklyStats, setWeeklyStats] = useState<WeeklyStats | null>(null);
   const [savedPlans, setSavedPlans] = useState<TrainingPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -46,12 +48,16 @@ export const PlansPage: React.FC = () => {
       try {
         setLoading(true);
         const [athleteData, activitiesData] = await Promise.all([
-          stravaApi.getAthlete(),
-          stravaApi.getActivities(1, 50) // More activities for better context
+          stravaCacheService.getAthlete(),
+          stravaCacheService.getActivities(false, 50) // More activities for better context
         ]);
-        
+
         setAthlete(athleteData);
         setActivities(activitiesData);
+
+        // Calculate weekly stats
+        const stats = calculateWeeklyStats(activitiesData);
+        setWeeklyStats(stats);
 
         // Load saved plans from Supabase
         const plans = await trainingPlansService.getPlans();
@@ -379,7 +385,6 @@ Additional Preferences: ${preferences || 'None'}
   }
 
   const cyclingActivities = activities.filter(a => a.type === 'Ride');
-  const weeklyStats = calculateWeeklyStats(cyclingActivities);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -404,39 +409,10 @@ Additional Preferences: ${preferences || 'None'}
         </div>
 
         {/* Current Training Context */}
-        {athlete && cyclingActivities.length > 0 && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-            <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
-              <Target className="w-5 h-5 mr-2 text-orange-500" />
-              Your Current Cycling Fitness
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-gray-900">
-                  {formatDistance(weeklyStats.totalDistance)}
-                </div>
-                <div className="text-sm text-gray-600">This Week</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-gray-900">
-                  {cyclingActivities.length}
-                </div>
-                <div className="text-sm text-gray-600">Recent Rides</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-gray-900">
-                  {formatDuration(weeklyStats.totalTime)}
-                </div>
-                <div className="text-sm text-gray-600">Weekly Time</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-gray-900">
-                  {cyclingActivities[0] ? 
-                    Math.round((cyclingActivities[0].average_speed * 3.6)) : 0}
-                </div>
-                <div className="text-sm text-gray-600">Last Avg Speed (km/h)</div>
-              </div>
-            </div>
+        {weeklyStats && (
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">This Week</h2>
+            <StatsSummary weeklyStats={weeklyStats} />
           </div>
         )}
 
