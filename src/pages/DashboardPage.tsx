@@ -3,6 +3,7 @@ import { stravaApi } from '../services/stravaApi';
 import { stravaCacheService } from '../services/stravaCacheService';
 import { ouraApi } from '../services/ouraApi';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
+import { Button } from '../components/common/Button';
 import { ActivityCard } from '../components/dashboard/ActivityCard';
 import { ActivityDetailModal } from '../components/dashboard/ActivityDetailModal';
 import { StatsSummary } from '../components/dashboard/StatsSummary';
@@ -17,11 +18,12 @@ import { dailyMetricsService } from '../services/dailyMetricsService';
 import type { StravaActivity, StravaAthlete, WeeklyStats, OuraSleepData, OuraReadinessData, DailyMetric } from '../types';
 import type { WeeklyInsight, HealthMetrics } from '../services/weeklyInsightService';
 import { calculateWeeklyStats } from '../utils/dataProcessing';
-import { MessageCircle, TrendingUp, ChevronDown, ChevronUp, Database } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { MessageCircle, ChevronDown, ChevronUp, Database, Calendar } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../utils/constants';
 
 export const DashboardPage: React.FC = () => {
+  const navigate = useNavigate();
   const [athlete, setAthlete] = useState<StravaAthlete | null>(null);
   const [activities, setActivities] = useState<StravaActivity[]>([]);
   const [displayedActivities, setDisplayedActivities] = useState<StravaActivity[]>([]);
@@ -331,7 +333,7 @@ export const DashboardPage: React.FC = () => {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Header */}
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Welcome back, {athlete?.firstname}! 👋
           </h1>
@@ -340,7 +342,30 @@ export const DashboardPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Weekly Stats */}
+        {/* Action Header */}
+        <div className="mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Button
+              variant="primary"
+              size="lg"
+              onClick={() => navigate(ROUTES.CHAT)}
+              className="w-full"
+            >
+              <MessageCircle className="w-5 h-5 mr-2" />
+              Chat with AI Coach
+            </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={() => navigate(ROUTES.PLANS)}
+              className="w-full"
+            >
+              <Calendar className="w-5 h-5 mr-2" />
+              Generate New Plan
+            </Button>
+          </div>
+        </div>
+
         {/* Weekly Insight */}
         <div className="mb-8 bg-white rounded-lg shadow-sm border border-gray-200">
           <div className="p-4 border-b border-gray-200">
@@ -480,47 +505,6 @@ export const DashboardPage: React.FC = () => {
             />
           </div>
         )}
-
-        {/* Quick Actions */}
-        <div className="grid md:grid-cols-2 gap-4 mb-8">
-          <Link
-            to={ROUTES.CHAT}
-            className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow group"
-          >
-            <div className="flex items-center space-x-4">
-              <div className="bg-blue-50 p-3 rounded-full">
-                <MessageCircle className="w-6 h-6 text-blue-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
-                  Chat with AI Coach
-                </h3>
-                <p className="text-gray-600 text-sm">
-                  Get personalized training advice based on your data
-                </p>
-              </div>
-            </div>
-          </Link>
-
-          <Link
-            to={ROUTES.PLANS}
-            className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow group"
-          >
-            <div className="flex items-center space-x-4">
-              <div className="bg-green-50 p-3 rounded-full">
-                <TrendingUp className="w-6 h-6 text-green-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900 group-hover:text-green-600 transition-colors">
-                  Generate Training Plan
-                </h3>
-                <p className="text-gray-600 text-sm">
-                  Create a personalized plan for your goals
-                </p>
-              </div>
-            </div>
-          </Link>
-        </div>
 
         {/* Recent Activities */}
         <div>
