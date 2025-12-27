@@ -8,6 +8,8 @@ interface UserProfile {
   full_name: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   is_admin: boolean;
+  gender?: string;
+  age_bucket?: string;
   created_at: string;
   updated_at: string;
 }
