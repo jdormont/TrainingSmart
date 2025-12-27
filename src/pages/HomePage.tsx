@@ -1,83 +1,58 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import { Activity, Brain, Calendar, Shield } from 'lucide-react';
+import { Activity, Brain, Calendar, Shield, BookOpen } from 'lucide-react';
 import { Button } from '../components/common/Button';
-import { ContentFeed } from '../components/home/ContentFeed';
-import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { useAuth } from '../contexts/AuthContext';
 import { stravaApi } from '../services/stravaApi';
-import type { StravaActivity } from '../types';
 import { ROUTES } from '../utils/constants';
 
 export const HomePage: React.FC = () => {
   const { user } = useAuth();
   const isStravaAuthenticated = stravaApi.isAuthenticated();
-  const [activities, setActivities] = useState<StravaActivity[]>([]);
-  const [loadingActivities, setLoadingActivities] = useState(false);
 
-  // Load activities for content feed when authenticated
-  useEffect(() => {
-    if (user && isStravaAuthenticated) {
-      const loadActivities = async () => {
-        try {
-          setLoadingActivities(true);
-          const activitiesData = await stravaApi.getActivities(1, 30);
-          setActivities(activitiesData);
-        } catch (error) {
-          console.error('Failed to load activities for content feed:', error);
-        } finally {
-          setLoadingActivities(false);
-        }
-      };
-      loadActivities();
-    }
-  }, [user, isStravaAuthenticated]);
-
-  // If user is logged in and has Strava connected
   if (user && isStravaAuthenticated) {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Welcome Header */}
           <div className="text-center mb-8">
             <div className="flex justify-center mb-8">
               <Activity className="w-12 h-12 text-orange-500" />
             </div>
-            
+
             <h1 className="text-3xl font-bold text-gray-900 mb-4">
               Welcome to TrainingSmart AI
             </h1>
-            
+
             <p className="text-lg text-gray-600 mb-8 max-w-2xl mx-auto">
               Your personalized cycling training hub with AI coaching and curated content
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link to={ROUTES.DASHBOARD}>
-                <Button size="lg" className="text-lg px-8 py-4">
-                  Go to Dashboard
-                </Button>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto">
+              <Link to={ROUTES.DASHBOARD} className="block">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                  <Activity className="w-8 h-8 text-orange-500 mx-auto mb-3" />
+                  <h3 className="font-semibold text-gray-900 mb-2">Dashboard</h3>
+                  <p className="text-sm text-gray-600">View your training overview and insights</p>
+                </div>
               </Link>
-              <Link to={ROUTES.CHAT}>
-                <Button variant="outline" size="lg" className="text-lg px-8 py-4">
-                  Chat with AI Coach
-                </Button>
+
+              <Link to={ROUTES.CHAT} className="block">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                  <Brain className="w-8 h-8 text-orange-500 mx-auto mb-3" />
+                  <h3 className="font-semibold text-gray-900 mb-2">AI Coach</h3>
+                  <p className="text-sm text-gray-600">Get personalized training advice</p>
+                </div>
+              </Link>
+
+              <Link to={ROUTES.LEARN} className="block">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                  <BookOpen className="w-8 h-8 text-orange-500 mx-auto mb-3" />
+                  <h3 className="font-semibold text-gray-900 mb-2">Learn</h3>
+                  <p className="text-sm text-gray-600">Discover curated training content</p>
+                </div>
               </Link>
             </div>
           </div>
-
-          {/* Content Feed */}
-          {loadingActivities ? (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-              <div className="text-center">
-                <LoadingSpinner size="lg" className="text-orange-500 mb-4" />
-                <p className="text-gray-600">Loading your personalized content...</p>
-              </div>
-            </div>
-          ) : (
-            <ContentFeed activities={activities} />
-          )}
         </div>
       </div>
     );

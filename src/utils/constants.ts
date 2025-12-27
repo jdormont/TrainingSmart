@@ -18,6 +18,7 @@ export const ROUTES = {
   DASHBOARD: '/dashboard',
   CHAT: '/chat',
   PLANS: '/plans',
+  LEARN: '/learn',
   CALENDAR: '/calendar',
   SETTINGS: '/settings',
   AUTH_CALLBACK: '/auth/callback'
