@@ -184,18 +184,17 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
 
       let overallPerformance = 0;
       if (athlete) {
-        const fourWeeksBeforeThisWeek = new Date(weekEnd);
-        fourWeeksBeforeThisWeek.setDate(fourWeeksBeforeThisWeek.getDate() - 28);
-
-        const trailing4WeeksActivities = activities.filter(activity => {
+        const activitiesUpToThisWeek = activities.filter(activity => {
           const activityDate = new Date(activity.start_date_local);
-          return activityDate >= fourWeeksBeforeThisWeek && activityDate < weekEnd;
+          return activityDate < weekEnd;
         });
 
-        if (trailing4WeeksActivities.length > 0) {
+        const recentActivitiesForThisWeek = activitiesUpToThisWeek.slice(0, Math.min(28, activitiesUpToThisWeek.length));
+
+        if (recentActivitiesForThisWeek.length > 0) {
           const weekHealthMetrics = healthMetricsService.calculateHealthMetrics(
             athlete,
-            trailing4WeeksActivities,
+            recentActivitiesForThisWeek,
             [],
             []
           );
