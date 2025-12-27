@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Activity, Brain, Calendar, Shield, BookOpen } from 'lucide-react';
 import { Button } from '../components/common/Button';
@@ -8,7 +8,15 @@ import { ROUTES } from '../utils/constants';
 
 export const HomePage: React.FC = () => {
   const { user } = useAuth();
-  const isStravaAuthenticated = stravaApi.isAuthenticated();
+  const [isStravaAuthenticated, setIsStravaAuthenticated] = useState(false);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const authenticated = await stravaApi.isAuthenticated();
+      setIsStravaAuthenticated(authenticated);
+    };
+    checkAuth();
+  }, []);
 
   if (user && isStravaAuthenticated) {
     return (

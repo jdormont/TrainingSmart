@@ -10,6 +10,7 @@ export const AuthCallback: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<string>('');
   const [processing, setProcessing] = useState(true);
+  const [isAuth, setIsAuth] = useState(false);
 
   useEffect(() => {
     let hasRun = false;
@@ -21,8 +22,10 @@ export const AuthCallback: React.FC = () => {
       }
       hasRun = true;
 
-      if (stravaApi.isAuthenticated()) {
+      const authenticated = await stravaApi.isAuthenticated();
+      if (authenticated) {
         console.log('Already authenticated, redirecting to dashboard');
+        setIsAuth(true);
         navigate(ROUTES.DASHBOARD, { replace: true });
         return;
       }
@@ -53,6 +56,7 @@ export const AuthCallback: React.FC = () => {
         setDebugInfo('Exchanging code for access tokens...');
         await stravaApi.exchangeCodeForTokens(code);
 
+        setIsAuth(true);
         setDebugInfo('Success! Redirecting to dashboard...');
         setTimeout(() => {
           navigate(ROUTES.DASHBOARD, { replace: true });
@@ -62,7 +66,7 @@ export const AuthCallback: React.FC = () => {
         console.error('Auth callback error:', err);
         const errorMsg = (err as Error).message;
 
-        if (errorMsg.includes('code: invalid') && stravaApi.isAuthenticated()) {
+        if (errorMsg.includes('code: invalid') && await stravaApi.isAuthenticated()) {
           console.log('Code already used but user is authenticated, redirecting');
           navigate(ROUTES.DASHBOARD, { replace: true });
         } else {
@@ -78,7 +82,7 @@ export const AuthCallback: React.FC = () => {
   }, [searchParams, navigate]);
 
   // Show success message if we have tokens but haven't redirected yet
-  if (!processing && !error && stravaApi.isAuthenticated()) {
+  if (!processing && !error && isAuth) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">

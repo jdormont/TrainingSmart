@@ -86,7 +86,11 @@ export const SettingsPage: React.FC = () => {
     }
 
     // Check Oura connection status
-    setOuraConnected(ouraApi.isAuthenticated());
+    const checkOuraStatus = async () => {
+      const connected = await ouraApi.isAuthenticated();
+      setOuraConnected(connected);
+    };
+    checkOuraStatus();
 
     // Load athlete data for display (from cache)
     const loadAthlete = async () => {
@@ -191,7 +195,7 @@ export const SettingsPage: React.FC = () => {
   const handleDisconnect = async () => {
     if (confirm('Are you sure you want to disconnect from Strava? This will clear all your data and log you out.')) {
       await stravaCacheService.clearCache();
-      stravaApi.clearTokens();
+      await stravaApi.clearTokens();
       window.location.href = '/';
     }
   };
@@ -225,9 +229,9 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleDisconnectOura = () => {
+  const handleDisconnectOura = async () => {
     if (confirm('Are you sure you want to disconnect your Oura Ring? This will clear all your recovery data.')) {
-      ouraApi.clearTokens();
+      await ouraApi.clearTokens();
       setOuraConnected(false);
     }
   };
