@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Save, RotateCcw, Bot, User, Settings, Moon, Activity, Calendar as CalendarIcon } from 'lucide-react';
+import { Save, RotateCcw, Bot, User, Settings, Moon, Activity, Calendar as CalendarIcon, TrendingUp } from 'lucide-react';
 import { Button } from '../components/common/Button';
 import { stravaApi } from '../services/stravaApi';
 import { stravaCacheService } from '../services/stravaCacheService';
@@ -9,6 +9,7 @@ import { googleCalendarService } from '../services/googleCalendarService';
 import { AdminDashboard } from '../components/admin/AdminDashboard';
 import { useAuth } from '../contexts/AuthContext';
 import { STORAGE_KEYS } from '../utils/constants';
+import { supabase } from '../services/supabaseClient';
 
 const DEFAULT_SYSTEM_PROMPT = `You are an expert personal running and cycling coach with access to the user's real Strava training data. 
 
@@ -52,6 +53,10 @@ export const SettingsPage: React.FC = () => {
   const [connectingCalendar, setConnectingCalendar] = useState(false);
   const [refreshingCache, setRefreshingCache] = useState(false);
   const [stravaConnectedAt, setStravaConnectedAt] = useState<Date | null>(null);
+  const [gender, setGender] = useState<string>('');
+  const [ageBucket, setAgeBucket] = useState<string>('');
+  const [savingDemographics, setSavingDemographics] = useState(false);
+  const [demographicsSaved, setDemographicsSaved] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -85,6 +90,15 @@ export const SettingsPage: React.FC = () => {
     };
     loadAthlete();
 
+    // Load demographic data
+    const loadDemographics = async () => {
+      if (userProfile) {
+        setGender(userProfile.gender || '');
+        setAgeBucket(userProfile.age_bucket || '');
+      }
+    };
+    loadDemographics();
+
     // Check Google Calendar connection status
     const checkCalendarStatus = async () => {
       const status = await googleCalendarService.getConnectionStatus();
@@ -99,7 +113,7 @@ export const SettingsPage: React.FC = () => {
     if (code) {
       handleCalendarCallback(code);
     }
-  }, [location.search]);
+  }, [location.search, userProfile]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -215,6 +229,33 @@ export const SettingsPage: React.FC = () => {
         console.error('Failed to disconnect:', error);
         alert(`Failed to disconnect: ${(error as Error).message}`);
       }
+    }
+  };
+
+  const handleSaveDemographics = async () => {
+    setSavingDemographics(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({
+          gender: gender || null,
+          age_bucket: ageBucket || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      setDemographicsSaved(true);
+      setTimeout(() => setDemographicsSaved(false), 3000);
+    } catch (error) {
+      console.error('Failed to save demographic data:', error);
+      alert(`Failed to save: ${(error as Error).message}`);
+    } finally {
+      setSavingDemographics(false);
     }
   };
 
@@ -472,6 +513,90 @@ export const SettingsPage: React.FC = () => {
               </div>
             )}
           </div>
+          {/* Demographics */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+              <TrendingUp className="w-5 h-5 mr-2" />
+              Health Profile
+            </h2>
+
+            <p className="text-gray-600 mb-4">
+              This data helps calibrate recommendations and health/recovery scores more accurately based on your age and gender.
+            </p>
+
+            <div className="space-y-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="gender" className="block text-sm font-medium text-gray-700 mb-2">
+                    Gender
+                  </label>
+                  <select
+                    id="gender"
+                    value={gender}
+                    onChange={(e) => setGender(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  >
+                    <option value="">Prefer not to say</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="ageBucket" className="block text-sm font-medium text-gray-700 mb-2">
+                    Age Range
+                  </label>
+                  <select
+                    id="ageBucket"
+                    value={ageBucket}
+                    onChange={(e) => setAgeBucket(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  >
+                    <option value="">Select age range</option>
+                    <option value="18-24">18-24</option>
+                    <option value="25-34">25-34</option>
+                    <option value="35-44">35-44</option>
+                    <option value="45-54">45-54</option>
+                    <option value="55-64">55-64</option>
+                    <option value="65+">65+</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h3 className="font-medium text-blue-900 mb-2 text-sm">
+                  Why we ask for this information
+                </h3>
+                <ul className="text-xs text-blue-800 space-y-1">
+                  <li>• <strong>HRV scoring</strong>: Normal HRV ranges vary significantly by age and gender</li>
+                  <li>• <strong>Resting heart rate</strong>: Target ranges differ based on age and gender</li>
+                  <li>• <strong>Recovery calibration</strong>: More accurate recommendations based on your demographic</li>
+                  <li>• <strong>Training recommendations</strong>: Age-appropriate training advice from your AI coach</li>
+                </ul>
+              </div>
+
+              <div className="flex space-x-3">
+                <Button
+                  onClick={handleSaveDemographics}
+                  loading={savingDemographics}
+                  className="flex items-center"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {demographicsSaved ? 'Saved!' : 'Save Profile'}
+                </Button>
+              </div>
+
+              {demographicsSaved && (
+                <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                  <p className="text-green-600 text-sm">
+                    ✅ Health profile saved! Your health metrics will now be calibrated based on your demographics.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* AI Coach Settings */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">

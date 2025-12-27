@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import type { DailyMetric } from '../types';
+import { healthCalibrationService, type DemographicInfo } from './healthCalibrationService';
 
 export const dailyMetricsService = {
   async getRecentMetrics(days: number = 7): Promise<DailyMetric[]> {
@@ -50,6 +51,32 @@ export const dailyMetricsService = {
     return data;
   },
 
+  async getMetricsForDateRange(startDate: Date, endDate: Date): Promise<DailyMetric[]> {
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    const startDateStr = startDate.toISOString().split('T')[0];
+    const endDateStr = endDate.toISOString().split('T')[0];
+
+    const { data, error } = await supabase
+      .from('daily_metrics')
+      .select('*')
+      .eq('user_id', user.id)
+      .gte('date', startDateStr)
+      .lte('date', endDateStr)
+      .order('date', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching daily metrics for date range:', error);
+      throw error;
+    }
+
+    return data || [];
+  },
+
   async getMostRecentMetric(): Promise<DailyMetric | null> {
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -73,7 +100,7 @@ export const dailyMetricsService = {
     return data;
   },
 
-  calculateIndividualScores(metric: DailyMetric) {
+  calculateIndividualScores(metric: DailyMetric, demographic?: DemographicInfo) {
     const scores: {
       sleepScore: number | null;
       hrvScore: number | null;
@@ -89,13 +116,36 @@ export const dailyMetricsService = {
     }
 
     if (metric.hrv > 0) {
-      scores.hrvScore = Math.round(Math.min(100, (metric.hrv / 80) * 100));
+      scores.hrvScore = healthCalibrationService.calibrateHRVScore(metric.hrv, demographic);
     }
 
     if (metric.resting_hr > 0) {
-      scores.rhrScore = Math.round(Math.max(0, 100 - ((metric.resting_hr - 40) * 2)));
+      scores.rhrScore = healthCalibrationService.calibrateRestingHRScore(metric.resting_hr, demographic);
     }
 
     return scores;
+  },
+
+  async getDemographicInfo(): Promise<DemographicInfo | undefined> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return undefined;
+
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('gender, age_bucket')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (error || !data) return undefined;
+
+      return {
+        gender: data.gender || undefined,
+        ageBucket: data.age_bucket || undefined,
+      };
+    } catch (error) {
+      console.error('Error fetching demographic info:', error);
+      return undefined;
+    }
   }
 };

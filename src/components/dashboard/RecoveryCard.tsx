@@ -3,6 +3,7 @@ import { Moon, Battery, Heart, Thermometer, Activity, TrendingUp, TrendingDown }
 import type { OuraSleepData, OuraReadinessData, DailyMetric } from '../../types';
 import { calculateSleepScore, getSleepScoreColor, getSleepScoreBgColor } from '../../utils/sleepScoreCalculator';
 import { dailyMetricsService } from '../../services/dailyMetricsService';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface RecoveryCardProps {
   sleepData: OuraSleepData | null;
@@ -17,6 +18,8 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
   dailyMetric,
   loading = false
 }) => {
+  const { userProfile } = useAuth();
+
   // Debug logging for data received
   console.log('=== RECOVERY CARD DEBUG ===');
   console.log('Sleep data received:', sleepData);
@@ -131,7 +134,12 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
     totalScore: sleepScore?.totalScore
   });
 
-  const individualScores = dailyMetric ? dailyMetricsService.calculateIndividualScores(dailyMetric) : null;
+  const demographic = userProfile?.gender || userProfile?.age_bucket ? {
+    gender: userProfile.gender,
+    ageBucket: userProfile.age_bucket
+  } : undefined;
+
+  const individualScores = dailyMetric ? dailyMetricsService.calculateIndividualScores(dailyMetric, demographic) : null;
 
   const displayRecoveryScore = dailyMetric ? (() => {
     if (dailyMetric.recovery_score > 0) {
