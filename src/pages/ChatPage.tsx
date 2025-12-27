@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Send, Bot, User, Loader2, Menu, X, Calendar, Activity, Heart, Battery } from 'lucide-react';
+import { Send, Bot, User, Loader2, Menu, X, Calendar, Activity, Heart, Battery, Zap, TrendingUp, HelpCircle, Map, Coffee, Wind, Wrench } from 'lucide-react';
 import { stravaApi } from '../services/stravaApi';
 import { ouraApi } from '../services/ouraApi';
 import { openaiService } from '../services/openaiApi';
@@ -347,12 +347,31 @@ What would you like to know about your training?`;
     }
   };
 
-  const SUGGESTIONS = [
-    { label: "Analyze my last week", icon: Activity },
-    { label: "Build a plan for a Century Ride", icon: Calendar },
-    { label: "Why is my HR high on hills?", icon: Heart },
-    { label: "Suggest a recovery ride", icon: Battery }
-  ];
+  const SUGGESTIONS_MAP: Record<string, Array<{ label: string; icon: React.ComponentType<any> }>> = {
+    training: [
+      { label: "Analyze my last week", icon: Activity },
+      { label: "Build a plan for next week", icon: Calendar },
+      { label: "Critique my interval pacing", icon: Zap },
+      { label: "Create a hill climbing workout", icon: TrendingUp }
+    ],
+    recovery: [
+      { label: "My legs feel heavy today", icon: Battery },
+      { label: "Should I rest or ride easy?", icon: HelpCircle },
+      { label: "Suggest a 15min stretch routine", icon: User },
+      { label: "Why is my heart rate variable?", icon: Heart }
+    ],
+    strategy: [
+      { label: "Pacing strategy for a Century", icon: Map },
+      { label: "Nutrition plan for 3hr ride", icon: Coffee },
+      { label: "How to handle crosswinds", icon: Wind },
+      { label: "Equipment check for race day", icon: Wrench }
+    ]
+  };
+
+  const getCurrentSuggestions = () => {
+    const category = activeSession?.category || 'training';
+    return SUGGESTIONS_MAP[category] || SUGGESTIONS_MAP.training;
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -644,7 +663,7 @@ What would you like to know about your training?`;
                 <p className="text-sm text-gray-600">Get started with one of these suggestions</p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {SUGGESTIONS.map((suggestion) => {
+                {getCurrentSuggestions().map((suggestion) => {
                   const Icon = suggestion.icon;
                   return (
                     <button

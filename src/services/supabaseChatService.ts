@@ -363,26 +363,28 @@ class SupabaseChatService {
     const colors = {
       training: 'bg-blue-100 text-blue-800',
       recovery: 'bg-green-100 text-green-800',
+      strategy: 'bg-purple-100 text-purple-800',
       nutrition: 'bg-yellow-100 text-yellow-800',
-      goals: 'bg-purple-100 text-purple-800',
+      goals: 'bg-orange-100 text-orange-800',
       analysis: 'bg-red-100 text-red-800',
       general: 'bg-gray-100 text-gray-800',
-      content_preferences: 'bg-orange-100 text-orange-800'
+      content_preferences: 'bg-pink-100 text-pink-800'
     };
-    return colors[category || 'general'];
+    return colors[category || 'training'];
   }
 
   getCategoryIcon(category: ChatSession['category']): string {
     const icons = {
       training: '🚴',
       recovery: '😴',
+      strategy: '🎯',
       nutrition: '🥗',
-      goals: '🎯',
+      goals: '🏆',
       analysis: '📊',
       general: '💬',
       content_preferences: '📺'
     };
-    return icons[category || 'general'];
+    return icons[category || 'training'];
   }
 
   // Migration helper: Move localStorage data to Supabase

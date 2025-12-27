@@ -24,7 +24,7 @@ const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [showNewSessionForm, setShowNewSessionForm] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [newSessionName, setNewSessionName] = useState('');
-  const [newSessionCategory, setNewSessionCategory] = useState<ChatSession['category']>('general');
+  const [newSessionCategory, setNewSessionCategory] = useState<ChatSession['category']>('training');
   const [newSessionDescription, setNewSessionDescription] = useState('');
   const [editName, setEditName] = useState('');
 
@@ -35,7 +35,7 @@ const SessionSidebar: React.FC<SessionSidebarProps> = ({
     onSessionCreate(newSessionName.trim(), newSessionCategory, newSessionDescription.trim() || undefined);
     setNewSessionName('');
     setNewSessionDescription('');
-    setNewSessionCategory('general');
+    setNewSessionCategory('training');
     setShowNewSessionForm(false);
   };
 
@@ -51,14 +51,10 @@ const SessionSidebar: React.FC<SessionSidebarProps> = ({
     setEditName(session.name);
   };
 
-  const categoryOptions: { value: ChatSession['category']; label: string }[] = [
-    { value: 'training', label: '🚴 Training' },
-    { value: 'recovery', label: '😴 Recovery' },
-    { value: 'nutrition', label: '🥗 Nutrition' },
-    { value: 'goals', label: '🎯 Goals' },
-    { value: 'analysis', label: '📊 Analysis' },
-    { value: 'general', label: '💬 General' },
-    { value: 'content_preferences', label: '📺 Content Preferences' }
+  const categoryOptions: { value: ChatSession['category']; label: string; description: string }[] = [
+    { value: 'training', label: '🚴 Training Coach', description: 'Workouts, Analysis, Planning' },
+    { value: 'recovery', label: '😴 Recovery Physio', description: 'Rest, HRV, Soreness' },
+    { value: 'strategy', label: '🎯 Event Strategist', description: 'Race prep, pacing, nutrition' }
   ];
 
   return (
@@ -118,7 +114,7 @@ const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   setShowNewSessionForm(false);
                   setNewSessionName('');
                   setNewSessionDescription('');
-                  setNewSessionCategory('general');
+                  setNewSessionCategory('training');
                 }}
               >
                 Cancel
