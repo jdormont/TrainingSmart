@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Save, RotateCcw, Bot, User, Settings, Moon, Activity, Calendar as CalendarIcon, TrendingUp } from 'lucide-react';
+import { Save, RotateCcw, Bot, User, Settings, Moon, Activity, Calendar as CalendarIcon, TrendingUp, Target } from 'lucide-react';
 import { Button } from '../components/common/Button';
 import { stravaApi } from '../services/stravaApi';
 import { stravaCacheService } from '../services/stravaCacheService';
@@ -10,6 +10,15 @@ import { AdminDashboard } from '../components/admin/AdminDashboard';
 import { useAuth } from '../contexts/AuthContext';
 import { STORAGE_KEYS } from '../utils/constants';
 import { supabase } from '../services/supabaseClient';
+import {
+  userProfileService,
+  COACH_PERSONAS,
+  TRAINING_GOALS,
+  SKILL_LEVELS,
+  AVAILABLE_INTERESTS,
+  type UserProfile,
+  type ContentProfile
+} from '../services/userProfileService';
 
 const DEFAULT_SYSTEM_PROMPT = `You are an expert personal running and cycling coach with access to the user's real Strava training data. 
 
@@ -57,6 +66,15 @@ export const SettingsPage: React.FC = () => {
   const [ageBucket, setAgeBucket] = useState<string>('');
   const [savingDemographics, setSavingDemographics] = useState(false);
   const [demographicsSaved, setDemographicsSaved] = useState(false);
+
+  const [trainingGoal, setTrainingGoal] = useState<string>('');
+  const [weeklyHours, setWeeklyHours] = useState<number>(0);
+  const [coachPersona, setCoachPersona] = useState<string>('');
+  const [skillLevel, setSkillLevel] = useState<'beginner' | 'intermediate' | 'advanced' | 'pro'>('beginner');
+  const [interests, setInterests] = useState<string[]>([]);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
+
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -98,6 +116,30 @@ export const SettingsPage: React.FC = () => {
       }
     };
     loadDemographics();
+
+    // Load training profile and content profile
+    const loadProfiles = async () => {
+      try {
+        const [trainingProfile, contentProfile] = await Promise.all([
+          userProfileService.getUserProfile(),
+          userProfileService.getContentProfile()
+        ]);
+
+        if (trainingProfile) {
+          setTrainingGoal(trainingProfile.training_goal || '');
+          setWeeklyHours(trainingProfile.weekly_hours || 0);
+          setCoachPersona(trainingProfile.coach_persona || '');
+        }
+
+        if (contentProfile) {
+          setSkillLevel(contentProfile.skill_level || 'beginner');
+          setInterests(contentProfile.interests || []);
+        }
+      } catch (error) {
+        console.error('Failed to load profiles:', error);
+      }
+    };
+    loadProfiles();
 
     // Check Google Calendar connection status
     const checkCalendarStatus = async () => {
@@ -257,6 +299,39 @@ export const SettingsPage: React.FC = () => {
     } finally {
       setSavingDemographics(false);
     }
+  };
+
+  const handleSaveTrainingProfile = async () => {
+    setSavingProfile(true);
+    try {
+      await Promise.all([
+        userProfileService.updateUserProfile({
+          training_goal: trainingGoal || null,
+          weekly_hours: weeklyHours || null,
+          coach_persona: coachPersona || null
+        }),
+        userProfileService.updateContentProfile({
+          skill_level: skillLevel,
+          interests: interests
+        })
+      ]);
+
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 3000);
+    } catch (error) {
+      console.error('Failed to save training profile:', error);
+      alert(`Failed to save: ${(error as Error).message}`);
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const toggleInterest = (interest: string) => {
+    setInterests(prev =>
+      prev.includes(interest)
+        ? prev.filter(i => i !== interest)
+        : [...prev, interest]
+    );
   };
 
   return (
@@ -591,6 +666,193 @@ export const SettingsPage: React.FC = () => {
                 <div className="bg-green-50 border border-green-200 rounded-md p-3">
                   <p className="text-green-600 text-sm">
                     ✅ Health profile saved! Your health metrics will now be calibrated based on your demographics.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Training Profile */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+              <Target className="w-5 h-5 mr-2" />
+              Training Profile
+            </h2>
+
+            <p className="text-gray-600 mb-6">
+              Manage your coaching preferences and content personalization to get the most relevant recommendations and learning materials.
+            </p>
+
+            <div className="space-y-8">
+              {/* Section A: Coaching Preferences */}
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                  <User className="w-5 h-5 mr-2 text-orange-500" />
+                  Coaching Preferences
+                </h3>
+
+                <div className="space-y-4">
+                  {/* Weekly Hours */}
+                  <div>
+                    <label htmlFor="weeklyHours" className="block text-sm font-medium text-gray-700 mb-2">
+                      Weekly Training Hours
+                    </label>
+                    <div className="flex items-center space-x-4">
+                      <input
+                        type="range"
+                        id="weeklyHours"
+                        min="0"
+                        max="20"
+                        step="1"
+                        value={weeklyHours}
+                        onChange={(e) => setWeeklyHours(Number(e.target.value))}
+                        className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                      />
+                      <div className="w-20 text-center">
+                        <input
+                          type="number"
+                          min="0"
+                          max="20"
+                          value={weeklyHours}
+                          onChange={(e) => setWeeklyHours(Number(e.target.value))}
+                          className="w-full px-2 py-1 border border-gray-300 rounded-md text-center focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        />
+                      </div>
+                      <span className="text-sm text-gray-600 w-12">hours</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      How many hours per week can you dedicate to training?
+                    </p>
+                  </div>
+
+                  {/* Coach Persona */}
+                  <div>
+                    <label htmlFor="coachPersona" className="block text-sm font-medium text-gray-700 mb-2">
+                      Coach Persona
+                    </label>
+                    <div className="grid md:grid-cols-3 gap-3">
+                      {COACH_PERSONAS.map((persona) => (
+                        <button
+                          key={persona.value}
+                          type="button"
+                          onClick={() => setCoachPersona(persona.value)}
+                          className={`p-4 text-left rounded-lg border transition-colors ${
+                            coachPersona === persona.value
+                              ? 'border-orange-500 bg-orange-50'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="font-medium text-gray-900 mb-1">{persona.label}</div>
+                          <div className="text-xs text-gray-600">{persona.description}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Main Goal */}
+                  <div>
+                    <label htmlFor="trainingGoal" className="block text-sm font-medium text-gray-700 mb-2">
+                      Main Training Goal
+                    </label>
+                    <div className="grid md:grid-cols-2 gap-3">
+                      {TRAINING_GOALS.map((goal) => (
+                        <button
+                          key={goal.value}
+                          type="button"
+                          onClick={() => setTrainingGoal(goal.value)}
+                          className={`p-4 text-left rounded-lg border transition-colors ${
+                            trainingGoal === goal.value
+                              ? 'border-orange-500 bg-orange-50'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="font-medium text-gray-900 mb-1">{goal.label}</div>
+                          <div className="text-xs text-gray-600">{goal.description}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section B: Content Personalization */}
+              <div className="pt-6 border-t border-gray-200">
+                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                  <Settings className="w-5 h-5 mr-2 text-orange-500" />
+                  Content Personalization
+                </h3>
+
+                <div className="space-y-4">
+                  {/* Skill Level */}
+                  <div>
+                    <label htmlFor="skillLevel" className="block text-sm font-medium text-gray-700 mb-2">
+                      Skill Level
+                    </label>
+                    <div className="grid grid-cols-4 gap-3">
+                      {SKILL_LEVELS.map((level) => (
+                        <button
+                          key={level.value}
+                          type="button"
+                          onClick={() => setSkillLevel(level.value as any)}
+                          className={`p-3 text-center rounded-lg border transition-colors ${
+                            skillLevel === level.value
+                              ? 'border-orange-500 bg-orange-50 text-orange-700'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="font-medium text-sm">{level.label}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Interests */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Interests
+                      <span className="ml-2 text-xs text-gray-500 font-normal">
+                        ({interests.length} selected)
+                      </span>
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {AVAILABLE_INTERESTS.map((interest) => (
+                        <button
+                          key={interest}
+                          type="button"
+                          onClick={() => toggleInterest(interest)}
+                          className={`px-3 py-2 rounded-full text-sm transition-colors ${
+                            interests.includes(interest)
+                              ? 'bg-orange-500 text-white hover:bg-orange-600'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          {interest}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Select topics you're interested in to personalize your content feed
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <div className="flex space-x-3 pt-6 border-t border-gray-200">
+                <Button
+                  onClick={handleSaveTrainingProfile}
+                  loading={savingProfile}
+                  className="flex items-center"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {profileSaved ? 'Saved!' : 'Save Changes'}
+                </Button>
+              </div>
+
+              {profileSaved && (
+                <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                  <p className="text-green-600 text-sm">
+                    ✅ Training profile saved! Your coaching and content preferences have been updated.
                   </p>
                 </div>
               )}
