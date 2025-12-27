@@ -12,9 +12,11 @@ import { RecoveryCard } from '../components/dashboard/RecoveryCard';
 import { WeeklyInsightCard } from '../components/dashboard/WeeklyInsightCard';
 import { HealthSpiderChart } from '../components/dashboard/HealthSpiderChart';
 import { StravaOnlySpiderChart } from '../components/dashboard/StravaOnlySpiderChart';
+import { IntakeWizard } from '../components/onboarding/IntakeWizard';
 import { weeklyInsightService } from '../services/weeklyInsightService';
 import { healthMetricsService } from '../services/healthMetricsService';
 import { dailyMetricsService } from '../services/dailyMetricsService';
+import { getUserOnboardingStatus } from '../services/userService';
 import type { StravaActivity, StravaAthlete, WeeklyStats, OuraSleepData, OuraReadinessData, DailyMetric } from '../types';
 import type { WeeklyInsight, HealthMetrics } from '../services/weeklyInsightService';
 import { calculateWeeklyStats } from '../utils/dataProcessing';
@@ -47,6 +49,10 @@ export const DashboardPage: React.FC = () => {
 
   // View mode toggle
   const [viewMode, setViewMode] = useState<'auto' | 'full' | 'strava'>('auto');
+
+  // Onboarding wizard state
+  const [showWizard, setShowWizard] = useState(false);
+  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
   const INITIAL_ACTIVITIES_COUNT = 9;
 
@@ -178,6 +184,26 @@ export const DashboardPage: React.FC = () => {
       setDisplayedActivities(activities.slice(0, INITIAL_ACTIVITIES_COUNT));
     }
   }, [showAllActivities, activities]);
+
+  useEffect(() => {
+    const checkOnboarding = async () => {
+      try {
+        const isOnboarded = await getUserOnboardingStatus();
+        setShowWizard(!isOnboarded);
+      } catch (error) {
+        console.error('Failed to check onboarding status:', error);
+      } finally {
+        setCheckingOnboarding(false);
+      }
+    };
+
+    checkOnboarding();
+  }, []);
+
+  const handleWizardComplete = () => {
+    setShowWizard(false);
+    window.location.reload();
+  };
 
   const generateWeeklyInsight = async (athleteData: StravaAthlete, activitiesData: StravaActivity[]) => {
     try {
@@ -568,6 +594,11 @@ export const DashboardPage: React.FC = () => {
             similarActivities={getSimilarActivities(selectedActivity)}
             onClose={handleCloseModal}
           />
+        )}
+
+        {/* Intake Wizard Modal */}
+        {showWizard && !checkingOnboarding && (
+          <IntakeWizard onComplete={handleWizardComplete} />
         )}
       </div>
     </div>

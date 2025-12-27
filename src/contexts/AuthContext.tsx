@@ -10,6 +10,9 @@ interface UserProfile {
   is_admin: boolean;
   gender?: string;
   age_bucket?: string;
+  training_goal?: string;
+  weekly_hours?: number;
+  coach_persona?: string;
   created_at: string;
   updated_at: string;
 }
