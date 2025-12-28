@@ -63,21 +63,32 @@ export const DashboardPage: React.FC = () => {
         setLoading(true);
         setError(null);
 
-        // Check if Strava is connected
-        const connected = await stravaApi.isAuthenticated();
-        setIsStravaConnected(connected);
+        // Try to fetch athlete data and recent activities from cache
+        let athleteData: StravaAthlete;
+        let activitiesData: StravaActivity[];
 
-        if (!connected) {
-          setLoading(false);
-          return;
+        try {
+          [athleteData, activitiesData] = await Promise.all([
+            stravaCacheService.getAthlete(),
+            stravaCacheService.getActivities(false, 20)
+          ]);
+        } catch (authError: any) {
+          // If we get an authentication error, show the ghost dashboard
+          if (authError?.message?.includes('authenticated') ||
+              authError?.message?.includes('token') ||
+              authError?.response?.status === 401 ||
+              authError?.response?.status === 403) {
+            console.log('Strava not connected:', authError.message);
+            setIsStravaConnected(false);
+            setLoading(false);
+            return;
+          }
+          // Re-throw other errors
+          throw authError;
         }
 
-        // Fetch athlete data and recent activities from cache
-        const [athleteData, activitiesData] = await Promise.all([
-          stravaCacheService.getAthlete(),
-          stravaCacheService.getActivities(false, 20)
-        ]);
-
+        // If we got here, we're connected
+        setIsStravaConnected(true);
         setAthlete(athleteData);
         setActivities(activitiesData);
         setDisplayedActivities(activitiesData.slice(0, INITIAL_ACTIVITIES_COUNT));
