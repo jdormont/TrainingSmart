@@ -1,19 +1,32 @@
 import { supabase } from './supabaseClient';
 import { stravaApi } from './stravaApi';
+import { tokenStorageService } from './tokenStorageService';
 import type { StravaAthlete, StravaActivity } from '../types';
 
 const CACHE_DURATION_MS = 15 * 60 * 1000;
 
 class StravaCacheService {
   private async getStravaUserId(): Promise<string> {
-    const tokens = localStorage.getItem('strava_tokens');
+    const tokens = await tokenStorageService.getTokens('strava');
+
     if (!tokens) {
-      throw new Error('Not authenticated with Strava');
+      const legacyTokens = localStorage.getItem('strava_tokens');
+      if (!legacyTokens) {
+        throw new Error('Not authenticated with Strava');
+      }
+
+      try {
+        const parsedTokens = JSON.parse(legacyTokens);
+        if (parsedTokens.athlete?.id) {
+          return parsedTokens.athlete.id.toString();
+        }
+      } catch (e) {
+        throw new Error('Not authenticated with Strava');
+      }
     }
 
-    const parsedTokens = JSON.parse(tokens);
-    if (parsedTokens.athlete?.id) {
-      return parsedTokens.athlete.id.toString();
+    if (tokens?.athlete?.id) {
+      return tokens.athlete.id.toString();
     }
 
     const athlete = await stravaApi.getAthlete();

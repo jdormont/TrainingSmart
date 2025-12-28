@@ -8,6 +8,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { ChatPage } from './pages/ChatPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { PlansPage } from './pages/PlansPage';
+import { LearnPage } from './pages/LearnPage';
 import { AuthPage } from './components/auth/AuthPage';
 import { AuthCallback } from './components/auth/AuthCallback';
 import { ManualAuth } from './components/auth/ManualAuth';
@@ -59,6 +60,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <PlansPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path={ROUTES.LEARN}
+              element={
+                <ProtectedRoute>
+                  <LearnPage />
                 </ProtectedRoute>
               }
             />

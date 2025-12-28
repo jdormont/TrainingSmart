@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Filter, Eye, EyeOff } from 'lucide-react';
+import { Filter, Eye, EyeOff, LineChart as LineChartIcon, RefreshCw } from 'lucide-react';
+import { Button } from '../common/Button';
 import type { StravaActivity, StravaAthlete, DailyMetric } from '../../types';
 import { startOfWeek, format, addWeeks } from 'date-fns';
 import { healthMetricsService } from '../../services/healthMetricsService';
@@ -297,6 +298,39 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
     }
     return null;
   };
+
+  if (!activities || activities.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            Training Trends (Last 8 Weeks)
+          </h3>
+          <p className="text-gray-600 text-sm">
+            Analyze your training patterns by activity type and metric
+          </p>
+        </div>
+
+        <div className="h-80 flex flex-col items-center justify-center text-center">
+          <LineChartIcon className="h-12 w-12 text-gray-400 mb-4" />
+          <h4 className="text-lg font-semibold text-gray-900 mb-2">
+            No training data yet
+          </h4>
+          <p className="text-gray-600 mb-6 max-w-md">
+            Connect Strava or log your first ride to see your fitness progression.
+          </p>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => window.location.reload()}
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh Data
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">

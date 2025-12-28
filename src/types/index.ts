@@ -87,7 +87,7 @@ export interface ChatSession {
   messages: ChatMessage[];
   createdAt: Date;
   updatedAt: Date;
-  category?: 'training' | 'recovery' | 'nutrition' | 'goals' | 'analysis' | 'general' | 'content_preferences';
+  category?: 'training' | 'recovery' | 'strategy' | 'nutrition' | 'goals' | 'analysis' | 'general' | 'content_preferences';
 }
 
 export interface ChatContextSnapshot {

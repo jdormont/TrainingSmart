@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Activity, Mail, Lock, User, AlertCircle } from 'lucide-react';
 import { Button } from '../common/Button';
 import { supabase } from '../../services/supabaseClient';
 import { LoadingSpinner } from '../common/LoadingSpinner';
+import { ROUTES } from '../../utils/constants';
 
 interface AuthPageProps {
   onAuthSuccess?: () => void;
 }
 
 export const AuthPage: React.FC<AuthPageProps> = ({ onAuthSuccess }) => {
+  const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -63,10 +66,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthSuccess }) => {
         if (signInError) throw signInError;
 
         if (data.user) {
-          setMessage('Successfully logged in!');
-          setTimeout(() => {
-            onAuthSuccess?.();
-          }, 500);
+          setMessage('Successfully logged in! Redirecting...');
+          if (onAuthSuccess) {
+            setTimeout(() => {
+              onAuthSuccess();
+            }, 500);
+          } else {
+            setTimeout(() => {
+              navigate(ROUTES.DASHBOARD);
+            }, 500);
+          }
         }
       } else {
         const { data, error: signUpError } = await supabase.auth.signUp({

@@ -1,25 +1,51 @@
 // Strava API service layer
 import axios from 'axios';
 import { STRAVA_CONFIG, STORAGE_KEYS } from '../utils/constants';
+import { tokenStorageService } from './tokenStorageService';
 import type { StravaAthlete, StravaActivity, StravaStats, AuthTokens } from '../types';
 
 class StravaApiService {
   private baseURL = STRAVA_CONFIG.BASE_URL;
+  private migrationChecked = false;
 
-  // Get stored tokens
-  private getTokens(): AuthTokens | null {
-    const stored = localStorage.getItem(STORAGE_KEYS.STRAVA_TOKENS);
-    return stored ? JSON.parse(stored) : null;
+  // Get stored tokens (checks database first, falls back to localStorage for migration)
+  private async getTokens(): Promise<AuthTokens | null> {
+    const dbTokens = await tokenStorageService.getTokens('strava');
+    if (dbTokens) {
+      return dbTokens;
+    }
+
+    if (!this.migrationChecked) {
+      this.migrationChecked = true;
+      const stored = localStorage.getItem(STORAGE_KEYS.STRAVA_TOKENS);
+      if (stored) {
+        try {
+          const tokens = JSON.parse(stored);
+          await this.setTokens(tokens);
+          localStorage.removeItem(STORAGE_KEYS.STRAVA_TOKENS);
+          return tokens;
+        } catch (error) {
+          console.error('Failed to migrate localStorage tokens to database:', error);
+        }
+      }
+    }
+
+    return null;
   }
 
   // Store tokens
-  private setTokens(tokens: AuthTokens): void {
-    localStorage.setItem(STORAGE_KEYS.STRAVA_TOKENS, JSON.stringify(tokens));
+  private async setTokens(tokens: AuthTokens): Promise<void> {
+    try {
+      await tokenStorageService.setTokens('strava', tokens);
+    } catch (error) {
+      console.error('Failed to save tokens to database:', error);
+      localStorage.setItem(STORAGE_KEYS.STRAVA_TOKENS, JSON.stringify(tokens));
+    }
   }
 
   // Check if tokens are valid and refresh if needed
   private async ensureValidTokens(): Promise<string | null> {
-    const tokens = this.getTokens();
+    const tokens = await this.getTokens();
     if (!tokens) return null;
 
     // Check if token is expired (with 5 minute buffer)
@@ -30,7 +56,7 @@ class StravaApiService {
         return refreshed.access_token;
       } catch (error) {
         console.error('Failed to refresh tokens:', error);
-        this.clearTokens();
+        await this.clearTokens();
         return null;
       }
     }
@@ -176,25 +202,26 @@ class StravaApiService {
   }
 
   // Clear stored tokens
-  clearTokens(): void {
+  async clearTokens(): Promise<void> {
+    await tokenStorageService.deleteTokens('strava');
     localStorage.removeItem(STORAGE_KEYS.STRAVA_TOKENS);
     localStorage.removeItem(STORAGE_KEYS.ATHLETE_DATA);
   }
 
   // Check if user is authenticated
-  isAuthenticated(): boolean {
-    const tokens = this.getTokens();
+  async isAuthenticated(): Promise<boolean> {
+    const tokens = await this.getTokens();
     if (!tokens) {
-      console.log('No tokens found in localStorage');
+      console.log('No tokens found in database or localStorage');
       return false;
     }
-    
+
     console.log('Tokens found:', {
       hasAccessToken: !!tokens.access_token,
       expiresAt: tokens.expires_at,
       now: Math.floor(Date.now() / 1000)
     });
-    
+
     return !!tokens.access_token;
   }
 

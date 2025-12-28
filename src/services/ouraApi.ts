@@ -2,25 +2,60 @@
 import axios from 'axios';
 import { format, subDays } from 'date-fns';
 import { OURA_CONFIG, STORAGE_KEYS } from '../utils/constants';
+import { tokenStorageService } from './tokenStorageService';
 import type { OuraTokens, OuraSleepData, OuraReadinessData, OuraActivityData } from '../types';
 
 class OuraApiService {
   private baseURL = import.meta.env.DEV ? '/api/oura' : OURA_CONFIG.BASE_URL;
+  private migrationChecked = false;
 
-  // Get stored tokens
-  private getTokens(): OuraTokens | null {
-    const stored = localStorage.getItem(STORAGE_KEYS.OURA_TOKENS);
-    return stored ? JSON.parse(stored) : null;
+  // Get stored tokens (checks database first, falls back to localStorage for migration)
+  private async getTokens(): Promise<OuraTokens | null> {
+    const dbTokens = await tokenStorageService.getTokens('oura');
+    if (dbTokens) {
+      return {
+        access_token: dbTokens.access_token,
+        token_type: dbTokens.token_type
+      };
+    }
+
+    if (!this.migrationChecked) {
+      this.migrationChecked = true;
+      const stored = localStorage.getItem(STORAGE_KEYS.OURA_TOKENS);
+      if (stored) {
+        try {
+          const tokens = JSON.parse(stored);
+          await this.setTokens(tokens);
+          localStorage.removeItem(STORAGE_KEYS.OURA_TOKENS);
+          return tokens;
+        } catch (error) {
+          console.error('Failed to migrate Oura localStorage tokens to database:', error);
+        }
+      }
+    }
+
+    return null;
   }
 
   // Store tokens
-  private setTokens(tokens: OuraTokens): void {
-    localStorage.setItem(STORAGE_KEYS.OURA_TOKENS, JSON.stringify(tokens));
+  private async setTokens(tokens: OuraTokens): Promise<void> {
+    try {
+      await tokenStorageService.setTokens('oura', {
+        access_token: tokens.access_token,
+        refresh_token: '',
+        expires_at: 0,
+        expires_in: 0,
+        token_type: tokens.token_type || 'Bearer'
+      });
+    } catch (error) {
+      console.error('Failed to save Oura tokens to database:', error);
+      localStorage.setItem(STORAGE_KEYS.OURA_TOKENS, JSON.stringify(tokens));
+    }
   }
 
   // Check if tokens are valid and refresh if needed
   private async ensureValidTokens(): Promise<string | null> {
-    const tokens = this.getTokens();
+    const tokens = await this.getTokens();
     if (!tokens) return null;
 
     // For personal access tokens, no refresh needed - they're long-lived
@@ -146,14 +181,15 @@ class OuraApiService {
   }
 
   // Clear stored tokens
-  clearTokens(): void {
+  async clearTokens(): Promise<void> {
+    await tokenStorageService.deleteTokens('oura');
     localStorage.removeItem(STORAGE_KEYS.OURA_TOKENS);
   }
 
   // Check if user is authenticated
-  isAuthenticated(): boolean {
+  async isAuthenticated(): Promise<boolean> {
     try {
-      const tokens = this.getTokens();
+      const tokens = await this.getTokens();
       const isAuth = !!tokens?.access_token;
       console.log('Oura authentication check:', {
         hasTokens: !!tokens,

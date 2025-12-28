@@ -3,6 +3,7 @@ import { stravaApi } from '../services/stravaApi';
 import { stravaCacheService } from '../services/stravaCacheService';
 import { ouraApi } from '../services/ouraApi';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
+import { Button } from '../components/common/Button';
 import { ActivityCard } from '../components/dashboard/ActivityCard';
 import { ActivityDetailModal } from '../components/dashboard/ActivityDetailModal';
 import { StatsSummary } from '../components/dashboard/StatsSummary';
@@ -11,17 +12,20 @@ import { RecoveryCard } from '../components/dashboard/RecoveryCard';
 import { WeeklyInsightCard } from '../components/dashboard/WeeklyInsightCard';
 import { HealthSpiderChart } from '../components/dashboard/HealthSpiderChart';
 import { StravaOnlySpiderChart } from '../components/dashboard/StravaOnlySpiderChart';
+import { IntakeWizard } from '../components/onboarding/IntakeWizard';
 import { weeklyInsightService } from '../services/weeklyInsightService';
 import { healthMetricsService } from '../services/healthMetricsService';
 import { dailyMetricsService } from '../services/dailyMetricsService';
+import { getUserOnboardingStatus } from '../services/userService';
 import type { StravaActivity, StravaAthlete, WeeklyStats, OuraSleepData, OuraReadinessData, DailyMetric } from '../types';
 import type { WeeklyInsight, HealthMetrics } from '../services/weeklyInsightService';
 import { calculateWeeklyStats } from '../utils/dataProcessing';
-import { MessageCircle, TrendingUp, ChevronDown, ChevronUp, Database } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { MessageCircle, ChevronDown, ChevronUp, Database, Calendar, Link2Off, Activity } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../utils/constants';
 
 export const DashboardPage: React.FC = () => {
+  const navigate = useNavigate();
   const [athlete, setAthlete] = useState<StravaAthlete | null>(null);
   const [activities, setActivities] = useState<StravaActivity[]>([]);
   const [displayedActivities, setDisplayedActivities] = useState<StravaActivity[]>([]);
@@ -38,6 +42,7 @@ export const DashboardPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedActivity, setSelectedActivity] = useState<StravaActivity | null>(null);
   const [showAllActivities, setShowAllActivities] = useState(false);
+  const [isStravaConnected, setIsStravaConnected] = useState(false);
 
   // Collapsible widget states
   const [weeklyInsightCollapsed, setWeeklyInsightCollapsed] = useState(false);
@@ -45,6 +50,10 @@ export const DashboardPage: React.FC = () => {
 
   // View mode toggle
   const [viewMode, setViewMode] = useState<'auto' | 'full' | 'strava'>('auto');
+
+  // Onboarding wizard state
+  const [showWizard, setShowWizard] = useState(false);
+  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
   const INITIAL_ACTIVITIES_COUNT = 9;
 
@@ -54,12 +63,32 @@ export const DashboardPage: React.FC = () => {
         setLoading(true);
         setError(null);
 
-        // Fetch athlete data and recent activities from cache
-        const [athleteData, activitiesData] = await Promise.all([
-          stravaCacheService.getAthlete(),
-          stravaCacheService.getActivities(false, 20)
-        ]);
+        // Try to fetch athlete data and recent activities from cache
+        let athleteData: StravaAthlete;
+        let activitiesData: StravaActivity[];
 
+        try {
+          [athleteData, activitiesData] = await Promise.all([
+            stravaCacheService.getAthlete(),
+            stravaCacheService.getActivities(false, 20)
+          ]);
+        } catch (authError: any) {
+          // If we get an authentication error, show the ghost dashboard
+          if (authError?.message?.includes('authenticated') ||
+              authError?.message?.includes('token') ||
+              authError?.response?.status === 401 ||
+              authError?.response?.status === 403) {
+            console.log('Strava not connected:', authError.message);
+            setIsStravaConnected(false);
+            setLoading(false);
+            return;
+          }
+          // Re-throw other errors
+          throw authError;
+        }
+
+        // If we got here, we're connected
+        setIsStravaConnected(true);
         setAthlete(athleteData);
         setActivities(activitiesData);
         setDisplayedActivities(activitiesData.slice(0, INITIAL_ACTIVITIES_COUNT));
@@ -176,6 +205,26 @@ export const DashboardPage: React.FC = () => {
       setDisplayedActivities(activities.slice(0, INITIAL_ACTIVITIES_COUNT));
     }
   }, [showAllActivities, activities]);
+
+  useEffect(() => {
+    const checkOnboarding = async () => {
+      try {
+        const isOnboarded = await getUserOnboardingStatus();
+        setShowWizard(!isOnboarded);
+      } catch (error) {
+        console.error('Failed to check onboarding status:', error);
+      } finally {
+        setCheckingOnboarding(false);
+      }
+    };
+
+    checkOnboarding();
+  }, []);
+
+  const handleWizardComplete = () => {
+    setShowWizard(false);
+    window.location.reload();
+  };
 
   const generateWeeklyInsight = async (athleteData: StravaAthlete, activitiesData: StravaActivity[]) => {
     try {
@@ -327,11 +376,134 @@ export const DashboardPage: React.FC = () => {
     );
   }
 
+  if (!loading && !isStravaConnected) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Welcome Header */}
+          <div className="mb-6">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              Welcome to TrainingSmart AI! 👋
+            </h1>
+            <p className="text-gray-600">
+              Connect your Strava account to start analyzing your training data
+            </p>
+          </div>
+
+          {/* Action Header - Disabled State */}
+          <div className="mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => {}}
+                className="w-full opacity-50 cursor-not-allowed"
+                disabled
+              >
+                <MessageCircle className="w-5 h-5 mr-2" />
+                Chat with AI Coach
+                <span className="ml-2 text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">Demo Mode</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => {}}
+                className="w-full opacity-50 cursor-not-allowed"
+                disabled
+              >
+                <Calendar className="w-5 h-5 mr-2" />
+                Generate New Plan
+                <span className="ml-2 text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">Demo Mode</span>
+              </Button>
+            </div>
+          </div>
+
+          {/* Ghost Dashboard - Locked Analytics Section */}
+          <div className="mb-8 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden relative">
+            {/* Grayed Out Background */}
+            <div className="absolute inset-0 bg-gray-50 opacity-50 z-0"></div>
+
+            {/* Skeleton/Placeholder Charts */}
+            <div className="relative z-0 p-6 opacity-30">
+              <div className="mb-8">
+                <div className="h-64 bg-gray-200 rounded-lg animate-pulse"></div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="h-24 bg-gray-200 rounded-lg animate-pulse"></div>
+                <div className="h-24 bg-gray-200 rounded-lg animate-pulse"></div>
+                <div className="h-24 bg-gray-200 rounded-lg animate-pulse"></div>
+              </div>
+            </div>
+
+            {/* Centered Action Card Overlay */}
+            <div className="absolute inset-0 flex items-center justify-center z-10">
+              <div className="bg-white rounded-xl shadow-xl border-2 border-gray-300 p-8 max-w-md mx-4 text-center">
+                <div className="mb-4 flex justify-center">
+                  <div className="p-4 bg-orange-50 rounded-full">
+                    <Link2Off className="w-12 h-12 text-orange-500" />
+                  </div>
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                  Training Data Offline
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  Connect your Strava account to unlock AI analysis and performance trends.
+                </p>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  onClick={() => navigate(ROUTES.SETTINGS)}
+                  className="w-full"
+                >
+                  <Activity className="w-5 h-5 mr-2" />
+                  Connect Strava
+                </Button>
+                <p className="text-sm text-gray-500 mt-4">
+                  Your data stays private and secure
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Info Section */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-blue-900 mb-2">
+              Why Connect Strava?
+            </h3>
+            <ul className="space-y-2 text-blue-800">
+              <li className="flex items-start">
+                <span className="mr-2">✓</span>
+                <span>AI-powered training insights based on your actual performance</span>
+              </li>
+              <li className="flex items-start">
+                <span className="mr-2">✓</span>
+                <span>Personalized coaching recommendations and training plans</span>
+              </li>
+              <li className="flex items-start">
+                <span className="mr-2">✓</span>
+                <span>Track your progress over time with detailed analytics</span>
+              </li>
+              <li className="flex items-start">
+                <span className="mr-2">✓</span>
+                <span>Optimize your training with recovery and performance metrics</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Intake Wizard Modal - Always render if needed */}
+        {showWizard && !checkingOnboarding && (
+          <IntakeWizard onComplete={handleWizardComplete} />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Header */}
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Welcome back, {athlete?.firstname}! 👋
           </h1>
@@ -340,7 +512,30 @@ export const DashboardPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Weekly Stats */}
+        {/* Action Header */}
+        <div className="mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Button
+              variant="primary"
+              size="lg"
+              onClick={() => navigate(ROUTES.CHAT)}
+              className="w-full"
+            >
+              <MessageCircle className="w-5 h-5 mr-2" />
+              Chat with AI Coach
+            </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={() => navigate(ROUTES.PLANS)}
+              className="w-full"
+            >
+              <Calendar className="w-5 h-5 mr-2" />
+              Generate New Plan
+            </Button>
+          </div>
+        </div>
+
         {/* Weekly Insight */}
         <div className="mb-8 bg-white rounded-lg shadow-sm border border-gray-200">
           <div className="p-4 border-b border-gray-200">
@@ -481,47 +676,6 @@ export const DashboardPage: React.FC = () => {
           </div>
         )}
 
-        {/* Quick Actions */}
-        <div className="grid md:grid-cols-2 gap-4 mb-8">
-          <Link
-            to={ROUTES.CHAT}
-            className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow group"
-          >
-            <div className="flex items-center space-x-4">
-              <div className="bg-blue-50 p-3 rounded-full">
-                <MessageCircle className="w-6 h-6 text-blue-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
-                  Chat with AI Coach
-                </h3>
-                <p className="text-gray-600 text-sm">
-                  Get personalized training advice based on your data
-                </p>
-              </div>
-            </div>
-          </Link>
-
-          <Link
-            to={ROUTES.PLANS}
-            className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow group"
-          >
-            <div className="flex items-center space-x-4">
-              <div className="bg-green-50 p-3 rounded-full">
-                <TrendingUp className="w-6 h-6 text-green-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900 group-hover:text-green-600 transition-colors">
-                  Generate Training Plan
-                </h3>
-                <p className="text-gray-600 text-sm">
-                  Create a personalized plan for your goals
-                </p>
-              </div>
-            </div>
-          </Link>
-        </div>
-
         {/* Recent Activities */}
         <div>
           <div className="flex items-center justify-between mb-6">
@@ -584,6 +738,11 @@ export const DashboardPage: React.FC = () => {
             similarActivities={getSimilarActivities(selectedActivity)}
             onClose={handleCloseModal}
           />
+        )}
+
+        {/* Intake Wizard Modal */}
+        {showWizard && !checkingOnboarding && (
+          <IntakeWizard onComplete={handleWizardComplete} />
         )}
       </div>
     </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Activity, MessageCircle, Calendar, Settings, User, LogOut, Shield } from 'lucide-react';
+import { Activity, MessageCircle, Calendar, Settings, User, LogOut, Shield, BookOpen } from 'lucide-react';
 import { ROUTES } from '../../utils/constants';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -31,6 +31,7 @@ export const Header: React.FC = () => {
     { name: 'Dashboard', href: ROUTES.DASHBOARD, icon: Activity },
     { name: 'Chat', href: ROUTES.CHAT, icon: MessageCircle },
     { name: 'Plans', href: ROUTES.PLANS, icon: Calendar },
+    { name: 'Learn', href: ROUTES.LEARN, icon: BookOpen },
     { name: 'Settings', href: ROUTES.SETTINGS, icon: Settings },
   ];
 

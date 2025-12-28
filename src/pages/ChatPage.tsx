@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Send, Bot, User, Loader2, Menu, X, Calendar } from 'lucide-react';
+import { Send, Bot, User, Loader2, Menu, X, Calendar, Activity, Heart, Battery, Zap, TrendingUp, HelpCircle, Map, Coffee, Wind, Wrench } from 'lucide-react';
 import { stravaApi } from '../services/stravaApi';
 import { ouraApi } from '../services/ouraApi';
 import { openaiService } from '../services/openaiApi';
 import { chatSessionService } from '../services/chatSessionService';
 import { chatContextExtractor } from '../services/chatContextExtractor';
+import { userProfileService } from '../services/userProfileService';
 import { convertMarkdownToHtml } from '../utils/markdownToHtml';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { Button } from '../components/common/Button';
@@ -250,10 +251,18 @@ What would you like to know about your training?`;
     try {
       // Build training context
       const weeklyStats = calculateWeeklyStats(activities);
-      
+
       // Calculate sleep score if we have sleep data
       const sleepScore = sleepData ? calculateSleepScore(sleepData).totalScore : undefined;
-      
+
+      // Get user profile for personalized coaching
+      let userProfile;
+      try {
+        userProfile = await userProfileService.getUserProfile();
+      } catch (profileError) {
+        console.warn('Could not load user profile:', profileError);
+      }
+
       const trainingContext = {
         athlete,
         recentActivities: activities,
@@ -267,7 +276,12 @@ What would you like to know about your training?`;
           sleepData,
           readinessData,
           sleepScore
-        }
+        },
+        userProfile: userProfile ? {
+          training_goal: userProfile.training_goal,
+          coach_persona: userProfile.coach_persona,
+          weekly_hours: userProfile.weekly_hours
+        } : undefined
       };
 
       const response = await openaiService.getChatResponse(
@@ -347,14 +361,31 @@ What would you like to know about your training?`;
     }
   };
 
-  const suggestedQuestions = [
-    "Should I ride tomorrow?",
-    "Am I overtraining?",
-    "Plan my next week",
-    "Analyze my recent performance",
-    "How can I improve my FTP?",
-    "What's my training consistency like?"
-  ];
+  const SUGGESTIONS_MAP: Record<string, Array<{ label: string; icon: React.ComponentType<any> }>> = {
+    training: [
+      { label: "Analyze my last week", icon: Activity },
+      { label: "Build a plan for next week", icon: Calendar },
+      { label: "Critique my interval pacing", icon: Zap },
+      { label: "Create a hill climbing workout", icon: TrendingUp }
+    ],
+    recovery: [
+      { label: "My legs feel heavy today", icon: Battery },
+      { label: "Should I rest or ride easy?", icon: HelpCircle },
+      { label: "Suggest a 15min stretch routine", icon: User },
+      { label: "Why is my heart rate variable?", icon: Heart }
+    ],
+    strategy: [
+      { label: "Pacing strategy for a Century", icon: Map },
+      { label: "Nutrition plan for 3hr ride", icon: Coffee },
+      { label: "How to handle crosswinds", icon: Wind },
+      { label: "Equipment check for race day", icon: Wrench }
+    ]
+  };
+
+  const getCurrentSuggestions = () => {
+    const category = activeSession?.category || 'training';
+    return SUGGESTIONS_MAP[category] || SUGGESTIONS_MAP.training;
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -363,8 +394,68 @@ What would you like to know about your training?`;
     }
   };
 
-  const handleSuggestedQuestion = (question: string) => {
-    setInputMessage(question);
+  const handleSuggestedQuestion = async (question: string) => {
+    if (!athlete || !activeSession) return;
+
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: question,
+      timestamp: new Date()
+    };
+
+    chatSessionService.addMessageToSession(activeSession.id, userMessage);
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const weeklyStats = calculateWeeklyStats(activities);
+      const sleepScore = sleepData ? calculateSleepScore(sleepData).totalScore : undefined;
+
+      const trainingContext = {
+        athlete,
+        recentActivities: activities,
+        stats: stats || {} as StravaStats,
+        weeklyVolume: {
+          distance: weeklyStats.totalDistance,
+          time: weeklyStats.totalTime,
+          activities: weeklyStats.activityCount
+        },
+        recovery: {
+          sleepData,
+          readinessData,
+          sleepScore
+        }
+      };
+
+      const response = await openaiService.getChatResponse(
+        [...activeSession.messages, userMessage],
+        trainingContext
+      );
+
+      const assistantMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: response,
+        timestamp: new Date()
+      };
+
+      chatSessionService.addMessageToSession(activeSession.id, assistantMessage);
+
+      const updatedSessions = await chatSessionService.getSessions();
+      setSessions(updatedSessions);
+
+      const updatedSession = await chatSessionService.getSession(activeSession.id);
+      if (updatedSession) {
+        setActiveSession(updatedSession);
+      }
+    } catch (err) {
+      console.error('Chat error:', err);
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (dataLoading) {
@@ -577,20 +668,33 @@ What would you like to know about your training?`;
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Suggested Questions */}
-        {activeSession && activeSession.messages.length <= 1 && !loading && (
-          <div className="border-t border-gray-200 p-4 bg-white flex-shrink-0">
-            <p className="text-sm text-gray-600 mb-2">Try asking:</p>
-            <div className="flex flex-wrap gap-2">
-              {suggestedQuestions.map((question) => (
-                <button
-                  key={question}
-                  onClick={() => handleSuggestedQuestion(question)}
-                  className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-full transition-colors"
-                >
-                  {question}
-                </button>
-              ))}
+        {/* Quick Start Suggestions */}
+        {activeSession && activeSession.messages.length === 0 && !loading && (
+          <div className="border-t border-gray-200 p-6 bg-gradient-to-br from-gray-50 to-white flex-shrink-0">
+            <div className="max-w-3xl mx-auto">
+              <div className="text-center mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Quick Start</h3>
+                <p className="text-sm text-gray-600">Get started with one of these suggestions</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {getCurrentSuggestions().map((suggestion) => {
+                  const Icon = suggestion.icon;
+                  return (
+                    <button
+                      key={suggestion.label}
+                      onClick={() => handleSuggestedQuestion(suggestion.label)}
+                      className="group flex items-center space-x-3 p-4 bg-white border-2 border-gray-200 rounded-lg hover:border-orange-400 hover:shadow-md transition-all text-left"
+                    >
+                      <div className="flex-shrink-0 w-10 h-10 bg-orange-50 group-hover:bg-orange-100 rounded-lg flex items-center justify-center transition-colors">
+                        <Icon className="w-5 h-5 text-orange-500" />
+                      </div>
+                      <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">
+                        {suggestion.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
