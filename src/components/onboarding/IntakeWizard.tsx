@@ -9,7 +9,7 @@ interface IntakeWizardProps {
 
 const TRAINING_GOALS = [
   {
-    id: 'Event Prep',
+    id: 'event_prep',
     label: 'Event Prep',
     description: 'Training for a race or event',
     icon: Trophy,
@@ -18,7 +18,7 @@ const TRAINING_GOALS = [
     borderColor: 'border-yellow-300'
   },
   {
-    id: 'General Fitness',
+    id: 'general_fitness',
     label: 'General Fitness',
     description: 'Building healthy habits',
     icon: Heart,
@@ -27,7 +27,7 @@ const TRAINING_GOALS = [
     borderColor: 'border-red-300'
   },
   {
-    id: 'Performance/Speed',
+    id: 'performance',
     label: 'Performance/Speed',
     description: 'Getting faster and stronger',
     icon: Zap,
@@ -36,7 +36,7 @@ const TRAINING_GOALS = [
     borderColor: 'border-orange-300'
   },
   {
-    id: 'Weight Loss',
+    id: 'weight_loss',
     label: 'Weight Loss',
     description: 'Managing weight through exercise',
     icon: Scale,
@@ -50,17 +50,17 @@ const WEEKLY_HOURS = [3, 5, 8, 10, 12];
 
 const COACH_PERSONAS = [
   {
-    id: 'Supportive',
+    id: 'supportive',
     label: 'Supportive',
     description: 'Gentle, encouraging, and understanding'
   },
   {
-    id: 'Drill Sergeant',
+    id: 'drill_sergeant',
     label: 'Drill Sergeant',
     description: 'Direct, demanding, and no-nonsense'
   },
   {
-    id: 'Analytical',
+    id: 'analytical',
     label: 'Analytical',
     description: 'Data-focused, precise, and scientific'
   }

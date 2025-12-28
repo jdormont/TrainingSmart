@@ -15,28 +15,28 @@ export interface ContentProfileSeed {
 
 function mapWizardToContentProfile(trainingGoal: string): ContentProfileSeed {
   switch (trainingGoal) {
-    case 'Event Prep':
+    case 'event_prep':
       return {
         goals: ['race strategy', 'peak performance'],
         interests: ['racing', 'race preparation', 'events'],
         skill_level: 'intermediate'
       };
 
-    case 'General Fitness':
+    case 'general_fitness':
       return {
         goals: ['consistency', 'health'],
         interests: ['lifestyle', 'nutrition', 'general fitness'],
         skill_level: 'beginner'
       };
 
-    case 'Performance/Speed':
+    case 'performance':
       return {
         goals: ['power', 'speed'],
         interests: ['training science', 'interval training', 'tech'],
         skill_level: 'advanced'
       };
 
-    case 'Weight Loss':
+    case 'weight_loss':
       return {
         goals: ['weight management', 'metabolism'],
         interests: ['nutrition', 'indoor cycling', 'health'],
