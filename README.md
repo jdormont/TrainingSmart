@@ -1,183 +1,107 @@
 # TrainingSmart AI
 
-A personal training assistant web app that integrates Strava activity data with AI-powered training advice and personalized content recommendations.
+## Can I train smarter, not harder?
 
-## 🔒 Security
+**TrainingSmart AI** is your personal digital cycling coach. It looks at your actual ride data (from Strava), understands your recovery needs (like how well you slept), and uses advanced AI to give you personalized training advice and plans.
 
-This application uses Supabase Edge Functions to securely handle all OpenAI API calls on the backend. API keys are stored as Supabase secrets and never exposed to the frontend.
+Instead of generic "one-size-fits-all" plans, TrainingSmart AI adapts to *you*.
 
-## 🛡️ Strava API Compliance & Privacy
+### Key Features
 
-**This application is fully compliant with Strava's API Terms of Service.**
-
-- ✅ Strava data is NEVER used to train or improve AI models
-- ✅ Data is used only as runtime context for real-time inference
-- ✅ All AI processing uses OpenAI's Chat Completions API (inference only)
-- ✅ No fine-tuning, embeddings, or model training of any kind
-- ✅ User data is secured with row-level security policies
-
-**Documentation:**
-- 📄 [Full Compliance Documentation](./STRAVA_COMPLIANCE.md) - Technical details of our AI/ML usage
-- 🔒 [Privacy Policy](./src/pages/PrivacyPage.tsx) - User-facing privacy information
-
-All OpenAI edge functions include compliance comments documenting inference-only usage.
-
-## Features
-
-- 🔗 **Strava Integration**: OAuth authentication and activity data sync
-- 🤖 **AI Training Coach**: Personalized advice based on your real training data
-- 📊 **Advanced Analytics**: Training trends, weekly stats, and performance insights
-- 📺 **Personalized Content Feed**: Curated cycling content based on your interests
-- 💬 **Multiple Chat Sessions**: Organized conversations by topic (training, recovery, nutrition, etc.)
-- 📋 **Training Plan Generation**: AI-created plans based on your goals and fitness level
-- 📅 **Google Calendar Export**: One-way sync of workout plans to your Google Calendar
-
-## Quick Start
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd trainingsmart-ai
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Set up environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your API credentials
-   ```
-
-4. **Start development server**
-   ```bash
-   npm run dev
-   ```
-
-## Environment Variables
-
-Create a `.env` file based on `.env.example`:
-
-```env
-# Strava API (get from https://www.strava.com/settings/api)
-VITE_STRAVA_CLIENT_ID=your_strava_client_id
-VITE_STRAVA_CLIENT_SECRET=your_strava_client_secret  # MOVE TO BACKEND!
-VITE_STRAVA_REDIRECT_URI=http://localhost:5173/auth/callback
-
-# OpenAI API (get from https://platform.openai.com/api-keys)
-VITE_OPENAI_API_KEY=your_openai_api_key  # MOVE TO BACKEND!
-
-# YouTube API (get from Google Cloud Console)
-VITE_YOUTUBE_API_KEY=your_youtube_api_key  # MOVE TO BACKEND!
-```
-
-**⚠️ NEVER commit your `.env` file to version control!**
-
-## API Setup
-
-### Strava API
-1. Go to [Strava API Settings](https://www.strava.com/settings/api)
-2. Create a new application
-3. Set Authorization Callback Domain to your domain
-4. Copy Client ID and Client Secret
-
-### OpenAI API
-1. Go to [OpenAI API Keys](https://platform.openai.com/api-keys)
-2. Create a new API key
-3. Copy the key (starts with `sk-`)
-
-### YouTube API (Optional)
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Enable YouTube Data API v3
-3. Create credentials (API Key)
-4. Copy the API key
-
-### Google Calendar API (Optional)
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select an existing one
-3. Enable Google Calendar API
-4. Go to Credentials → Create Credentials → OAuth 2.0 Client ID
-5. Configure OAuth consent screen (add your app name and scopes)
-6. Choose "Web application" as application type
-7. Add authorized redirect URIs:
-   - Development: `http://localhost:5173/settings`
-   - Production: `https://yourdomain.com/settings`
-8. Copy the Client ID and Client Secret
-9. Add required OAuth scope: `https://www.googleapis.com/auth/calendar.events`
-
-## Architecture
-
-- **Frontend**: React + TypeScript + Tailwind CSS
-- **State Management**: React hooks + localStorage
-- **Charts**: Recharts
-- **Icons**: Lucide React
-- **Build Tool**: Vite
-
-## Security Recommendations
-
-### For Production Deployment:
-
-1. **Backend API Server**
-   ```
-   Frontend → Your Backend → External APIs
-   ```
-   - Keep all API keys server-side
-   - Implement user authentication
-   - Rate limiting and request validation
-
-2. **Serverless Functions**
-   ```
-   Frontend → Vercel/Netlify Functions → External APIs
-   ```
-   - Environment variables stay server-side
-   - Automatic scaling
-   - Cost-effective for small apps
-
-3. **User-Provided Keys**
-   ```
-   User enters their own API keys → Stored locally
-   ```
-   - Users responsible for their own keys
-   - No server costs for you
-   - Requires user technical knowledge
-
-## Development
-
-```bash
-# Start development server
-npm run dev
-
-# Build for production
-npm run build
-
-# Preview production build
-npm run preview
-
-# Lint code
-npm run lint
-```
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
-## License
-
-MIT License - see LICENSE file for details
-
-## Support
-
-For issues and questions:
-1. Check the GitHub issues
-2. Review the security guidelines above
-3. Ensure proper API key configuration
+*   **🏆 Connect with Strava**: Automatically pulls in your ride history so the AI knows your fitness level.
+*   **🤖 AI Coach Chat**: Ask questions like "I'm feeling tired today, what should I do?" or "How do I improve my hill climbing?" and get answers based on your real data.
+*   **📊 Smart Dashboard**: See your weekly progress, fatigue levels, and personalized tips at a glance.
+*   **📅 Custom Training Plans**: Generate a training plan for your specific goal (e.g., "Prepare for a Century Ride in 8 weeks") that fits your schedule.
 
 ---
 
-**Remember: Implement proper security measures before deploying to production!**
+## Application Guide
+
+Here is a tour of the main features you'll use in TrainingSmart AI:
+
+### 📊 Dashboard
+The mission control for your training.
+*   **Health Overview**: A "Spider Chart" that visualizes your current fitness across multiple dimensions (Endurance, Speed, Recovery, Consistency) compared to your historical baseline.
+*   **Weekly Insights**: AI-generated summary of your week. It analyzes your recent volume and intensity to tell you if you're on track or overtraining.
+*   **Recovery & Sleep**: If you connect an **Oura Ring**, this section shows your Sleep and Readiness scores. The AI uses this to recommend rest days when you're burnt out.
+*   **Recent Activities**: A quick list of your latest Strava rides.
+
+### 🤖 AI Coach Chat
+Talk to a coach who actually knows you.
+*   **Context-Aware**: The chatbot automatically receives your recent activity stats and recovery data. You don't have to explain that you did a "hard interval session yesterday" – it already knows.
+*   **Session Management**: Create different chat threads for different topics (e.g., "Nutrition", "Race Prep", "Gear Talk").
+*   **Create Plans from Chat**: If you discuss a goal with the coach (like "I want to ride 100 miles"), it can detect that intent and offer to build a structured plan for you immediately.
+
+### 📅 Training Plans
+Structured paths to hit your goals.
+*   **AI Plan Generator**: Tell the app your goal (e.g., "Gran Fondo next month"), your available time (e.g., "6 hours/week"), and your focus areas. It will build a full schedule for you.
+*   **Calendar & List Views**: See your upcoming workouts in a format that works for you.
+*   **Google Calendar Sync**: One-click export of your workouts to your personal Google Calendar so you never miss a session.
+*   **Modify Weeks**: Sick or busy? Ask the AI to "rewrite this week" to accommodate your schedule change.
+
+### ⚙️ Settings
+Customize your experience.
+*   **Integrations**: Connect or disconnect your **Strava**, **Oura Ring**, and **Google Calendar** accounts.
+*   **AI Personality**: You can customize the "System Prompt" of your coach. Want a drill sergeant? A supportive cheerleader? A science-nerd physiologist? You can change the AI's personality to match your motivational style.
+
+---
+
+## How it Works (Under the Hood)
+
+You don't need to be a tech expert to understand how TrainingSmart AI works. Here are the three main parts of the system:
+
+### 1. The Database
+We use a secure database (Supabase) to keep your information safe and organized. Think of it like a very smart filing cabinet:
+*   **User Profiles**: Stores your preferences and settings.
+*   **Training Plans**: Keeps the schedules the AI builds for you.
+*   **Workouts**: Breaks down your plan into individual daily sessions (e.g., "Tuesday: 45min Recovery Ride").
+*   **Daily Metrics**: Tracks your daily health stats like sleep and heart rate to make sure you aren't overtraining.
+
+### 2. The AI Brain
+We use OpenAI (the makers of ChatGPT) to analyze your data. When you ask for advice, the app securely sends your *anonymized* recent stats to the AI, which then acts like a professional coach to give you the best answer.
+
+### 3. Your Data Privacy
+Your privacy is our priority.
+*   **Strava Compliance**: We only use your Strava data to give you advice right now. We do *not* use it to train the AI models.
+*   **Secure Storage**: Your API keys and personal data are stored securely.
+
+---
+
+## How to Run the App
+
+If you want to run this application on your own computer, follow these steps.
+
+### Prerequisites
+*   **Node.js**: You need to have Node.js installed. If you don't have it, download it from [nodejs.org](https://nodejs.org/).
+
+### Step-by-Step Guide
+
+1.  **Download the Code**
+    Open your terminal (Command Prompt on Windows, Terminal on Mac) and "clone" the repository:
+    ```bash
+    git clone <repository-url>
+    cd TrainingSmart
+    ```
+
+2.  **Install Dependencies**
+    This installs all the software libraries the app needs to run:
+    ```bash
+    npm install
+    ```
+
+3.  **Configure Keys**
+    You need to set up your "keys" for the services we use (Strava, OpenAI).
+    *   Duplicate the `.env.example` file and rename it to `.env`.
+    *   Open `.env` in a text editor.
+    *   Fill in your API keys (you will need to get these from Strava and OpenAI).
+
+4.  **Start the App**
+    Run this command to turn on the "Dev Server":
+    ```bash
+    npm run dev
+    ```
+
+5.  **Open in Browser**
+    Look at the terminal output. It will usually say something like `Local: http://localhost:5173/`. Copy that address and paste it into your web browser.
+
+That's it! You should now see the TrainingSmart AI login screen.
