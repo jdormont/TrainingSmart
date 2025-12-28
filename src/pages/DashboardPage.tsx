@@ -20,7 +20,7 @@ import { getUserOnboardingStatus } from '../services/userService';
 import type { StravaActivity, StravaAthlete, WeeklyStats, OuraSleepData, OuraReadinessData, DailyMetric } from '../types';
 import type { WeeklyInsight, HealthMetrics } from '../services/weeklyInsightService';
 import { calculateWeeklyStats } from '../utils/dataProcessing';
-import { MessageCircle, ChevronDown, ChevronUp, Database, Calendar } from 'lucide-react';
+import { MessageCircle, ChevronDown, ChevronUp, Database, Calendar, Link2Off, Activity } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../utils/constants';
 
@@ -42,6 +42,7 @@ export const DashboardPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedActivity, setSelectedActivity] = useState<StravaActivity | null>(null);
   const [showAllActivities, setShowAllActivities] = useState(false);
+  const [isStravaConnected, setIsStravaConnected] = useState(false);
 
   // Collapsible widget states
   const [weeklyInsightCollapsed, setWeeklyInsightCollapsed] = useState(false);
@@ -61,6 +62,15 @@ export const DashboardPage: React.FC = () => {
       try {
         setLoading(true);
         setError(null);
+
+        // Check if Strava is connected
+        const connected = await stravaApi.isAuthenticated();
+        setIsStravaConnected(connected);
+
+        if (!connected) {
+          setLoading(false);
+          return;
+        }
 
         // Fetch athlete data and recent activities from cache
         const [athleteData, activitiesData] = await Promise.all([
@@ -351,6 +361,129 @@ export const DashboardPage: React.FC = () => {
             </button>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (!loading && !isStravaConnected) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Welcome Header */}
+          <div className="mb-6">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              Welcome to TrainingSmart AI! 👋
+            </h1>
+            <p className="text-gray-600">
+              Connect your Strava account to start analyzing your training data
+            </p>
+          </div>
+
+          {/* Action Header - Disabled State */}
+          <div className="mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => {}}
+                className="w-full opacity-50 cursor-not-allowed"
+                disabled
+              >
+                <MessageCircle className="w-5 h-5 mr-2" />
+                Chat with AI Coach
+                <span className="ml-2 text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">Demo Mode</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => {}}
+                className="w-full opacity-50 cursor-not-allowed"
+                disabled
+              >
+                <Calendar className="w-5 h-5 mr-2" />
+                Generate New Plan
+                <span className="ml-2 text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">Demo Mode</span>
+              </Button>
+            </div>
+          </div>
+
+          {/* Ghost Dashboard - Locked Analytics Section */}
+          <div className="mb-8 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden relative">
+            {/* Grayed Out Background */}
+            <div className="absolute inset-0 bg-gray-50 opacity-50 z-0"></div>
+
+            {/* Skeleton/Placeholder Charts */}
+            <div className="relative z-0 p-6 opacity-30">
+              <div className="mb-8">
+                <div className="h-64 bg-gray-200 rounded-lg animate-pulse"></div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="h-24 bg-gray-200 rounded-lg animate-pulse"></div>
+                <div className="h-24 bg-gray-200 rounded-lg animate-pulse"></div>
+                <div className="h-24 bg-gray-200 rounded-lg animate-pulse"></div>
+              </div>
+            </div>
+
+            {/* Centered Action Card Overlay */}
+            <div className="absolute inset-0 flex items-center justify-center z-10">
+              <div className="bg-white rounded-xl shadow-xl border-2 border-gray-300 p-8 max-w-md mx-4 text-center">
+                <div className="mb-4 flex justify-center">
+                  <div className="p-4 bg-orange-50 rounded-full">
+                    <Link2Off className="w-12 h-12 text-orange-500" />
+                  </div>
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                  Training Data Offline
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  Connect your Strava account to unlock AI analysis and performance trends.
+                </p>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  onClick={() => navigate(ROUTES.SETTINGS)}
+                  className="w-full"
+                >
+                  <Activity className="w-5 h-5 mr-2" />
+                  Connect Strava
+                </Button>
+                <p className="text-sm text-gray-500 mt-4">
+                  Your data stays private and secure
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Info Section */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-blue-900 mb-2">
+              Why Connect Strava?
+            </h3>
+            <ul className="space-y-2 text-blue-800">
+              <li className="flex items-start">
+                <span className="mr-2">✓</span>
+                <span>AI-powered training insights based on your actual performance</span>
+              </li>
+              <li className="flex items-start">
+                <span className="mr-2">✓</span>
+                <span>Personalized coaching recommendations and training plans</span>
+              </li>
+              <li className="flex items-start">
+                <span className="mr-2">✓</span>
+                <span>Track your progress over time with detailed analytics</span>
+              </li>
+              <li className="flex items-start">
+                <span className="mr-2">✓</span>
+                <span>Optimize your training with recovery and performance metrics</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Intake Wizard Modal - Always render if needed */}
+        {showWizard && !checkingOnboarding && (
+          <IntakeWizard onComplete={handleWizardComplete} />
+        )}
       </div>
     );
   }
