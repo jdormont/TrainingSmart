@@ -6,6 +6,7 @@ import { ouraApi } from '../services/ouraApi';
 import { openaiService } from '../services/openaiApi';
 import { chatSessionService } from '../services/chatSessionService';
 import { chatContextExtractor } from '../services/chatContextExtractor';
+import { userProfileService } from '../services/userProfileService';
 import { convertMarkdownToHtml } from '../utils/markdownToHtml';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { Button } from '../components/common/Button';
@@ -250,10 +251,18 @@ What would you like to know about your training?`;
     try {
       // Build training context
       const weeklyStats = calculateWeeklyStats(activities);
-      
+
       // Calculate sleep score if we have sleep data
       const sleepScore = sleepData ? calculateSleepScore(sleepData).totalScore : undefined;
-      
+
+      // Get user profile for personalized coaching
+      let userProfile;
+      try {
+        userProfile = await userProfileService.getUserProfile();
+      } catch (profileError) {
+        console.warn('Could not load user profile:', profileError);
+      }
+
       const trainingContext = {
         athlete,
         recentActivities: activities,
@@ -267,7 +276,12 @@ What would you like to know about your training?`;
           sleepData,
           readinessData,
           sleepScore
-        }
+        },
+        userProfile: userProfile ? {
+          training_goal: userProfile.training_goal,
+          coach_persona: userProfile.coach_persona,
+          weekly_hours: userProfile.weekly_hours
+        } : undefined
       };
 
       const response = await openaiService.getChatResponse(

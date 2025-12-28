@@ -3,6 +3,7 @@ import type { StravaActivity, StravaAthlete, OuraSleepData, OuraReadinessData, C
 export type { HealthMetrics } from './healthMetricsService';
 import { openaiService } from './openaiApi';
 import { chatSessionService } from './chatSessionService';
+import { userProfileService } from './userProfileService';
 import { STORAGE_KEYS } from '../utils/constants';
 import { startOfWeek, endOfWeek, subWeeks, format } from 'date-fns';
 
@@ -350,6 +351,14 @@ Generate a JSON response with:
       const prompt = this.buildInsightPrompt(athlete, patterns, themes);
       console.log('Generated AI prompt');
 
+      // Get user profile for personalized coaching
+      let userProfile;
+      try {
+        userProfile = await userProfileService.getUserProfile();
+      } catch (profileError) {
+        console.warn('Could not load user profile for insight generation:', profileError);
+      }
+
       // Get AI response
       const aiResponse = await openaiService.getChatResponse(
         [{ id: 'insight', role: 'user', content: prompt, timestamp: new Date() }],
@@ -361,7 +370,12 @@ Generate a JSON response with:
             distance: patterns.weeklyVolume.thisWeek * 1609.34, // Convert back to meters
             time: 0,
             activities: patterns.weeklyVolume.activities
-          }
+          },
+          userProfile: userProfile ? {
+            training_goal: userProfile.training_goal,
+            coach_persona: userProfile.coach_persona,
+            weekly_hours: userProfile.weekly_hours
+          } : undefined
         }
       );
 
