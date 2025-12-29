@@ -107,36 +107,35 @@ RESPONSE GUIDELINES:
     let recoveryContext = '';
     if (context.recovery?.sleepData || context.recovery?.readinessData) {
       recoveryContext = '\n\nRECOVERY DATA:';
-      
+
       if (context.recovery.sleepData) {
         const sleep = context.recovery.sleepData;
         const sleepHours = Math.round((sleep.total_sleep_duration / 3600) * 10) / 10;
         const deepSleepMin = Math.round(sleep.deep_sleep_duration / 60);
         const remSleepMin = Math.round(sleep.rem_sleep_duration / 60);
-        
+
         recoveryContext += `
 - Last night's sleep: ${sleepHours}h total (${sleep.efficiency}% efficiency)
 - Sleep quality: ${deepSleepMin}min deep sleep, ${remSleepMin}min REM sleep
 - Sleep disturbances: ${sleep.restless_periods} restless periods
 - Resting heart rate: ${sleep.lowest_heart_rate} bpm`;
-        
+
         if (context.recovery.sleepScore) {
           recoveryContext += `
 - Sleep score: ${context.recovery.sleepScore}/100`;
         }
       }
-      
+
       if (context.recovery.readinessData) {
         const readiness = context.recovery.readinessData;
         recoveryContext += `
 - Readiness score: ${readiness.score}/100
-- Recovery recommendation: ${
-          readiness.score >= 85 ? 'Ready for intense training' :
-          readiness.score >= 70 ? 'Moderate training recommended' :
-          'Focus on recovery today'
-        }`;
+- Recovery recommendation: ${readiness.score >= 85 ? 'Ready for intense training' :
+            readiness.score >= 70 ? 'Moderate training recommended' :
+              'Focus on recovery today'
+          }`;
       }
-      
+
       recoveryContext += '\n\nIMPORTANT: Use this recovery data to inform your training recommendations. Poor sleep or low readiness should lead to easier training suggestions.';
     }
 
@@ -150,9 +149,9 @@ ATHLETE PROFILE:
 RECENT TRAINING DATA:
 - This week: ${(context.weeklyVolume.distance * 0.000621371).toFixed(1)}mi over ${context.weeklyVolume.activities} activities
 - Total time: ${Math.round(context.weeklyVolume.time / 3600)}h ${Math.round((context.weeklyVolume.time % 3600) / 60)}m
-- Recent activities: ${context.recentActivities.slice(0, 5).map(a => 
-  `${a.type}: ${(a.distance * 0.000621371).toFixed(1)}mi in ${Math.round(a.moving_time / 60)}min`
-).join(', ')}${recoveryContext}
+- Recent activities: ${context.recentActivities.slice(0, 5).map(a =>
+      `${a.type}: ${(a.distance * 0.000621371).toFixed(1)}mi in ${Math.round(a.moving_time / 60)}min`
+    ).join(', ')}${recoveryContext}
 
 Use the coaching style and personality defined above, while incorporating this real-time training data into your responses.`;
   }
@@ -181,24 +180,31 @@ Use the coaching style and personality defined above, while incorporating this r
             'Authorization': `Bearer ${this.supabaseAnonKey}`,
             'Content-Type': 'application/json',
           },
+          timeout: 45000, // 45s timeout for chat response
         }
       );
 
       return response.data.content;
     } catch (error) {
       console.error('OpenAI API error:', error);
-      
+
       // Handle specific error types
       if (axios.isAxiosError(error)) {
+        if (error.code === 'ECONNABORTED') {
+          throw new Error('AI Coach check-in timed out. Please try again.');
+        }
+        if (error.code === 'ERR_NETWORK') {
+          throw new Error('Network error. Please check your internet connection.');
+        }
         if (error.response?.status === 429) {
           throw new Error('OpenAI API rate limit exceeded. Please wait a moment and try again, or check your OpenAI account limits.');
         }
-        
+
         const status = error.response?.status;
         const message = error.response?.data?.error?.message || error.message;
         throw new Error(`OpenAI API error (${status}): ${message}`);
       }
-      
+
       throw new Error('Failed to get AI response');
     }
   }

@@ -16,6 +16,7 @@ import WeeklyPlanView from '../components/plans/WeeklyPlanView';
 import PlanModificationModal from '../components/plans/PlanModificationModal';
 import { addDays } from 'date-fns';
 import { ouraApi } from '../services/ouraApi';
+import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
 
 export const PlansPage: React.FC = () => {
   const [athlete, setAthlete] = useState<StravaAthlete | null>(null);
@@ -83,7 +84,7 @@ export const PlansPage: React.FC = () => {
     try {
       const weeklyStats = calculateWeeklyStats(activities);
       const cyclingActivities = activities.filter(a => a.type === 'Ride');
-      
+
       const trainingContext = {
         athlete,
         recentActivities: cyclingActivities,
@@ -144,7 +145,7 @@ Additional Preferences: ${preferences || 'None'}
       const newPlan = await trainingPlansService.createPlan(planToCreate);
       const updatedPlans = [...savedPlans, newPlan];
       setSavedPlans(updatedPlans);
-      
+
       setShowForm(false);
       // Reset form
       setGoal('');
@@ -191,11 +192,11 @@ Additional Preferences: ${preferences || 'None'}
       prevPlans.map(p =>
         p.id === plan.id
           ? {
-              ...p,
-              workouts: p.workouts.map(w =>
-                w.id === workoutId ? { ...w, completed: newCompletedState } : w
-              )
-            }
+            ...p,
+            workouts: p.workouts.map(w =>
+              w.id === workoutId ? { ...w, completed: newCompletedState } : w
+            )
+          }
           : p
       )
     );
@@ -208,11 +209,11 @@ Additional Preferences: ${preferences || 'None'}
         prevPlans.map(p =>
           p.id === plan.id
             ? {
-                ...p,
-                workouts: p.workouts.map(w =>
-                  w.id === workoutId ? { ...w, completed: !newCompletedState } : w
-                )
-              }
+              ...p,
+              workouts: p.workouts.map(w =>
+                w.id === workoutId ? { ...w, completed: !newCompletedState } : w
+              )
+            }
             : p
         )
       );
@@ -324,12 +325,12 @@ Additional Preferences: ${preferences || 'None'}
         prevPlans.map(p =>
           p.id === modificationModal.planId
             ? {
-                ...p,
-                workouts: p.workouts.map(w => {
-                  const updatedWorkout = updatedWorkoutsWithDates.find(uw => uw.id === w.id);
-                  return updatedWorkout || w;
-                })
-              }
+              ...p,
+              workouts: p.workouts.map(w => {
+                const updatedWorkout = updatedWorkoutsWithDates.find(uw => uw.id === w.id);
+                return updatedWorkout || w;
+              })
+            }
             : p
         )
       );
@@ -388,6 +389,7 @@ Additional Preferences: ${preferences || 'None'}
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <NetworkErrorBanner />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -422,7 +424,7 @@ Additional Preferences: ${preferences || 'None'}
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               Generate New Cycling Plan
             </h3>
-            
+
             <form onSubmit={handleGeneratePlan} className="space-y-6">
               {/* Goal Type */}
               <div>
@@ -435,11 +437,10 @@ Additional Preferences: ${preferences || 'None'}
                       key={option.value}
                       type="button"
                       onClick={() => setGoalType(option.value as any)}
-                      className={`p-3 text-sm rounded-lg border transition-colors ${
-                        goalType === option.value
+                      className={`p-3 text-sm rounded-lg border transition-colors ${goalType === option.value
                           ? 'border-orange-500 bg-orange-50 text-orange-700'
                           : 'border-gray-200 hover:border-gray-300'
-                      }`}
+                        }`}
                     >
                       {option.label}
                     </button>
@@ -510,11 +511,10 @@ Additional Preferences: ${preferences || 'None'}
                       key={area}
                       type="button"
                       onClick={() => toggleFocusArea(area)}
-                      className={`p-2 text-xs rounded-md border transition-colors text-left ${
-                        focusAreas.includes(area)
+                      className={`p-2 text-xs rounded-md border transition-colors text-left ${focusAreas.includes(area)
                           ? 'border-orange-500 bg-orange-50 text-orange-700'
                           : 'border-gray-200 hover:border-gray-300'
-                      }`}
+                        }`}
                     >
                       {area}
                     </button>
@@ -589,7 +589,7 @@ Additional Preferences: ${preferences || 'None'}
               </Button>
             </div>
           ) : (
-<div className="space-y-6">
+            <div className="space-y-6">
               {savedPlans.map((plan) => {
                 const completedWorkouts = plan.workouts.filter(w => w.completed).length;
                 const totalWorkouts = plan.workouts.length;
@@ -688,22 +688,20 @@ Additional Preferences: ${preferences || 'None'}
                                 <div className="flex items-center space-x-2">
                                   <button
                                     onClick={() => setViewMode('calendar')}
-                                    className={`p-2 rounded-lg transition-colors ${
-                                      viewMode === 'calendar'
+                                    className={`p-2 rounded-lg transition-colors ${viewMode === 'calendar'
                                         ? 'bg-orange-100 text-orange-600'
                                         : 'text-gray-400 hover:text-gray-600'
-                                    }`}
+                                      }`}
                                     title="Calendar view"
                                   >
                                     <CalendarDays className="w-5 h-5" />
                                   </button>
                                   <button
                                     onClick={() => setViewMode('list')}
-                                    className={`p-2 rounded-lg transition-colors ${
-                                      viewMode === 'list'
+                                    className={`p-2 rounded-lg transition-colors ${viewMode === 'list'
                                         ? 'bg-orange-100 text-orange-600'
                                         : 'text-gray-400 hover:text-gray-600'
-                                    }`}
+                                      }`}
                                     title="List view"
                                   >
                                     <List className="w-5 h-5" />

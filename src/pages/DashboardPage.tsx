@@ -23,6 +23,7 @@ import { calculateWeeklyStats } from '../utils/dataProcessing';
 import { MessageCircle, ChevronDown, ChevronUp, Database, Calendar, Link2Off, Activity } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../utils/constants';
+import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -75,9 +76,9 @@ export const DashboardPage: React.FC = () => {
         } catch (authError: any) {
           // If we get an authentication error, show the ghost dashboard
           if (authError?.message?.includes('authenticated') ||
-              authError?.message?.includes('token') ||
-              authError?.response?.status === 401 ||
-              authError?.response?.status === 403) {
+            authError?.message?.includes('token') ||
+            authError?.response?.status === 401 ||
+            authError?.response?.status === 403) {
             console.log('Strava not connected:', authError.message);
             setIsStravaConnected(false);
             setLoading(false);
@@ -177,7 +178,7 @@ export const DashboardPage: React.FC = () => {
 
         // Generate weekly insight
         await generateWeeklyInsight(athleteData, activitiesData);
-        
+
         // Generate health metrics
         await generateHealthMetrics(athleteData, activitiesData);
 
@@ -230,11 +231,11 @@ export const DashboardPage: React.FC = () => {
     try {
       setInsightLoading(true);
       console.log('Generating weekly insight...');
-      
+
       // Get Oura data for insight generation
       let sleepDataForInsight: OuraSleepData[] = [];
       let readinessDataForInsight: OuraReadinessData[] = [];
-      
+
       if (ouraApi.isAuthenticated()) {
         try {
           const [sleepArray, readinessArray] = await Promise.all([
@@ -247,14 +248,14 @@ export const DashboardPage: React.FC = () => {
           console.warn('Could not load Oura data for insight generation:', ouraError);
         }
       }
-      
+
       const insight = await weeklyInsightService.generateWeeklyInsight(
         athleteData,
         activitiesData,
         sleepDataForInsight,
         readinessDataForInsight
       );
-      
+
       setWeeklyInsight(insight);
       console.log('Weekly insight generated:', insight);
     } catch (error) {
@@ -268,11 +269,11 @@ export const DashboardPage: React.FC = () => {
     try {
       setHealthLoading(true);
       console.log('Generating health metrics...');
-      
+
       // Get Oura data for health metrics
       let sleepDataForHealth: OuraSleepData[] = [];
       let readinessDataForHealth: OuraReadinessData[] = [];
-      
+
       if (ouraApi.isAuthenticated()) {
         try {
           const [sleepArray, readinessArray] = await Promise.all([
@@ -285,14 +286,14 @@ export const DashboardPage: React.FC = () => {
           console.warn('Could not load Oura data for health metrics:', ouraError);
         }
       }
-      
+
       const metrics = healthMetricsService.calculateHealthMetrics(
         athleteData,
         activitiesData,
         sleepDataForHealth,
         readinessDataForHealth
       );
-      
+
       setHealthMetrics(metrics);
       console.log('Health metrics generated:', metrics);
     } catch (error) {
@@ -312,7 +313,7 @@ export const DashboardPage: React.FC = () => {
 
   const hasOuraData = (): boolean => {
     return (sleepData !== null && sleepData !== undefined) ||
-           (readinessData !== null && readinessData !== undefined);
+      (readinessData !== null && readinessData !== undefined);
   };
 
   const getEffectiveViewMode = (): 'full' | 'strava' => {
@@ -324,8 +325,8 @@ export const DashboardPage: React.FC = () => {
 
   // Find similar activities for comparison
   const getSimilarActivities = (activity: StravaActivity): StravaActivity[] => {
-    return activities.filter(a => 
-      a.id !== activity.id && 
+    return activities.filter(a =>
+      a.id !== activity.id &&
       a.type === activity.type &&
       Math.abs(a.distance - activity.distance) < (activity.distance * 0.3) // Within 30% of distance
     ).slice(0, 10); // Limit to 10 for comparison
@@ -396,7 +397,7 @@ export const DashboardPage: React.FC = () => {
               <Button
                 variant="outline"
                 size="lg"
-                onClick={() => {}}
+                onClick={() => { }}
                 className="w-full opacity-50 cursor-not-allowed"
                 disabled
               >
@@ -407,7 +408,7 @@ export const DashboardPage: React.FC = () => {
               <Button
                 variant="outline"
                 size="lg"
-                onClick={() => {}}
+                onClick={() => { }}
                 className="w-full opacity-50 cursor-not-allowed"
                 disabled
               >
@@ -501,6 +502,7 @@ export const DashboardPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <NetworkErrorBanner />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Header */}
         <div className="mb-6">
@@ -554,10 +556,10 @@ export const DashboardPage: React.FC = () => {
               )}
             </button>
           </div>
-          
+
           {!weeklyInsightCollapsed && (
             <div className="p-6 pt-0">
-              <WeeklyInsightCard 
+              <WeeklyInsightCard
                 insight={weeklyInsight}
                 loading={insightLoading}
                 onRefresh={handleRefreshInsight}
@@ -593,32 +595,29 @@ export const DashboardPage: React.FC = () => {
                 <div className="ml-4 flex items-center bg-gray-100 rounded-lg p-1">
                   <button
                     onClick={() => setViewMode('auto')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                      viewMode === 'auto'
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === 'auto'
                         ? 'bg-white text-gray-900 shadow-sm'
                         : 'text-gray-600 hover:text-gray-900'
-                    }`}
+                      }`}
                   >
                     Auto
                   </button>
                   <button
                     onClick={() => setViewMode('full')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                      viewMode === 'full'
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === 'full'
                         ? 'bg-white text-gray-900 shadow-sm'
                         : 'text-gray-600 hover:text-gray-900'
-                    }`}
+                      }`}
                     disabled={!hasOuraData()}
                   >
                     Full
                   </button>
                   <button
                     onClick={() => setViewMode('strava')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                      viewMode === 'strava'
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === 'strava'
                         ? 'bg-white text-gray-900 shadow-sm'
                         : 'text-gray-600 hover:text-gray-900'
-                    }`}
+                      }`}
                   >
                     Training
                   </button>

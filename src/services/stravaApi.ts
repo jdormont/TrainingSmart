@@ -68,17 +68,17 @@ class StravaApiService {
   generateAuthUrl(): string {
     const clientId = import.meta.env.VITE_STRAVA_CLIENT_ID;
     const redirectUri = import.meta.env.VITE_STRAVA_REDIRECT_URI;
-    
+
     // Security check for production
     if (import.meta.env.PROD && (!clientId || clientId.includes('your_'))) {
       throw new Error('⚠️ SECURITY: Strava Client ID not properly configured for production deployment!');
     }
-    
+
     // Check if environment variables are configured
     if (!clientId || clientId === 'your_actual_strava_client_id_here') {
       throw new Error('Strava Client ID not configured. Please set VITE_STRAVA_CLIENT_ID in your .env file.');
     }
-    
+
     if (!redirectUri) {
       throw new Error('Strava Redirect URI not configured. Please set VITE_STRAVA_REDIRECT_URI in your .env file.');
     }
@@ -237,13 +237,22 @@ class StravaApiService {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
+        timeout: 10000, // 10s timeout
       });
 
       return response.data;
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response?.status === 429) {
-        const retryAfter = error.response.headers['retry-after'] || '15 minutes';
-        throw new Error(`Strava API rate limit exceeded. Please wait ${retryAfter} and try again. Strava limits: 100 requests per 15 minutes, 1000 per day.`);
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ECONNABORTED') {
+          throw new Error('Request timed out. Please check your internet connection.');
+        }
+        if (error.code === 'ERR_NETWORK') {
+          throw new Error('Network error. Please check your internet connection.');
+        }
+        if (error.response?.status === 429) {
+          const retryAfter = error.response.headers['retry-after'] || '15 minutes';
+          throw new Error(`Strava API rate limit exceeded. Please wait ${retryAfter} and try again.`);
+        }
       }
       throw error;
     }
@@ -265,13 +274,22 @@ class StravaApiService {
           page,
           per_page: perPage,
         },
+        timeout: 15000, // 15s timeout for activities
       });
 
       return response.data;
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response?.status === 429) {
-        const retryAfter = error.response.headers['retry-after'] || '15 minutes';
-        throw new Error(`Strava API rate limit exceeded. Please wait ${retryAfter} and try again. Strava limits: 100 requests per 15 minutes, 1000 per day.`);
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ECONNABORTED') {
+          throw new Error('Request timed out. Please check your internet connection.');
+        }
+        if (error.code === 'ERR_NETWORK') {
+          throw new Error('Network error. Please check your internet connection.');
+        }
+        if (error.response?.status === 429) {
+          const retryAfter = error.response.headers['retry-after'] || '15 minutes';
+          throw new Error(`Strava API rate limit exceeded. Please wait ${retryAfter} and try again.`);
+        }
       }
       throw error;
     }
