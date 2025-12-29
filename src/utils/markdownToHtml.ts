@@ -16,7 +16,7 @@ export const convertMarkdownToHtml = (text: string): string => {
   
   // Convert bullet points
   html = html.replace(/^- (.*$)/gm, '<li class="ml-4 mb-1">• $1</li>');
-  html = html.replace(/^  - (.*$)/gm, '<li class="ml-8 mb-1">◦ $1</li>');
+  html = html.replace(/^ {2}- (.*$)/gm, '<li class="ml-8 mb-1">◦ $1</li>');
   
   // Convert numbered lists
   html = html.replace(/^\d+\. (.*$)/gm, '<li class="ml-4 mb-2 list-decimal">$1</li>');
