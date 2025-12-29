@@ -236,7 +236,7 @@ export const DashboardPage: React.FC = () => {
       let sleepDataForInsight: OuraSleepData[] = [];
       let readinessDataForInsight: OuraReadinessData[] = [];
 
-      if (ouraApi.isAuthenticated()) {
+      if (await ouraApi.isAuthenticated()) {
         try {
           const [sleepArray, readinessArray] = await Promise.all([
             ouraApi.getRecentSleepData(),
@@ -274,7 +274,7 @@ export const DashboardPage: React.FC = () => {
       let sleepDataForHealth: OuraSleepData[] = [];
       let readinessDataForHealth: OuraReadinessData[] = [];
 
-      if (ouraApi.isAuthenticated()) {
+      if (await ouraApi.isAuthenticated()) {
         try {
           const [sleepArray, readinessArray] = await Promise.all([
             ouraApi.getRecentSleepData(),
