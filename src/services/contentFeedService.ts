@@ -218,145 +218,145 @@ class ContentFeedService {
 
   // Fetch content from YouTube
   // Fetch content from YouTube using Hybrid Approach (Interests + Trends)
-  async fetchYouTubeContent(userProfile: UserContentProfile): Promise < ContentItem[] > {
-              const profileHash = this.generateProfileHash(userProfile);
+  async fetchYouTubeContent(userProfile: UserContentProfile): Promise<ContentItem[]> {
+    const profileHash = this.generateProfileHash(userProfile);
 
-              // Check cache first
-              const cachedContent = this.loadCachedContent();
-              if(cachedContent && this.isCacheValid(cachedContent, profileHash)) {
-              console.log('Using cached YouTube content');
-              return cachedContent.content;
+    // Check cache first
+    const cachedContent = this.loadCachedContent();
+    if (cachedContent && this.isCacheValid(cachedContent, profileHash)) {
+      console.log('Using cached YouTube content');
+      return cachedContent.content;
+    }
+
+    if (!YOUTUBE_CONFIG.API_KEY ||
+      YOUTUBE_CONFIG.API_KEY.includes('your_youtube_api_key')) {
+      console.warn('YouTube API key not configured, using mock content');
+      return this.getMockYouTubeContent(userProfile);
+    }
+
+    try {
+      console.log('Fetching fresh YouTube content from API...');
+      const contentMap = new Map<string, ContentItem>();
+      let totalApiCalls = 0;
+
+      // 1. INTEREST-BASED SEARCH (Top Priority)
+      // Extract top 2 interests to query
+      const topInterests = userProfile.interests.slice(0, 2);
+      const searchQueries = topInterests.length > 0 ? topInterests : ['cycling training'];
+
+      console.log(`Searching for interests: ${searchQueries.join(', ')}`);
+
+      for (const interest of searchQueries) {
+        try {
+          // Add "cycling" context to ensure relevance
+          const query = interest.toLowerCase().includes('cycling') || interest.toLowerCase().includes('bike')
+            ? interest
+            : `cycling ${interest}`;
+
+          const items = await this.searchContentByKeywords(query, 6); // Fetch 6 items per interest
+          items.forEach(item => contentMap.set(item.id, item));
+          totalApiCalls++;
+        } catch (err) {
+          console.warn(`Failed to search for "${interest}":`, err);
+        }
+      }
+
+      // 2. TRENDING/LATEST FROM CHANNELS (Secondary)
+      // Fetch from a subset of top channels to keep user updated
+      const trendingCount = 5;
+      const channelsToFetch = Object.entries(CYCLING_CHANNELS).slice(0, 3); // Top 3 channels only
+
+      for (const [channelName, channelId] of channelsToFetch) {
+        try {
+          const response = await axios.get(`${YOUTUBE_CONFIG.BASE_URL}/search`, {
+            params: {
+              key: YOUTUBE_CONFIG.API_KEY,
+              channelId,
+              part: 'snippet',
+              order: 'date',
+              maxResults: 2, // Just 2 latest items per channel
+              type: 'video',
+              publishedAfter: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString() // Last 2 weeks
             }
+          });
+          totalApiCalls++;
 
-            if (!YOUTUBE_CONFIG.API_KEY ||
-              YOUTUBE_CONFIG.API_KEY.includes('your_youtube_api_key')) {
-              console.warn('YouTube API key not configured, using mock content');
-              return this.getMockYouTubeContent(userProfile);
+          const items = this.mapYouTubeItems(response.data.items, channelName);
+          items.forEach(item => {
+            if (!contentMap.has(item.id)) {
+              contentMap.set(item.id, item);
             }
+          });
+        } catch (err) {
+          console.warn(`Failed to fetch from channel ${channelName}:`, err);
+        }
+      }
 
-            try {
-              console.log('Fetching fresh YouTube content from API...');
-              const contentMap = new Map<string, ContentItem>();
-              let totalApiCalls = 0;
+      console.log(`YouTube API: Made ${totalApiCalls} calls, fetched ${contentMap.size} unique videos`);
 
-              // 1. INTEREST-BASED SEARCH (Top Priority)
-              // Extract top 2 interests to query
-              const topInterests = userProfile.interests.slice(0, 2);
-              const searchQueries = topInterests.length > 0 ? topInterests : ['cycling training'];
+      const allContent = Array.from(contentMap.values());
 
-              console.log(`Searching for interests: ${searchQueries.join(', ')}`);
+      // If we got no content due to API errors, fall back to mock content
+      if (allContent.length === 0) {
+        console.warn('No content fetched from YouTube API, falling back to mock content');
+        return this.getMockYouTubeContent(userProfile);
+      }
 
-              for (const interest of searchQueries) {
-                try {
-                  // Add "cycling" context to ensure relevance
-                  const query = interest.toLowerCase().includes('cycling') || interest.toLowerCase().includes('bike')
-                    ? interest
-                    : `cycling ${interest}`;
+      // Fetch statistics for all collected videos to get duration/views
+      // (Optimized: one batch call for all IDs)
+      const videoIdsToFetch = allContent
+        .filter(i => i.source === 'youtube')
+        .map(i => i.id.split('_')[1]) // Extract video ID from youtube_ID_channel
+        .slice(0, 50); // limit to 50 for API
 
-                  const items = await this.searchContentByKeywords(query, 6); // Fetch 6 items per interest
-                  items.forEach(item => contentMap.set(item.id, item));
-                  totalApiCalls++;
-                } catch (err) {
-                  console.warn(`Failed to search for "${interest}":`, err);
-                }
-              }
-
-              // 2. TRENDING/LATEST FROM CHANNELS (Secondary)
-              // Fetch from a subset of top channels to keep user updated
-              const trendingCount = 5;
-              const channelsToFetch = Object.entries(CYCLING_CHANNELS).slice(0, 3); // Top 3 channels only
-
-              for (const [channelName, channelId] of channelsToFetch) {
-                try {
-                  const response = await axios.get(`${YOUTUBE_CONFIG.BASE_URL}/search`, {
-                    params: {
-                      key: YOUTUBE_CONFIG.API_KEY,
-                      channelId,
-                      part: 'snippet',
-                      order: 'date',
-                      maxResults: 2, // Just 2 latest items per channel
-                      type: 'video',
-                      publishedAfter: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString() // Last 2 weeks
-                    }
-                  });
-                  totalApiCalls++;
-
-                  const items = this.mapYouTubeItems(response.data.items, channelName);
-                  items.forEach(item => {
-                    if (!contentMap.has(item.id)) {
-                      contentMap.set(item.id, item);
-                    }
-                  });
-                } catch (err) {
-                  console.warn(`Failed to fetch from channel ${channelName}:`, err);
-                }
-              }
-
-              console.log(`YouTube API: Made ${totalApiCalls} calls, fetched ${contentMap.size} unique videos`);
-
-              const allContent = Array.from(contentMap.values());
-
-              // If we got no content due to API errors, fall back to mock content
-              if (allContent.length === 0) {
-                console.warn('No content fetched from YouTube API, falling back to mock content');
-                return this.getMockYouTubeContent(userProfile);
-              }
-
-              // Fetch statistics for all collected videos to get duration/views
-              // (Optimized: one batch call for all IDs)
-              const videoIdsToFetch = allContent
-                .filter(i => i.source === 'youtube')
-                .map(i => i.id.split('_')[1]) // Extract video ID from youtube_ID_channel
-                .slice(0, 50); // limit to 50 for API
-
-              if (videoIdsToFetch.length > 0) {
-                try {
-                  const statsResponse = await axios.get(`${YOUTUBE_CONFIG.BASE_URL}/videos`, {
-                    params: {
-                      key: YOUTUBE_CONFIG.API_KEY,
-                      id: videoIdsToFetch.join(','),
-                      part: 'statistics,contentDetails'
-                    }
-                  });
-
-                  const statsMap = new Map(
-                    statsResponse.data.items.map((item: any) => [item.id, item])
-                  );
-
-                  // Update content with stats
-                  allContent.forEach(item => {
-                    const vidId = item.id.split('_')[1];
-                    const stats = statsMap.get(vidId);
-                    if (stats) {
-                      item.duration = stats.contentDetails?.duration ? this.parseYouTubeDuration(stats.contentDetails.duration) : 0;
-                      item.viewCount = stats.statistics?.viewCount ? parseInt(stats.statistics.viewCount) : undefined;
-                    }
-                  });
-                } catch (err) {
-                  console.warn('Failed to fetch video statistics:', err);
-                }
-              }
-
-              // Score and sort content
-              const scoredContent = allContent.map(item => ({
-                ...item,
-                relevanceScore: this.calculateRelevanceScore(item, userProfile)
-              }));
-
-              const finalContent = scoredContent
-                .sort((a, b) => b.relevanceScore - a.relevanceScore)
-                .slice(0, YOUTUBE_CONFIG.MAX_RESULTS);
-
-              // Cache the results
-              this.saveCachedContent(finalContent, profileHash);
-
-              return finalContent;
-
-            } catch (error) {
-              console.error('YouTube API error, falling back to mock content:', error);
-              return this.getMockYouTubeContent(userProfile);
+      if (videoIdsToFetch.length > 0) {
+        try {
+          const statsResponse = await axios.get(`${YOUTUBE_CONFIG.BASE_URL}/videos`, {
+            params: {
+              key: YOUTUBE_CONFIG.API_KEY,
+              id: videoIdsToFetch.join(','),
+              part: 'statistics,contentDetails'
             }
-          }
+          });
+
+          const statsMap = new Map(
+            statsResponse.data.items.map((item: any) => [item.id, item])
+          );
+
+          // Update content with stats
+          allContent.forEach(item => {
+            const vidId = item.id.split('_')[1];
+            const stats = statsMap.get(vidId);
+            if (stats) {
+              item.duration = stats.contentDetails?.duration ? this.parseYouTubeDuration(stats.contentDetails.duration) : 0;
+              item.viewCount = stats.statistics?.viewCount ? parseInt(stats.statistics.viewCount) : undefined;
+            }
+          });
+        } catch (err) {
+          console.warn('Failed to fetch video statistics:', err);
+        }
+      }
+
+      // Score and sort content
+      const scoredContent = allContent.map(item => ({
+        ...item,
+        relevanceScore: this.calculateRelevanceScore(item, userProfile)
+      }));
+
+      const finalContent = scoredContent
+        .sort((a, b) => b.relevanceScore - a.relevanceScore)
+        .slice(0, YOUTUBE_CONFIG.MAX_RESULTS);
+
+      // Cache the results
+      this.saveCachedContent(finalContent, profileHash);
+
+      return finalContent;
+
+    } catch (error) {
+      console.error('YouTube API error, falling back to mock content:', error);
+      return this.getMockYouTubeContent(userProfile);
+    }
+  }
 
   // Helper to search YouTube by keywords
   private async searchContentByKeywords(query: string, maxResults: number): Promise<ContentItem[]> {
@@ -796,6 +796,7 @@ class ContentFeedService {
         duration: 420,
         viewCount: 95000,
         channelSubscribers: 450000
+      },
       {
         id: 'mock_7_nutrition_weight_loss_cycling',
         source: 'youtube',
