@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { ContentFeed } from '../components/home/ContentFeed';
 import { supabase } from '../services/supabaseClient';
-import { stravaApi } from '../services/stravaApi';
+
 import { stravaCacheService } from '../services/stravaCacheService';
 import { ROUTES } from '../utils/constants';
 import type { StravaActivity } from '../types';

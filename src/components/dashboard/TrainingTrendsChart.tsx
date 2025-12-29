@@ -51,7 +51,7 @@ interface ActivityFilter {
   heartRateKey: keyof WeeklyTrend;
 }
 
-export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activities, athlete, healthMetrics }) => {
+export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activities, athlete }) => {
   const [weeklyMetrics, setWeeklyMetrics] = useState<Map<string, DailyMetric[]>>(new Map());
   const [selectedMetrics, setSelectedMetrics] = useState<Set<string>>(new Set(['distance']));
 
@@ -248,13 +248,7 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
     return weeks;
   }, [activities, athlete, weeklyMetrics]);
 
-  const toggleFilter = (filterId: string) => {
-    setFilters(prev => prev.map(filter =>
-      filter.id === filterId
-        ? { ...filter, enabled: !filter.enabled }
-        : filter
-    ));
-  };
+
 
   const toggleMetric = (metricId: string) => {
     setSelectedMetrics(prev => {
@@ -268,7 +262,7 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
     });
   };
 
-  const enabledFilters = filters.filter(f => f.enabled);
+
 
   const metricConfigs = [
     { id: 'distance', label: 'Distance', color: '#3b82f6', unit: 'miles', key: 'allDistance' },
@@ -358,8 +352,8 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
                 key={metric.id}
                 onClick={() => toggleMetric(metric.id)}
                 className={`flex items-center space-x-2 px-3 py-1.5 text-sm rounded-md transition-colors ${selectedMetrics.has(metric.id)
-                    ? 'text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 style={selectedMetrics.has(metric.id) ? { backgroundColor: metric.color } : {}}
               >
