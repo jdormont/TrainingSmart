@@ -49,7 +49,7 @@ class ContentFeedService {
       skillLevel: profile.skillLevel,
       goals: profile.goals.sort()
     });
-    
+
     // Simple hash function
     let hash = 0;
     for (let i = 0; i < profileString.length; i++) {
@@ -64,7 +64,7 @@ class ContentFeedService {
   private isCacheValid(cache: ContentCache, currentProfileHash: string): boolean {
     const now = new Date();
     const cacheAge = now.getTime() - cache.timestamp.getTime();
-    
+
     return (
       cacheAge < YOUTUBE_CONFIG.CACHE_DURATION &&
       cache.userProfileHash === currentProfileHash &&
@@ -77,7 +77,7 @@ class ContentFeedService {
     try {
       const cached = localStorage.getItem(STORAGE_KEYS.CONTENT_CACHE);
       if (!cached) return null;
-      
+
       const cache = JSON.parse(cached);
       return {
         ...cache,
@@ -131,11 +131,11 @@ class ContentFeedService {
   // Extract interests from chat history
   private extractInterestsFromChats(sessions: ChatSession[]): string[] {
     const interests = new Set<string>();
-    
+
     // First, add interests from user feedback
     const feedbackInterests = this.extractInterestsFromFeedback();
     feedbackInterests.forEach(interest => interests.add(interest));
-    
+
     const interestKeywords = {
       'power training': ['power', 'ftp', 'watts', 'threshold'],
       'recovery': ['recovery', 'rest', 'sleep', 'fatigue'],
@@ -170,7 +170,7 @@ class ContentFeedService {
     }, {} as Record<string, number>);
 
     return Object.entries(typeCount)
-      .sort(([,a], [,b]) => b - a)
+      .sort(([, a], [, b]) => b - a)
       .slice(0, 3)
       .map(([type]) => type);
   }
@@ -217,9 +217,10 @@ class ContentFeedService {
   }
 
   // Fetch content from YouTube
+  // Fetch content from YouTube using Hybrid Approach (Interests + Trends)
   async fetchYouTubeContent(userProfile: UserContentProfile): Promise<ContentItem[]> {
     const profileHash = this.generateProfileHash(userProfile);
-    
+
     // Check cache first
     const cachedContent = this.loadCachedContent();
     if (cachedContent && this.isCacheValid(cachedContent, profileHash)) {
@@ -228,121 +229,116 @@ class ContentFeedService {
     }
 
     if (!YOUTUBE_CONFIG.API_KEY ||
-        YOUTUBE_CONFIG.API_KEY.includes('your_youtube_api_key')) {
+      YOUTUBE_CONFIG.API_KEY.includes('your_youtube_api_key')) {
       console.warn('YouTube API key not configured, using mock content');
       return this.getMockYouTubeContent(userProfile);
     }
 
     try {
       console.log('Fetching fresh YouTube content from API...');
-      const content: ContentItem[] = [];
+      const contentMap = new Map<string, ContentItem>();
       let totalApiCalls = 0;
 
-      // Fetch from cycling channels
-      for (const [channelName, channelId] of Object.entries(CYCLING_CHANNELS)) {
+      // 1. INTEREST-BASED SEARCH (Top Priority)
+      // Extract top 2 interests to query
+      const topInterests = userProfile.interests.slice(0, 2);
+      const searchQueries = topInterests.length > 0 ? topInterests : ['cycling training'];
+
+      console.log(`Searching for interests: ${searchQueries.join(', ')}`);
+
+      for (const interest of searchQueries) {
         try {
-          console.log(`Fetching content from ${channelName}...`);
+          // Add "cycling" context to ensure relevance
+          const query = interest.toLowerCase().includes('cycling') || interest.toLowerCase().includes('bike')
+            ? interest
+            : `cycling ${interest}`;
+
+          const items = await this.searchContentByKeywords(query, 6); // Fetch 6 items per interest
+          items.forEach(item => contentMap.set(item.id, item));
+          totalApiCalls++;
+        } catch (err) {
+          console.warn(`Failed to search for "${interest}":`, err);
+        }
+      }
+
+      // 2. TRENDING/LATEST FROM CHANNELS (Secondary)
+      // Fetch from a subset of top channels to keep user updated
+      const trendingCount = 5;
+      const channelsToFetch = Object.entries(CYCLING_CHANNELS).slice(0, 3); // Top 3 channels only
+
+      for (const [channelName, channelId] of channelsToFetch) {
+        try {
           const response = await axios.get(`${YOUTUBE_CONFIG.BASE_URL}/search`, {
             params: {
               key: YOUTUBE_CONFIG.API_KEY,
               channelId,
               part: 'snippet',
               order: 'date',
-              maxResults: 5,
+              maxResults: 2, // Just 2 latest items per channel
               type: 'video',
-              publishedAfter: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString() // Last 30 days
+              publishedAfter: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString() // Last 2 weeks
             }
           });
-          
           totalApiCalls++;
 
-          const videoIds = response.data.items.map((item: any) => item.id.videoId);
-
-          // Fetch video statistics and details
-          let videoStats: Record<string, any> = {};
-          let channelStats: Record<string, any> = {};
-
-          if (videoIds.length > 0) {
-            try {
-              const statsResponse = await axios.get(`${YOUTUBE_CONFIG.BASE_URL}/videos`, {
-                params: {
-                  key: YOUTUBE_CONFIG.API_KEY,
-                  id: videoIds.join(','),
-                  part: 'statistics,contentDetails'
-                }
-              });
-              totalApiCalls++;
-
-              statsResponse.data.items.forEach((item: any) => {
-                videoStats[item.id] = item;
-              });
-
-              // Fetch channel statistics
-              const channelStatsResponse = await axios.get(`${YOUTUBE_CONFIG.BASE_URL}/channels`, {
-                params: {
-                  key: YOUTUBE_CONFIG.API_KEY,
-                  id: channelId,
-                  part: 'statistics'
-                }
-              });
-              totalApiCalls++;
-
-              if (channelStatsResponse.data.items.length > 0) {
-                channelStats[channelId] = channelStatsResponse.data.items[0];
-              }
-            } catch (error) {
-              console.warn(`Failed to fetch stats for ${channelName}:`, error);
+          const items = this.mapYouTubeItems(response.data.items, channelName);
+          items.forEach(item => {
+            if (!contentMap.has(item.id)) {
+              contentMap.set(item.id, item);
             }
-          }
-
-          const videos = response.data.items.map((item: any) => {
-            const stats = videoStats[item.id.videoId];
-            const channel = channelStats[channelId];
-
-            return {
-              id: `youtube_${item.id.videoId}_${channelName}`,
-              source: 'youtube' as const,
-              type: 'video' as const,
-              title: this.decodeHtmlEntities(item.snippet.title.trim()),
-              description: this.decodeHtmlEntities(item.snippet.description?.substring(0, 200) || '') + '...',
-              url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
-              thumbnail: item.snippet.thumbnails.medium?.url,
-              author: channelName,
-              publishedAt: new Date(item.snippet.publishedAt),
-              relevanceScore: 0,
-              tags: this.extractTags(item.snippet.title + ' ' + item.snippet.description),
-              duration: stats?.contentDetails?.duration ? this.parseYouTubeDuration(stats.contentDetails.duration) : 0,
-              viewCount: stats?.statistics?.viewCount ? parseInt(stats.statistics.viewCount) : undefined,
-              channelSubscribers: channel?.statistics?.subscriberCount ? parseInt(channel.statistics.subscriberCount) : undefined
-            };
           });
-
-          content.push(...videos);
-        } catch (error) {
-          if (axios.isAxiosError(error)) {
-            if (error.response?.status === 403) {
-              console.warn(`YouTube API 403 error for ${channelName}: API key invalid, quota exceeded, or permissions issue`);
-            } else if (error.response?.status === 400) {
-              console.warn(`YouTube API 400 error for ${channelName}: Invalid request parameters`);
-            } else {
-              console.warn(`YouTube API error for ${channelName}:`, error.response?.status, error.response?.statusText);
-            }
-          } else {
-            console.warn(`Failed to fetch from ${channelName}:`, error);
-          }
+        } catch (err) {
+          console.warn(`Failed to fetch from channel ${channelName}:`, err);
         }
       }
 
-      console.log(`YouTube API: Made ${totalApiCalls} calls, fetched ${content.length} videos`);
+      console.log(`YouTube API: Made ${totalApiCalls} calls, fetched ${contentMap.size} unique videos`);
+
+      const allContent = Array.from(contentMap.values());
 
       // If we got no content due to API errors, fall back to mock content
-      if (content.length === 0) {
+      if (allContent.length === 0) {
         console.warn('No content fetched from YouTube API, falling back to mock content');
         return this.getMockYouTubeContent(userProfile);
       }
 
+      // Fetch statistics for all collected videos to get duration/views
+      // (Optimized: one batch call for all IDs)
+      const videoIdsToFetch = allContent
+        .filter(i => i.source === 'youtube')
+        .map(i => i.id.split('_')[1]) // Extract video ID from youtube_ID_channel
+        .slice(0, 50); // limit to 50 for API
+
+      if (videoIdsToFetch.length > 0) {
+        try {
+          const statsResponse = await axios.get(`${YOUTUBE_CONFIG.BASE_URL}/videos`, {
+            params: {
+              key: YOUTUBE_CONFIG.API_KEY,
+              id: videoIdsToFetch.join(','),
+              part: 'statistics,contentDetails'
+            }
+          });
+
+          const statsMap = new Map(
+            statsResponse.data.items.map((item: any) => [item.id, item])
+          );
+
+          // Update content with stats
+          allContent.forEach(item => {
+            const vidId = item.id.split('_')[1];
+            const stats = statsMap.get(vidId);
+            if (stats) {
+              item.duration = stats.contentDetails?.duration ? this.parseYouTubeDuration(stats.contentDetails.duration) : 0;
+              item.viewCount = stats.statistics?.viewCount ? parseInt(stats.statistics.viewCount) : undefined;
+            }
+          });
+        } catch (err) {
+          console.warn('Failed to fetch video statistics:', err);
+        }
+      }
+
       // Score and sort content
-      const scoredContent = content.map(item => ({
+      const scoredContent = allContent.map(item => ({
         ...item,
         relevanceScore: this.calculateRelevanceScore(item, userProfile)
       }));
@@ -353,21 +349,55 @@ class ContentFeedService {
 
       // Cache the results
       this.saveCachedContent(finalContent, profileHash);
-      
+
       return finalContent;
 
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        if (error.response?.status === 403) {
-          console.error('YouTube API 403 Forbidden: API key is invalid, quota exceeded, or lacks permissions. Falling back to mock content.');
-        } else {
-          console.error(`YouTube API error (${error.response?.status}), falling back to mock content:`, error.response?.statusText);
-        }
-      } else {
-        console.error('YouTube API error, falling back to mock content:', error);
-      }
+      console.error('YouTube API error, falling back to mock content:', error);
       return this.getMockYouTubeContent(userProfile);
     }
+  }
+
+  // Helper to search YouTube by keywords
+  private async searchContentByKeywords(query: string, maxResults: number): Promise<ContentItem[]> {
+    const response = await axios.get(`${YOUTUBE_CONFIG.BASE_URL}/search`, {
+      params: {
+        key: YOUTUBE_CONFIG.API_KEY,
+        q: query,
+        part: 'snippet',
+        order: 'relevance',
+        maxResults: maxResults,
+        type: 'video',
+        videoDuration: 'medium', // Avoid shorts if possible, or very short videos
+        publishedAfter: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString() // Last 3 months (broader window for niche interests)
+      }
+    });
+
+    return this.mapYouTubeItems(response.data.items, 'YouTube Search');
+  }
+
+  // Helper to map API response items to ContentItem[]
+  private mapYouTubeItems(items: any[], defaultAuthor: string): ContentItem[] {
+    return items.map((item: any) => {
+      // Use channelTitle if available, otherwise default
+      const author = item.snippet.channelTitle || defaultAuthor;
+
+      return {
+        id: `youtube_${item.id.videoId || item.id}_${author.replace(/\s+/g, '')}`,
+        source: 'youtube' as const,
+        type: 'video' as const,
+        title: this.decodeHtmlEntities(item.snippet.title.trim()),
+        description: this.decodeHtmlEntities(item.snippet.description?.substring(0, 200) || '') + '...',
+        url: `https://www.youtube.com/watch?v=${item.id.videoId || item.id}`,
+        thumbnail: item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default?.url,
+        author: author,
+        publishedAt: new Date(item.snippet.publishedAt),
+        relevanceScore: 0, // Calculated later
+        tags: this.extractTags(item.snippet.title + ' ' + item.snippet.description),
+        duration: 0, // Populated by stats call
+        viewCount: 0 // Populated by stats call
+      };
+    });
   }
 
   // Decode HTML entities from YouTube titles/descriptions
@@ -411,7 +441,7 @@ class ContentFeedService {
   private calculateRelevanceScore(item: ContentItem, profile: UserContentProfile): number {
     let score = 0;
     const scoringDetails: string[] = [];
-    
+
     // Apply feedback-based scoring first
     const feedbackScore = this.getFeedbackScore(item);
     score += feedbackScore;
@@ -428,8 +458,8 @@ class ContentFeedService {
     // Interest matching
     profile.interests.forEach(interest => {
       const interestWords = interest.split(' ');
-      if (interestWords.some(word => 
-        item.title.toLowerCase().includes(word) || 
+      if (interestWords.some(word =>
+        item.title.toLowerCase().includes(word) ||
         item.description.toLowerCase().includes(word)
       )) {
         // Higher score for interests from content preferences chat
@@ -447,7 +477,7 @@ class ContentFeedService {
     // Activity type matching
     profile.activityTypes.forEach(activityType => {
       if (item.title.toLowerCase().includes(activityType.toLowerCase()) ||
-          item.description.toLowerCase().includes(activityType.toLowerCase())) {
+        item.description.toLowerCase().includes(activityType.toLowerCase())) {
         score += 10;
         scoringDetails.push(`activity "${activityType}": +10`);
       }
@@ -461,7 +491,7 @@ class ContentFeedService {
     };
 
     const levelWords = skillKeywords[profile.skillLevel] || [];
-    if (levelWords.some(word => 
+    if (levelWords.some(word =>
       item.title.toLowerCase().includes(word) ||
       item.description.toLowerCase().includes(word)
     )) {
@@ -488,7 +518,7 @@ class ContentFeedService {
   private extractKeywordsFromContent(item: ContentItem): string[] {
     const text = `${item.title} ${item.description}`.toLowerCase();
     const keywords = new Set<string>();
-    
+
     // Extract multi-word phrases first (more specific)
     const multiWordPhrases = [
       'power meter', 'heart rate', 'bike fit', 'bike fitting', 'time trial',
@@ -498,13 +528,13 @@ class ContentFeedService {
       'cycling nutrition', 'recovery nutrition', 'race preparation', 'century ride',
       'gran fondo', 'criterium', 'road race', 'time trialing', 'hill climbing'
     ];
-    
+
     multiWordPhrases.forEach(phrase => {
       if (text.includes(phrase)) {
         keywords.add(phrase);
       }
     });
-    
+
     // Extract single word keywords
     const singleWords = [
       'power', 'ftp', 'watts', 'training', 'endurance', 'speed', 'climbing',
@@ -516,38 +546,38 @@ class ContentFeedService {
       'maintenance', 'repair', 'setup', 'fit', 'position', 'saddle',
       'handlebars', 'wheels', 'tires', 'chain', 'gears', 'brakes'
     ];
-    
+
     singleWords.forEach(word => {
       if (text.includes(word) && word.length > 2) {
         keywords.add(word);
       }
     });
-    
+
     // Also include the item's existing tags
     item.tags.forEach(tag => {
       if (tag.length > 2) {
         keywords.add(tag.toLowerCase());
       }
     });
-    
+
     return Array.from(keywords);
   }
 
   // Extract keywords from item ID (for feedback matching)
   private extractKeywordsFromId(itemId: string): string[] {
     console.log(`Extracting keywords from ID: ${itemId}`);
-    
+
     // Parse the enhanced item ID format: source_videoId_channel_keywords
     const parts = itemId.split('_');
     const keywords = new Set<string>();
-    
+
     // Add channel/author name as keyword
     if (parts.length > 2) {
       const channel = parts[2].toLowerCase();
       keywords.add(channel);
       console.log(`Added channel keyword: ${channel}`);
     }
-    
+
     // Extract keywords from the ID parts (title words, etc.)
     parts.forEach(part => {
       const cleanPart = part.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -555,7 +585,7 @@ class ContentFeedService {
         keywords.add(cleanPart);
       }
     });
-    
+
     // Try to match against our cycling keyword list
     const cyclingKeywords = [
       'power', 'ftp', 'watts', 'training', 'endurance', 'speed', 'climbing',
@@ -565,14 +595,14 @@ class ContentFeedService {
       'bike', 'bicycle', 'cycling', 'ride', 'riding', 'cyclist',
       'maintenance', 'repair', 'setup', 'fit', 'position'
     ];
-    
+
     const idText = itemId.toLowerCase();
     cyclingKeywords.forEach(keyword => {
       if (idText.includes(keyword)) {
         keywords.add(keyword);
       }
     });
-    
+
     const result = Array.from(keywords);
     console.log(`Extracted keywords from ${itemId}:`, result);
     return result;
@@ -581,38 +611,38 @@ class ContentFeedService {
   // Get feedback-based score adjustments
   private getFeedbackScore(item: ContentItem): number {
     console.log(`Calculating feedback score for: ${item.title}`);
-    
+
     try {
       const feedbackData = localStorage.getItem(STORAGE_KEYS.CONTENT_FEEDBACK);
       if (!feedbackData) {
         console.log('No feedback data found');
         return 0;
       }
-      
+
       const feedback = JSON.parse(feedbackData);
       console.log('Available feedback:', Object.keys(feedback).length, 'items');
-      
+
       // Direct feedback on this item
       if (feedback[item.id]) {
         const score = feedback[item.id] === 'like' ? 50 : -100;
         console.log(`Direct feedback found for ${item.id}: ${feedback[item.id]} (score: ${score})`);
         return score;
       }
-      
+
       // Feedback on similar content based on title keywords and topics
       let similarScore = 0;
       let feedbackCount = 0;
       const currentKeywords = this.extractKeywordsFromContent(item);
       console.log(`Current item keywords:`, currentKeywords);
-      
+
       Object.entries(feedback).forEach(([feedbackItemId, feedbackType]) => {
         const feedbackKeywords = this.extractKeywordsFromId(feedbackItemId);
-        
+
         // Check for keyword overlap
-        const commonKeywords = feedbackKeywords.filter(keyword => 
+        const commonKeywords = feedbackKeywords.filter(keyword =>
           currentKeywords.includes(keyword)
         );
-        
+
         if (commonKeywords.length > 0) {
           console.log(`Found ${commonKeywords.length} common keywords with ${feedbackItemId}:`, commonKeywords);
           // Weight by number of common keywords
@@ -624,12 +654,12 @@ class ContentFeedService {
           console.log(`Applied similarity score: ${weightedScore} (base: ${baseScore}, weight: ${keywordWeight})`);
         }
       });
-      
+
       // Average the similar content feedback
       const finalScore = feedbackCount > 0 ? similarScore / feedbackCount : 0;
       console.log(`Final feedback score for "${item.title}": ${finalScore} (from ${feedbackCount} similar items)`);
       return finalScore;
-      
+
     } catch (error) {
       console.warn('Failed to calculate feedback score:', error);
       return 0;
@@ -641,19 +671,19 @@ class ContentFeedService {
     try {
       const feedbackData = localStorage.getItem(STORAGE_KEYS.CONTENT_FEEDBACK);
       if (!feedbackData) return [];
-      
+
       const feedback = JSON.parse(feedbackData);
       const likedContent = Object.entries(feedback)
         .filter(([_, type]) => type === 'like')
         .map(([itemId]) => itemId);
-      
+
       // Extract specific sub-topic interests from liked content
       const interests = new Set<string>();
-      
+
       likedContent.forEach(itemId => {
         // Extract keywords from the enhanced item IDs
         const keywords = this.extractKeywordsFromId(itemId);
-        
+
         keywords.forEach(keyword => {
           // Add specific sub-topics as interests
           if (keyword.length > 2) { // Avoid very short keywords
@@ -661,7 +691,7 @@ class ContentFeedService {
           }
         });
       });
-      
+
       return Array.from(interests);
     } catch (error) {
       console.warn('Failed to extract interests from feedback:', error);
@@ -766,6 +796,54 @@ class ContentFeedService {
         duration: 420,
         viewCount: 95000,
         channelSubscribers: 450000
+      },
+      {
+        id: 'mock_7_nutrition_weight_loss_cycling',
+        source: 'youtube',
+        type: 'video',
+        title: 'Cycling Nutrition for Weight Loss | Eat to Burn Fat',
+        description: 'Learn how to fuel your rides while maintaining a caloric deficit for effective and sustainable weight loss.',
+        url: 'https://youtube.com/watch?v=mock7',
+        thumbnail: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=480&h=270&fit=crop&auto=format',
+        author: 'Cycling Health',
+        publishedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+        relevanceScore: 0,
+        tags: ['nutrition', 'weight loss', 'fat loss', 'diet'],
+        duration: 840,
+        viewCount: 156000,
+        channelSubscribers: 85000
+      },
+      {
+        id: 'mock_8_indoor_training_zwift_workout',
+        source: 'youtube',
+        type: 'video',
+        title: 'Best Indoor Cycling Workouts for Busy Riders',
+        description: 'Maximize your fitness in just 45 minutes with these high-intensity indoor training sessions.',
+        url: 'https://youtube.com/watch?v=mock8',
+        thumbnail: 'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=480&h=270&fit=crop&auto=format',
+        author: 'Indoor Specialist',
+        publishedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+        relevanceScore: 0,
+        tags: ['indoor', 'training', 'intervals', 'zwift'],
+        duration: 600,
+        viewCount: 42000,
+        channelSubscribers: 28000
+      },
+      {
+        id: 'mock_9_metabolism_science_endurance',
+        source: 'youtube',
+        type: 'video',
+        title: 'Boosting Metabolism Through Endurance Training',
+        description: 'The science behind how long rides affect your metabolic rate and fat burning potential.',
+        url: 'https://youtube.com/watch?v=mock9',
+        thumbnail: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=480&h=270&fit=crop&auto=format',
+        author: 'Science of Sport',
+        publishedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+        relevanceScore: 0,
+        tags: ['metabolism', 'health', 'science', 'endurance'],
+        duration: 1100,
+        viewCount: 89000,
+        channelSubscribers: 125000
       }
     ];
 
@@ -796,52 +874,52 @@ class ContentFeedService {
   recordFeedback(itemId: string, feedback: 'like' | 'dislike'): void {
     try {
       console.log(`Recording ${feedback} feedback for item: ${itemId}`);
-      
+
       const existingFeedback = localStorage.getItem(STORAGE_KEYS.CONTENT_FEEDBACK);
       const feedbackData = existingFeedback ? JSON.parse(existingFeedback) : {};
-      
+
       feedbackData[itemId] = feedback;
-      
+
       localStorage.setItem(STORAGE_KEYS.CONTENT_FEEDBACK, JSON.stringify(feedbackData));
       console.log('Feedback data saved:', feedbackData);
-      
+
       // Clear content cache to force refresh with new feedback
       localStorage.removeItem(STORAGE_KEYS.CONTENT_CACHE);
       console.log('Content cache cleared - next refresh will use new feedback');
-      
+
       // Update user profile to reflect new preferences
       this.updateUserProfileFromFeedback();
-      
+
       // Extract and log what we learned
-      const keywords = this.extractKeywordsFromContent({ 
-        id: itemId, 
+      const keywords = this.extractKeywordsFromContent({
+        id: itemId,
         title: itemId.split('_').slice(2).join(' '), // Extract title from ID
         description: '',
         tags: []
       } as any);
       console.log(`Learned from ${feedback} feedback - keywords:`, keywords);
-      
+
     } catch (error) {
       console.warn('Failed to record content feedback:', error);
     }
   }
-  
+
   // Update user profile based on feedback patterns
   private updateUserProfileFromFeedback(): void {
     try {
       const currentProfile = this.loadUserProfile();
       if (!currentProfile) return;
-      
+
       // Add feedback-derived interests to profile
       const feedbackInterests = this.extractInterestsFromFeedback();
       const updatedInterests = [...new Set([...currentProfile.interests, ...feedbackInterests])];
-      
+
       const updatedProfile: UserContentProfile = {
         ...currentProfile,
         interests: updatedInterests,
         lastUpdated: new Date()
       };
-      
+
       this.saveUserProfile(updatedProfile);
       console.log('Updated user profile with feedback-derived interests:', feedbackInterests);
     } catch (error) {
@@ -856,7 +934,7 @@ class ContentFeedService {
   ): Promise<ContentItem[]> {
     // Load or generate user profile
     let userProfile = this.loadUserProfile();
-    
+
     if (!userProfile || this.shouldUpdateProfile(userProfile)) {
       userProfile = await this.generateUserProfile(chatSessions, activities);
       this.saveUserProfile(userProfile);
@@ -864,10 +942,10 @@ class ContentFeedService {
 
     // Fetch content from all sources
     const youtubeContent = await this.fetchYouTubeContent(userProfile);
-    
+
     // Remove duplicates first, then sort by relevance
     const uniqueContent = this.deduplicateContent(youtubeContent);
-    
+
     return uniqueContent
       .sort((a, b) => b.relevanceScore - a.relevanceScore)
       .slice(0, YOUTUBE_CONFIG.DISPLAY_LIMIT); // Return fewer items to reduce choice overload
@@ -888,25 +966,25 @@ class ContentFeedService {
       const titleKey = item.title.toLowerCase().trim();
       const authorTitleKey = `${item.author.toLowerCase()}_${titleKey}`;
       const urlKey = item.url.toLowerCase();
-      
+
       // Check for exact duplicates by URL
       if (seen.has(urlKey)) return false;
-      
+
       // Check for very similar titles (edit distance or substring matching)
       const similarTitle = Array.from(seenTitles).some(existingTitle => {
         // Check if titles are very similar (one contains the other or high overlap)
         const shorter = titleKey.length < existingTitle.length ? titleKey : existingTitle;
         const longer = titleKey.length >= existingTitle.length ? titleKey : existingTitle;
-        
+
         // If one title contains 80% of the other, consider them duplicates
         return longer.includes(shorter) && (shorter.length / longer.length) > 0.8;
       });
-      
+
       if (similarTitle) return false;
-      
+
       // Check for same author + very similar title
       if (seen.has(authorTitleKey)) return false;
-      
+
       // Add to seen sets
       seen.add(urlKey);
       seen.add(authorTitleKey);

@@ -34,7 +34,7 @@ export const STORAGE_KEYS = {
   TRAINING_PLANS: 'training_plans',
   SYSTEM_PROMPT: 'system_prompt',
   USER_CONTENT_PROFILE: 'user_content_profile',
-  CONTENT_CACHE: 'content_cache',
+  CONTENT_CACHE: 'content_cache_v2',
   CONTENT_FEEDBACK: 'content_feedback',
 } as const;
 
