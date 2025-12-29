@@ -265,8 +265,17 @@ Additional Preferences: ${preferences || 'None'}
       const weeklyStats = calculateWeeklyStats(activities);
       const cyclingActivities = activities.filter((a: StravaActivity) => a.type === 'Ride');
 
-      const sleepData = await ouraApi.getRecentSleepData().catch(() => null);
-      const readinessData = await ouraApi.getRecentReadinessData().catch(() => null);
+      // Fetch arrays first
+      const sleepHistory = await ouraApi.getRecentSleepData().catch(() => null);
+      const readinessHistory = await ouraApi.getRecentReadinessData().catch(() => null);
+
+      // Extract latest single object or null
+      const latestSleep = sleepHistory && sleepHistory.length > 0
+        ? sleepHistory[sleepHistory.length - 1]
+        : null;
+      const latestReadiness = readinessHistory && readinessHistory.length > 0
+        ? readinessHistory[readinessHistory.length - 1]
+        : null;
 
       const trainingContext = {
         athlete,
@@ -277,9 +286,9 @@ Additional Preferences: ${preferences || 'None'}
           time: weeklyStats.totalTime,
           activities: weeklyStats.activityCount
         },
-        recovery: sleepData || readinessData ? {
-          sleepData,
-          readinessData
+        recovery: latestSleep || latestReadiness ? {
+          sleepData: latestSleep,
+          readinessData: latestReadiness
         } : undefined
       };
 

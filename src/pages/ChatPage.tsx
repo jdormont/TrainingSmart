@@ -115,7 +115,7 @@ export const ChatPage: React.FC = () => {
           supabaseChatService.setActiveSession(currentSession.id);
         }
 
-        setActiveSession(currentSession);
+        setActiveSession(currentSession || null);
 
         // Add welcome message if session is empty
         if (currentSession && currentSession.messages.length === 0) {
@@ -570,13 +570,13 @@ What would you like to know about your training?`;
                 <div>
                   <span className="text-gray-500">This Week:</span>
                   <span className="font-medium ml-1">
-                    {formatDistance(calculateWeeklyStats(activities).totalDistance)}
+                    {(calculateWeeklyStats(activities).totalDistance * 0.000621371).toFixed(1)} mi
                   </span>
                 </div>
                 <div>
                   <span className="text-gray-500">Last Activity:</span>
                   <span className="font-medium ml-1">
-                    {formatDate(activities[0]?.start_date_local || '')}
+                    {activities[0]?.start_date_local ? format(new Date(activities[0].start_date_local), 'MMM d, yyyy') : 'N/A'}
                   </span>
                 </div>
                 <div>
