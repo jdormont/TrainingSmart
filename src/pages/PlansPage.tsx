@@ -8,7 +8,7 @@ import { openaiService } from '../services/openaiApi';
 import { trainingPlansService } from '../services/trainingPlansService';
 import type { StravaActivity, StravaAthlete, TrainingPlan, Workout, WeeklyStats } from '../types';
 import { calculateWeeklyStats } from '../utils/dataProcessing';
-import { formatDistance, formatDuration } from '../utils/formatters';
+
 import { convertMarkdownToHtml } from '../utils/markdownToHtml';
 import { StatsSummary } from '../components/dashboard/StatsSummary';
 import WorkoutCard from '../components/plans/WorkoutCard';
@@ -309,7 +309,7 @@ Additional Preferences: ${preferences || 'None'}
         modificationModal.weekNumber
       );
 
-      const workoutIdsToUpdate = modificationModal.workouts.map((w: Workout) => w.id);
+
       const updatedWorkoutsWithDates = modifiedWorkouts.map((w: any, index: number) => {
         const originalWorkout = modificationModal.workouts[index];
         const weekStart = new Date(modificationModal.workouts[0].scheduledDate);
