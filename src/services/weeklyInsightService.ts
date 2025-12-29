@@ -2,7 +2,7 @@
 import type { StravaActivity, StravaAthlete, OuraSleepData, OuraReadinessData, ChatSession } from '../types';
 export type { HealthMetrics } from './healthMetricsService';
 import { openaiService } from './openaiApi';
-import { chatSessionService } from './chatSessionService';
+import { supabaseChatService } from './supabaseChatService';
 import { userProfileService } from './userProfileService';
 import { STORAGE_KEYS } from '../utils/constants';
 import { startOfWeek, endOfWeek, subWeeks, format } from 'date-fns';
@@ -86,12 +86,12 @@ class WeeklyInsightService {
   private analyzeTrainingConsistency(activities: StravaActivity[]) {
     const now = new Date();
     const weeks = [];
-    
+
     // Analyze last 4 weeks
     for (let i = 0; i < 4; i++) {
       const weekStart = startOfWeek(subWeeks(now, i), { weekStartsOn: 1 });
       const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
-      
+
       const weekActivities = activities.filter(a => {
         const activityDate = new Date(a.start_date_local);
         return activityDate >= weekStart && activityDate <= weekEnd;
@@ -107,7 +107,7 @@ class WeeklyInsightService {
 
     const avgActivities = weeks.reduce((sum, w) => sum + w.activities, 0) / weeks.length;
     const avgDistance = weeks.reduce((sum, w) => sum + w.distance, 0) / weeks.length;
-    
+
     return {
       weeks,
       avgActivitiesPerWeek: Math.round(avgActivities * 10) / 10,
@@ -118,12 +118,12 @@ class WeeklyInsightService {
 
   private calculateConsistencyScore(weeks: any[]): number {
     if (weeks.length < 2) return 0;
-    
+
     const distances = weeks.map(w => w.distance);
     const mean = distances.reduce((sum, d) => sum + d, 0) / distances.length;
     const variance = distances.reduce((sum, d) => sum + Math.pow(d - mean, 2), 0) / distances.length;
     const stdDev = Math.sqrt(variance);
-    
+
     // Lower standard deviation = higher consistency
     // Normalize to 0-100 scale
     const consistencyScore = Math.max(0, 100 - (stdDev / mean) * 100);
@@ -135,7 +135,7 @@ class WeeklyInsightService {
       return { available: false };
     }
 
-    const avgSleepHours = sleepData.length > 0 
+    const avgSleepHours = sleepData.length > 0
       ? sleepData.reduce((sum, s) => sum + s.total_sleep_duration, 0) / sleepData.length / 3600
       : 0;
 
@@ -163,7 +163,7 @@ class WeeklyInsightService {
 
     // Simple correlation analysis
     const correlations = [];
-    
+
     activities.forEach(activity => {
       const activityDate = activity.start_date_local.split('T')[0];
       const previousNightSleep = sleepData.find(s => {
@@ -186,7 +186,7 @@ class WeeklyInsightService {
     return {
       available: correlations.length > 0,
       correlations: correlations.length,
-      avgSleepBeforeRides: correlations.length > 0 
+      avgSleepBeforeRides: correlations.length > 0
         ? Math.round(correlations.reduce((sum, c) => sum + c.sleepHours, 0) / correlations.length * 10) / 10
         : 0
     };
@@ -195,7 +195,7 @@ class WeeklyInsightService {
   private analyzeWeeklyVolume(activities: StravaActivity[]) {
     const thisWeek = startOfWeek(new Date(), { weekStartsOn: 1 });
     const lastWeek = startOfWeek(subWeeks(new Date(), 1), { weekStartsOn: 1 });
-    
+
     const thisWeekActivities = activities.filter(a => {
       const activityDate = new Date(a.start_date_local);
       return activityDate >= thisWeek;
@@ -208,7 +208,7 @@ class WeeklyInsightService {
 
     const thisWeekDistance = thisWeekActivities.reduce((sum, a) => sum + a.distance, 0) * 0.000621371;
     const lastWeekDistance = lastWeekActivities.reduce((sum, a) => sum + a.distance, 0) * 0.000621371;
-    
+
     const change = lastWeekDistance > 0 ? ((thisWeekDistance - lastWeekDistance) / lastWeekDistance) * 100 : 0;
 
     return {
@@ -221,7 +221,7 @@ class WeeklyInsightService {
 
   private analyzeIntensityDistribution(activities: StravaActivity[]) {
     const recentActivities = activities.slice(0, 10); // Last 10 activities
-    
+
     const intensityBuckets = {
       easy: 0,    // < 15 mph
       moderate: 0, // 15-18 mph  
@@ -343,7 +343,7 @@ Generate a JSON response with:
       console.log('Analyzed patterns:', patterns);
 
       // Extract training themes from recent chats
-      const chatSessions = await chatSessionService.getSessions();
+      const chatSessions = await supabaseChatService.getSessions();
       const themes = await this.extractTrainingThemes(chatSessions);
       console.log('Training themes:', themes);
 
@@ -417,10 +417,10 @@ Generate a JSON response with:
 
       // Return fallback insight
       const patterns = this.analyzePatterns(activities, sleepData, readinessData);
-      const chatSessions = await chatSessionService.getSessions();
+      const chatSessions = await supabaseChatService.getSessions();
       const themes = await this.extractTrainingThemes(chatSessions);
       const fallback = this.generateFallbackInsight(patterns, themes);
-      
+
       const insight: WeeklyInsight = {
         id: `weekly_fallback_${Date.now()}`,
         type: fallback.type,

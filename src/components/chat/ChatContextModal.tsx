@@ -5,7 +5,7 @@ import type { ChatContextSnapshot, ChatSession, StravaAthlete, StravaActivity, S
 import { Button } from '../common/Button';
 import { openaiService } from '../../services/openaiApi';
 import { trainingPlansService } from '../../services/trainingPlansService';
-import { chatSessionService } from '../../services/chatSessionService';
+import { supabaseChatService } from '../../services/supabaseChatService';
 
 interface ChatContextModalProps {
   isOpen: boolean;
@@ -146,7 +146,7 @@ Intensity Preference: ${context.preferences.intensityPreference || 'Balanced'}
         timestamp: new Date()
       };
 
-      await chatSessionService.addMessageToSession(sessionId, confirmationMessage);
+      await supabaseChatService.addMessageToSession(sessionId, confirmationMessage);
 
       navigate('/plans');
     } catch (err) {

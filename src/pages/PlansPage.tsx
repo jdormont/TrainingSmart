@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Target, Clock, MapPin, Plus, Trash2, CreditCard as Edit3, List, CalendarDays, MessageCircle } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Calendar, Target, Clock, MapPin, Plus, Trash2, List, CalendarDays, MessageCircle } from 'lucide-react';
+
 import { Button } from '../components/common/Button';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { stravaCacheService } from '../services/stravaCacheService';
@@ -83,7 +83,7 @@ export const PlansPage: React.FC = () => {
 
     try {
       const weeklyStats = calculateWeeklyStats(activities);
-      const cyclingActivities = activities.filter(a => a.type === 'Ride');
+      const cyclingActivities = activities.filter((a: StravaActivity) => a.type === 'Ride');
 
       const trainingContext = {
         athlete,
@@ -180,20 +180,20 @@ Additional Preferences: ${preferences || 'None'}
   };
 
   const handleToggleWorkoutComplete = async (workoutId: string) => {
-    const plan = savedPlans.find(p => p.workouts.some(w => w.id === workoutId));
+    const plan = savedPlans.find((p: TrainingPlan) => p.workouts.some((w: Workout) => w.id === workoutId));
     if (!plan) return;
 
-    const workout = plan.workouts.find(w => w.id === workoutId);
+    const workout = plan.workouts.find((w: Workout) => w.id === workoutId);
     if (!workout) return;
 
     const newCompletedState = !workout.completed;
 
-    setSavedPlans(prevPlans =>
-      prevPlans.map(p =>
+    setSavedPlans((prevPlans: TrainingPlan[]) =>
+      prevPlans.map((p: TrainingPlan) =>
         p.id === plan.id
           ? {
             ...p,
-            workouts: p.workouts.map(w =>
+            workouts: p.workouts.map((w: Workout) =>
               w.id === workoutId ? { ...w, completed: newCompletedState } : w
             )
           }
@@ -205,12 +205,12 @@ Additional Preferences: ${preferences || 'None'}
       await trainingPlansService.updateWorkoutCompletion(workoutId, newCompletedState);
     } catch (err) {
       console.error('Failed to update workout:', err);
-      setSavedPlans(prevPlans =>
-        prevPlans.map(p =>
+      setSavedPlans((prevPlans: TrainingPlan[]) =>
+        prevPlans.map((p: TrainingPlan) =>
           p.id === plan.id
             ? {
               ...p,
-              workouts: p.workouts.map(w =>
+              workouts: p.workouts.map((w: Workout) =>
                 w.id === workoutId ? { ...w, completed: !newCompletedState } : w
               )
             }
@@ -221,9 +221,9 @@ Additional Preferences: ${preferences || 'None'}
   };
 
   const toggleFocusArea = (area: string) => {
-    setFocusAreas(prev =>
+    setFocusAreas((prev: string[]) =>
       prev.includes(area)
-        ? prev.filter(a => a !== area)
+        ? prev.filter((a: string) => a !== area)
         : [...prev, area]
     );
   };
@@ -258,15 +258,15 @@ Additional Preferences: ${preferences || 'None'}
   const handleApplyModification = async (modificationRequest: string) => {
     if (!modificationModal.planId || !athlete) return;
 
-    const plan = savedPlans.find(p => p.id === modificationModal.planId);
+    const plan = savedPlans.find((p: TrainingPlan) => p.id === modificationModal.planId);
     if (!plan) return;
 
     try {
       const weeklyStats = calculateWeeklyStats(activities);
-      const cyclingActivities = activities.filter(a => a.type === 'Ride');
+      const cyclingActivities = activities.filter((a: StravaActivity) => a.type === 'Ride');
 
-      const sleepData = await ouraApi.getSleepData().catch(() => null);
-      const readinessData = await ouraApi.getReadinessData().catch(() => null);
+      const sleepData = await ouraApi.getRecentSleepData().catch(() => null);
+      const readinessData = await ouraApi.getRecentReadinessData().catch(() => null);
 
       const trainingContext = {
         athlete,
@@ -283,7 +283,7 @@ Additional Preferences: ${preferences || 'None'}
         } : undefined
       };
 
-      const workoutsToModify = modificationModal.workouts.map(w => ({
+      const workoutsToModify = modificationModal.workouts.map((w: Workout) => ({
         name: w.name,
         type: w.type,
         description: w.description,
@@ -300,7 +300,7 @@ Additional Preferences: ${preferences || 'None'}
         modificationModal.weekNumber
       );
 
-      const workoutIdsToUpdate = modificationModal.workouts.map(w => w.id);
+      const workoutIdsToUpdate = modificationModal.workouts.map((w: Workout) => w.id);
       const updatedWorkoutsWithDates = modifiedWorkouts.map((w: any, index: number) => {
         const originalWorkout = modificationModal.workouts[index];
         const weekStart = new Date(modificationModal.workouts[0].scheduledDate);
@@ -321,13 +321,13 @@ Additional Preferences: ${preferences || 'None'}
         };
       });
 
-      setSavedPlans(prevPlans =>
-        prevPlans.map(p =>
+      setSavedPlans((prevPlans: TrainingPlan[]) =>
+        prevPlans.map((p: TrainingPlan) =>
           p.id === modificationModal.planId
             ? {
               ...p,
-              workouts: p.workouts.map(w => {
-                const updatedWorkout = updatedWorkoutsWithDates.find(uw => uw.id === w.id);
+              workouts: p.workouts.map((w: Workout) => {
+                const updatedWorkout = updatedWorkoutsWithDates.find((uw: Workout) => uw.id === w.id);
                 return updatedWorkout || w;
               })
             }
@@ -438,8 +438,8 @@ Additional Preferences: ${preferences || 'None'}
                       type="button"
                       onClick={() => setGoalType(option.value as any)}
                       className={`p-3 text-sm rounded-lg border transition-colors ${goalType === option.value
-                          ? 'border-orange-500 bg-orange-50 text-orange-700'
-                          : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-orange-500 bg-orange-50 text-orange-700'
+                        : 'border-gray-200 hover:border-gray-300'
                         }`}
                     >
                       {option.label}
@@ -512,8 +512,8 @@ Additional Preferences: ${preferences || 'None'}
                       type="button"
                       onClick={() => toggleFocusArea(area)}
                       className={`p-2 text-xs rounded-md border transition-colors text-left ${focusAreas.includes(area)
-                          ? 'border-orange-500 bg-orange-50 text-orange-700'
-                          : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-orange-500 bg-orange-50 text-orange-700'
+                        : 'border-gray-200 hover:border-gray-300'
                         }`}
                     >
                       {area}
@@ -689,8 +689,8 @@ Additional Preferences: ${preferences || 'None'}
                                   <button
                                     onClick={() => setViewMode('calendar')}
                                     className={`p-2 rounded-lg transition-colors ${viewMode === 'calendar'
-                                        ? 'bg-orange-100 text-orange-600'
-                                        : 'text-gray-400 hover:text-gray-600'
+                                      ? 'bg-orange-100 text-orange-600'
+                                      : 'text-gray-400 hover:text-gray-600'
                                       }`}
                                     title="Calendar view"
                                   >
@@ -699,8 +699,8 @@ Additional Preferences: ${preferences || 'None'}
                                   <button
                                     onClick={() => setViewMode('list')}
                                     className={`p-2 rounded-lg transition-colors ${viewMode === 'list'
-                                        ? 'bg-orange-100 text-orange-600'
-                                        : 'text-gray-400 hover:text-gray-600'
+                                      ? 'bg-orange-100 text-orange-600'
+                                      : 'text-gray-400 hover:text-gray-600'
                                       }`}
                                     title="List view"
                                   >

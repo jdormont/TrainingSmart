@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { Button } from '../common/Button';
 import { contentFeedService } from '../../services/contentFeedService';
-import { chatSessionService } from '../../services/chatSessionService';
+import { supabaseChatService } from '../../services/supabaseChatService';
 import { stravaApi } from '../../services/stravaApi';
 import type { ContentItem, StravaActivity, ChatSession } from '../../types';
 
@@ -31,7 +31,7 @@ export const ContentFeed: React.FC<ContentFeedProps> = ({ activities }) => {
         console.log('Loading content feed...');
 
         // Get chat sessions for profile analysis
-        const chatSessions = await chatSessionService.getSessions();
+        const chatSessions = await supabaseChatService.getSessions();
 
         // Check if content preferences chat exists
         const hasContentPrefs = chatSessions.some(session => session.category === 'content_preferences');
@@ -54,23 +54,23 @@ export const ContentFeed: React.FC<ContentFeedProps> = ({ activities }) => {
 
   const handleFeedback = (itemId: string, feedback: 'like' | 'dislike') => {
     console.log(`User gave ${feedback} feedback to item: ${itemId}`);
-    
+
     setFeedbackStates(prev => ({
       ...prev,
       [itemId]: prev[itemId] === feedback ? null : feedback
     }));
-    
+
     // Store feedback for recommendation training
     contentFeedService.recordFeedback(itemId, feedback);
-    
+
     // Show user that feedback was recorded
-    const message = feedback === 'like' 
-      ? 'Thanks! We\'ll show you more content about these topics.' 
+    const message = feedback === 'like'
+      ? 'Thanks! We\'ll show you more content about these topics.'
       : 'Got it! We\'ll avoid content about these topics.';
-    
+
     const item = content.find(c => c.id === itemId);
     console.log(`${message} Learning from: "${item?.title}"`);
-    
+
     // Force a small delay then refresh to show immediate impact
     setTimeout(() => {
       console.log('Auto-refreshing content to show feedback impact...');
@@ -78,15 +78,19 @@ export const ContentFeed: React.FC<ContentFeedProps> = ({ activities }) => {
     }, 1000);
   };
 
-  const createContentPreferencesChat = () => {
-    const newSession = chatSessionService.createSession(
-      'Content Preferences',
-      'content_preferences',
-      'Set up your content recommendations'
-    );
-    
-    // Navigate to chat page with the new session
-    navigate('/chat', { state: { activeSessionId: newSession.id } });
+  const createContentPreferencesChat = async () => {
+    try {
+      const newSession = await supabaseChatService.createSession(
+        'Content Preferences',
+        'content_preferences',
+        'Set up your content recommendations'
+      );
+
+      // Navigate to chat page with the new session
+      navigate('/chat', { state: { activeSessionId: newSession.id } });
+    } catch (err) {
+      console.error('Failed to create content preferences session:', err);
+    }
   };
 
   const handleRefreshContent = async () => {
@@ -97,7 +101,7 @@ export const ContentFeed: React.FC<ContentFeedProps> = ({ activities }) => {
       localStorage.removeItem('content_cache');
 
       // Reload content
-      const chatSessions = await chatSessionService.getSessions();
+      const chatSessions = await supabaseChatService.getSessions();
       const feedContent = await contentFeedService.getContentFeed(chatSessions, activities);
       console.log(`Refreshed content: ${feedContent.length} items`);
       setContent(feedContent);
@@ -127,7 +131,7 @@ export const ContentFeed: React.FC<ContentFeedProps> = ({ activities }) => {
     const now = new Date();
     const diffTime = now.getTime() - date.getTime();
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays === 0) return 'Today';
     if (diffDays === 1) return 'Yesterday';
     if (diffDays < 7) return `${diffDays} days ago`;
@@ -204,7 +208,7 @@ export const ContentFeed: React.FC<ContentFeedProps> = ({ activities }) => {
               Personalized cycling content based on your training and interests
             </p>
           </div>
-          
+
           {/* Filter Controls */}
           <div className="flex items-center space-x-2">
             <Button
@@ -354,27 +358,25 @@ export const ContentFeed: React.FC<ContentFeedProps> = ({ activities }) => {
                       <span>{item.type === 'video' ? 'Watch' : 'Read'}</span>
                       <ExternalLink className="w-3 h-3" />
                     </a>
-                    
+
                     {/* Feedback Buttons */}
                     <div className="flex items-center space-x-1">
                       <button
                         onClick={() => handleFeedback(item.id, 'like')}
-                        className={`p-1 rounded-full transition-colors ${
-                          feedbackStates[item.id] === 'like'
-                            ? 'bg-green-100 text-green-600'
-                            : 'text-gray-400 hover:text-green-600 hover:bg-green-50'
-                        }`}
+                        className={`p-1 rounded-full transition-colors ${feedbackStates[item.id] === 'like'
+                          ? 'bg-green-100 text-green-600'
+                          : 'text-gray-400 hover:text-green-600 hover:bg-green-50'
+                          }`}
                         title="I like this content"
                       >
                         <ThumbsUp className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleFeedback(item.id, 'dislike')}
-                        className={`p-1 rounded-full transition-colors ${
-                          feedbackStates[item.id] === 'dislike'
-                            ? 'bg-red-100 text-red-600'
-                            : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
-                        }`}
+                        className={`p-1 rounded-full transition-colors ${feedbackStates[item.id] === 'dislike'
+                          ? 'bg-red-100 text-red-600'
+                          : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+                          }`}
                         title="I don't like this content"
                       >
                         <ThumbsDown className="w-4 h-4" />

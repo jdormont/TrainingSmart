@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { stravaApi } from '../services/stravaApi';
+
 import { stravaCacheService } from '../services/stravaCacheService';
 import { ouraApi } from '../services/ouraApi';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
@@ -20,7 +20,7 @@ import { getUserOnboardingStatus } from '../services/userService';
 import type { StravaActivity, StravaAthlete, WeeklyStats, OuraSleepData, OuraReadinessData, DailyMetric } from '../types';
 import type { WeeklyInsight, HealthMetrics } from '../services/weeklyInsightService';
 import { calculateWeeklyStats } from '../utils/dataProcessing';
-import { MessageCircle, ChevronDown, ChevronUp, Database, Calendar, Link2Off, Activity } from 'lucide-react';
+import { MessageCircle, ChevronDown, ChevronUp, Calendar, Link2Off, Activity } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../utils/constants';
 import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
@@ -100,7 +100,7 @@ export const DashboardPage: React.FC = () => {
 
         // Fetch Oura data if authenticated
         let hasOuraData = false;
-        if (ouraApi.isAuthenticated()) {
+        if (await ouraApi.isAuthenticated()) {
           console.log('Oura is authenticated, fetching recovery data...');
           setOuraLoading(true);
           try {
@@ -147,7 +147,7 @@ export const DashboardPage: React.FC = () => {
             }
 
             console.log('=== END OURA DATA FETCH ===');
-          } catch (ouraError) {
+          } catch (ouraError: any) {
             console.error('Failed to fetch Oura data:', ouraError);
             console.error('Oura error details:', {
               message: ouraError.message,
@@ -596,8 +596,8 @@ export const DashboardPage: React.FC = () => {
                   <button
                     onClick={() => setViewMode('auto')}
                     className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === 'auto'
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
                       }`}
                   >
                     Auto
@@ -605,8 +605,8 @@ export const DashboardPage: React.FC = () => {
                   <button
                     onClick={() => setViewMode('full')}
                     className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === 'full'
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
                       }`}
                     disabled={!hasOuraData()}
                   >
@@ -615,8 +615,8 @@ export const DashboardPage: React.FC = () => {
                   <button
                     onClick={() => setViewMode('strava')}
                     className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === 'strava'
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
                       }`}
                   >
                     Training
@@ -697,7 +697,7 @@ export const DashboardPage: React.FC = () => {
           ) : (
             <>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {displayedActivities.map((activity) => (
+                {displayedActivities.map((activity: StravaActivity) => (
                   <ActivityCard
                     key={activity.id}
                     activity={activity}

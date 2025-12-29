@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, MessageCircle, Trash2, CreditCard as Edit3, X } from 'lucide-react';
 import { Button } from '../common/Button';
-import { chatSessionService } from '../../services/chatSessionService';
+import { supabaseChatService } from '../../services/supabaseChatService';
 import type { ChatSession } from '../../types';
 
 interface SessionSidebarProps {
@@ -72,7 +72,7 @@ const SessionSidebar: React.FC<SessionSidebarProps> = ({
             <span>New</span>
           </Button>
         </div>
-        
+
         {/* New Session Form */}
         {showNewSessionForm && (
           <form onSubmit={handleCreateSession} className="space-y-3 p-3 bg-gray-50 rounded-md">
@@ -139,11 +139,10 @@ const SessionSidebar: React.FC<SessionSidebarProps> = ({
               .map((session) => (
                 <div
                   key={session.id}
-                  className={`group rounded-md p-3 cursor-pointer transition-colors ${
-                    activeSessionId === session.id
+                  className={`group rounded-md p-3 cursor-pointer transition-colors ${activeSessionId === session.id
                       ? 'bg-orange-50 border border-orange-200'
                       : 'hover:bg-gray-50'
-                  }`}
+                    }`}
                   onClick={() => onSessionSelect(session.id)}
                 >
                   <div className="flex items-start justify-between">
@@ -187,28 +186,28 @@ const SessionSidebar: React.FC<SessionSidebarProps> = ({
                         <>
                           <div className="flex items-center space-x-2 mb-1">
                             <span className="text-sm">
-                              {chatSessionService.getCategoryIcon(session.category)}
+                              {supabaseChatService.getCategoryIcon(session.category)}
                             </span>
                             <h3 className="font-medium text-gray-900 truncate">
                               {session.name}
                             </h3>
                           </div>
-                          
+
                           {session.description && (
                             <p className="text-xs text-gray-600 mb-2 line-clamp-2">
                               {session.description}
                             </p>
                           )}
-                          
+
                           <div className="flex items-center justify-between">
-                            <span className={`text-xs px-2 py-1 rounded-full ${chatSessionService.getCategoryColor(session.category)}`}>
+                            <span className={`text-xs px-2 py-1 rounded-full ${supabaseChatService.getCategoryColor(session.category)}`}>
                               {session.category}
                             </span>
                             <div className="text-xs text-gray-500">
                               {session.messages.length} messages
                             </div>
                           </div>
-                          
+
                           <p className="text-xs text-gray-400 mt-1">
                             {session.updatedAt.toLocaleDateString()}
                           </p>
