@@ -4,7 +4,6 @@ export type { HealthMetrics } from './healthMetricsService';
 import { openaiService } from './openaiApi';
 import { supabaseChatService } from './supabaseChatService';
 import { userProfileService } from './userProfileService';
-import { STORAGE_KEYS } from '../utils/constants';
 import { startOfWeek, endOfWeek, subWeeks, format } from 'date-fns';
 
 export interface WeeklyInsight {
@@ -21,6 +20,13 @@ export interface WeeklyInsight {
 interface WeeklyInsightCache {
   insight: WeeklyInsight;
   weekOf: string; // ISO string for comparison
+}
+
+interface Correlation {
+  sleepHours: number;
+  sleepEfficiency: number;
+  activitySpeed: number;
+  activityDistance: number;
 }
 
 class WeeklyInsightService {
@@ -162,7 +168,7 @@ class WeeklyInsightService {
     }
 
     // Simple correlation analysis
-    const correlations = [];
+    const correlations: Correlation[] = [];
 
     activities.forEach(activity => {
       const activityDate = activity.start_date_local.split('T')[0];
@@ -446,28 +452,28 @@ Generate a JSON response with:
     // Choose insight based on patterns
     if (consistency < 60) {
       return {
-        type: 'consistency',
+        type: 'consistency' as const,
         title: 'Focus on Consistency',
         message: `Your training consistency is ${consistency}/100. Try to maintain ${Math.ceil(patterns.trainingConsistency.avgActivitiesPerWeek)} rides per week for better fitness gains.`,
         dataPoints: [`${consistency}/100 consistency score`, `${patterns.trainingConsistency.avgActivitiesPerWeek} avg rides/week`]
       };
     } else if (Math.abs(weeklyChange) > 25) {
       return {
-        type: 'training',
+        type: 'training' as const,
         title: weeklyChange > 0 ? 'Volume Increase Noted' : 'Volume Drop Detected',
         message: `Your weekly distance ${weeklyChange > 0 ? 'increased' : 'decreased'} by ${Math.abs(weeklyChange)}%. ${weeklyChange > 0 ? 'Monitor recovery to avoid overreaching.' : 'Consider gradually building back up.'}`,
         dataPoints: [`${weeklyChange}% weekly change`, `${patterns.weeklyVolume.thisWeek} miles this week`]
       };
     } else if (!hasRecoveryData) {
       return {
-        type: 'recovery',
+        type: 'recovery' as const,
         title: 'Connect Recovery Data',
         message: `Great ${consistency}/100 training consistency! Connect your Oura Ring to get personalized recovery insights and optimize your ${patterns.trainingConsistency.avgDistancePerWeek} miles/week.`,
         dataPoints: [`${consistency}/100 consistency`, `${patterns.trainingConsistency.avgDistancePerWeek} miles/week average`]
       };
     } else {
       return {
-        type: 'pattern',
+        type: 'pattern' as const,
         title: 'Strong Training Pattern',
         message: `Excellent consistency at ${patterns.trainingConsistency.avgActivitiesPerWeek} rides/week with ${patterns.recoveryTrends.avgSleepHours}h average sleep. Your ${patterns.recoveryTrends.avgReadiness}/100 readiness supports current training load.`,
         dataPoints: [`${patterns.trainingConsistency.avgActivitiesPerWeek} rides/week`, `${patterns.recoveryTrends.avgSleepHours}h sleep`, `${patterns.recoveryTrends.avgReadiness}/100 readiness`]
