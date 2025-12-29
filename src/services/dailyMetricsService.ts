@@ -126,6 +126,15 @@ export const dailyMetricsService = {
     return scores;
   },
 
+  calculateRecoveryScore(metric: DailyMetric, demographic?: DemographicInfo): number {
+    return healthCalibrationService.calibrateRecoveryScore(
+      metric.sleep_minutes,
+      metric.hrv,
+      metric.resting_hr,
+      demographic
+    );
+  },
+
   async getDemographicInfo(): Promise<DemographicInfo | undefined> {
     try {
       const { data: { user } } = await supabase.auth.getUser();

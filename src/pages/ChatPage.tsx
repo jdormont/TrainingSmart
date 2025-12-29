@@ -4,7 +4,7 @@ import { Send, Bot, User, Loader2, Menu, X, Calendar, Activity, Heart, Battery, 
 import { stravaApi } from '../services/stravaApi';
 import { ouraApi } from '../services/ouraApi';
 import { openaiService } from '../services/openaiApi';
-import { chatSessionService } from '../services/chatSessionService';
+import { supabaseChatService } from '../services/supabaseChatService';
 import { chatContextExtractor } from '../services/chatContextExtractor';
 import { userProfileService } from '../services/userProfileService';
 import { convertMarkdownToHtml } from '../utils/markdownToHtml';
@@ -16,7 +16,7 @@ import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
 import type { StravaActivity, StravaAthlete, StravaStats, ChatMessage, ChatSession, OuraSleepData, OuraReadinessData, ChatContextSnapshot } from '../types';
 import { calculateWeeklyStats } from '../utils/dataProcessing';
 import { calculateSleepScore } from '../utils/sleepScoreCalculator';
-import { formatDistance, formatDuration, formatDate } from '../utils/formatters';
+import { format, isToday, isYesterday, subDays, addDays } from 'date-fns';
 
 export const ChatPage: React.FC = () => {
   const location = useLocation();
@@ -66,7 +66,7 @@ export const ChatPage: React.FC = () => {
         }
 
         // Load Oura recovery data if available
-        if (ouraApi.isAuthenticated()) {
+        if (await ouraApi.isAuthenticated()) {
           try {
             console.log('Loading Oura recovery data for AI coach...');
             const [recentSleep, recentReadiness] = await Promise.all([
@@ -91,17 +91,17 @@ export const ChatPage: React.FC = () => {
         }
 
         // Load chat sessions
-        const savedSessions = await chatSessionService.getSessions();
+        const savedSessions = await supabaseChatService.getSessions();
         setSessions(savedSessions);
 
         // Load active session or create default
-        const activeSessionId = (location.state as any)?.activeSessionId || chatSessionService.getActiveSessionId();
+        const activeSessionId = (location.state as any)?.activeSessionId || supabaseChatService.getActiveSessionId();
         let currentSession = activeSessionId ?
           savedSessions.find(s => s.id === activeSessionId) : null;
 
         if (!currentSession && savedSessions.length === 0) {
           // Create default session
-          currentSession = await chatSessionService.createSession(
+          currentSession = await supabaseChatService.createSession(
             'General Training Chat',
             'training',
             'General discussion about your cycling training'
@@ -112,7 +112,7 @@ export const ChatPage: React.FC = () => {
           currentSession = savedSessions.sort((a, b) =>
             b.updatedAt.getTime() - a.updatedAt.getTime()
           )[0];
-          chatSessionService.setActiveSession(currentSession.id);
+          supabaseChatService.setActiveSession(currentSession.id);
         }
 
         setActiveSession(currentSession);
@@ -166,7 +166,7 @@ What would you like to know about your training?`;
             timestamp: new Date()
           };
 
-          chatSessionService.addMessageToSession(currentSession.id, welcomeMessage);
+          supabaseChatService.addMessageToSession(currentSession.id, welcomeMessage);
           setActiveSession({
             ...currentSession,
             messages: [welcomeMessage],
@@ -243,7 +243,7 @@ What would you like to know about your training?`;
     };
 
     // Add message to current session
-    chatSessionService.addMessageToSession(activeSession.id, userMessage);
+    supabaseChatService.addMessageToSession(activeSession.id, userMessage);
 
     setInputMessage('');
     setLoading(true);
@@ -298,14 +298,14 @@ What would you like to know about your training?`;
       };
 
       // Add assistant response to session
-      chatSessionService.addMessageToSession(activeSession.id, assistantMessage);
+      supabaseChatService.addMessageToSession(activeSession.id, assistantMessage);
 
       // Update sessions list
-      const updatedSessions = await chatSessionService.getSessions();
+      const updatedSessions = await supabaseChatService.getSessions();
       setSessions(updatedSessions);
 
       // Refresh active session from storage to get latest messages
-      const updatedSession = await chatSessionService.getSession(activeSession.id);
+      const updatedSession = await supabaseChatService.getSession(activeSession.id);
       if (updatedSession) {
         setActiveSession(updatedSession);
       }
@@ -318,42 +318,42 @@ What would you like to know about your training?`;
   };
 
   const handleSessionSelect = async (sessionId: string) => {
-    const session = await chatSessionService.getSession(sessionId);
+    const session = await supabaseChatService.getSession(sessionId);
     if (session) {
       setActiveSession(session);
-      chatSessionService.setActiveSession(sessionId);
+      supabaseChatService.setActiveSession(sessionId);
     }
   };
 
   const handleSessionCreate = async (name: string, category: ChatSession['category'], description?: string) => {
-    const newSession = await chatSessionService.createSession(name, category, description);
-    const updatedSessions = await chatSessionService.getSessions();
+    const newSession = await supabaseChatService.createSession(name, category, description);
+    const updatedSessions = await supabaseChatService.getSessions();
     setSessions(updatedSessions);
     setActiveSession(newSession);
   };
 
   const handleSessionDelete = async (sessionId: string) => {
-    await chatSessionService.deleteSession(sessionId);
-    const updatedSessions = await chatSessionService.getSessions();
+    await supabaseChatService.deleteSession(sessionId);
+    const updatedSessions = await supabaseChatService.getSessions();
     setSessions(updatedSessions);
 
     // If we deleted the active session, switch to another or create new
     if (activeSession?.id === sessionId) {
-      const remainingSessions = await chatSessionService.getSessions();
+      const remainingSessions = await supabaseChatService.getSessions();
       if (remainingSessions.length > 0) {
         const newActive = remainingSessions[0];
         setActiveSession(newActive);
-        chatSessionService.setActiveSession(newActive.id);
+        supabaseChatService.setActiveSession(newActive.id);
       } else {
         setActiveSession(null);
-        chatSessionService.clearActiveSession();
+        supabaseChatService.clearActiveSession();
       }
     }
   };
 
   const handleSessionRename = async (sessionId: string, newName: string) => {
-    await chatSessionService.updateSession(sessionId, { name: newName });
-    const updatedSessions = await chatSessionService.getSessions();
+    await supabaseChatService.updateSession(sessionId, { name: newName });
+    const updatedSessions = await supabaseChatService.getSessions();
     setSessions(updatedSessions);
 
     // Update active session if it's the one being renamed
@@ -405,7 +405,7 @@ What would you like to know about your training?`;
       timestamp: new Date()
     };
 
-    chatSessionService.addMessageToSession(activeSession.id, userMessage);
+    supabaseChatService.addMessageToSession(activeSession.id, userMessage);
 
     setLoading(true);
     setError(null);
@@ -442,12 +442,12 @@ What would you like to know about your training?`;
         timestamp: new Date()
       };
 
-      chatSessionService.addMessageToSession(activeSession.id, assistantMessage);
+      supabaseChatService.addMessageToSession(activeSession.id, assistantMessage);
 
-      const updatedSessions = await chatSessionService.getSessions();
+      const updatedSessions = await supabaseChatService.getSessions();
       setSessions(updatedSessions);
 
-      const updatedSession = await chatSessionService.getSession(activeSession.id);
+      const updatedSession = await supabaseChatService.getSession(activeSession.id);
       if (updatedSession) {
         setActiveSession(updatedSession);
       }
@@ -548,8 +548,8 @@ What would you like to know about your training?`;
                       <span>{extracting ? 'Extracting...' : 'Create Plan'}</span>
                     </button>
                   )}
-                  <span className={`text-xs px-2 py-1 rounded-full ${chatSessionService.getCategoryColor(activeSession.category)}`}>
-                    {chatSessionService.getCategoryIcon(activeSession.category)} {activeSession.category}
+                  <span className={`text-xs px-2 py-1 rounded-full ${supabaseChatService.getCategoryColor(activeSession.category)}`}>
+                    {supabaseChatService.getCategoryIcon(activeSession.category)} {activeSession.category}
                   </span>
                   <span className="text-xs text-gray-500">
                     {activeSession.messages.length} messages

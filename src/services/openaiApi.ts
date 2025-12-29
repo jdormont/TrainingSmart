@@ -21,8 +21,8 @@ interface TrainingContext {
     activities: number;
   };
   recovery?: {
-    sleepData: OuraSleepData | null;
-    readinessData: OuraReadinessData | null;
+    sleepData: OuraSleepData[] | null;
+    readinessData: OuraReadinessData[] | null;
     sleepScore?: number;
   };
   userProfile?: {

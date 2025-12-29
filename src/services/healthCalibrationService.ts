@@ -92,22 +92,29 @@ class HealthCalibrationService {
 
     const reference = this.getRestingHRReference(demographic.gender, demographic.ageBucket);
 
+    // If RHR is below or equal to the minimum of the range, that's excellent (100)
+    if (restingHR <= reference.min) {
+      return 100;
+    }
+
+    // If within the optimal range (between min and target)
     if (restingHR <= reference.target) {
-      const deviationFromIdeal = Math.abs(restingHR - reference.target);
-      const rangeToMin = reference.target - reference.min;
-      if (deviationFromIdeal <= rangeToMin * 0.3) {
-        return 100;
-      } else {
-        const percentInRange = 1 - (deviationFromIdeal / rangeToMin);
-        return Math.round(80 + (percentInRange * 20));
-      }
-    } else if (restingHR <= reference.max) {
+      const range = reference.target - reference.min;
+      const position = restingHR - reference.min;
+      // Scale linearly from 100 (at min) to 80 (at target)
+      const score = 100 - ((position / range) * 20);
+      return Math.round(score);
+    }
+
+    // If above target but within max
+    if (restingHR <= reference.max) {
       const percentAboveTarget = (restingHR - reference.target) / (reference.max - reference.target);
       return Math.round(80 - (percentAboveTarget * 30));
-    } else {
-      const percentAboveMax = Math.min((restingHR - reference.max) / 20, 1);
-      return Math.round(50 - (percentAboveMax * 30));
     }
+
+    // If above max
+    const percentAboveMax = Math.min((restingHR - reference.max) / 20, 1);
+    return Math.round(50 - (percentAboveMax * 30));
   }
 
   private getDefaultHRVScore(hrvValue: number): number {
@@ -133,8 +140,10 @@ class HealthCalibrationService {
   ): number {
     const scores: number[] = [];
 
-    const sleepScore = Math.min(100, (sleepMinutes / 480) * 100);
-    scores.push(sleepScore);
+    if (sleepMinutes > 0) {
+      const sleepScore = Math.min(100, (sleepMinutes / 480) * 100);
+      scores.push(sleepScore);
+    }
 
     if (hrvValue && hrvValue > 0) {
       const hrvScore = this.calibrateHRVScore(hrvValue, demographic);

@@ -26,7 +26,7 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
   console.log('Readiness data received:', readinessData);
   console.log('Daily metric received:', dailyMetric);
   console.log('Loading state:', loading);
-  
+
   if (sleepData) {
     console.log('Sleep data fields available:', Object.keys(sleepData));
     console.log('Key sleep metrics:', {
@@ -38,7 +38,7 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
       restless_periods: sleepData.restless_periods
     });
   }
-  
+
   if (readinessData) {
     console.log('Readiness data fields available:', Object.keys(readinessData));
     console.log('Readiness score:', readinessData.score);
@@ -141,15 +141,25 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
 
   const individualScores = dailyMetric ? dailyMetricsService.calculateIndividualScores(dailyMetric, demographic) : null;
 
+  /* Calculates recovery score dynamically from available metrics */
   const displayRecoveryScore = dailyMetric ? (() => {
-    if (dailyMetric.recovery_score > 0) {
-      return dailyMetric.recovery_score;
+    // Determine which scores are available (non-null)
+    const scores: number[] = [];
+
+    // Sleep Score (only if minutes > 0)
+    if (dailyMetric.sleep_minutes > 0 && individualScores?.sleepScore !== null) {
+      scores.push(individualScores.sleepScore!);
     }
 
-    const scores: number[] = [];
-    if (individualScores?.sleepScore !== null) scores.push(individualScores.sleepScore!);
-    if (individualScores?.hrvScore !== null) scores.push(individualScores.hrvScore!);
-    if (individualScores?.rhrScore !== null) scores.push(individualScores.rhrScore!);
+    // HRV Score
+    if (dailyMetric.hrv > 0 && individualScores?.hrvScore !== null) {
+      scores.push(individualScores.hrvScore!);
+    }
+
+    // RHR Score
+    if (dailyMetric.resting_hr > 0 && individualScores?.rhrScore !== null) {
+      scores.push(individualScores.rhrScore!);
+    }
 
     if (scores.length === 0) return 0;
 
@@ -315,8 +325,8 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
             </div>
             <div className={`text-sm ${getScoreColor(readinessData.score)}`}>
               {(readinessData.score && readinessData.score >= 85) ? '🟢 Ready for intense training' :
-               (readinessData.score && readinessData.score >= 70) ? '🟡 Moderate training recommended' :
-               '🔴 Focus on recovery today'}
+                (readinessData.score && readinessData.score >= 70) ? '🟡 Moderate training recommended' :
+                  '🔴 Focus on recovery today'}
             </div>
           </div>
         </div>

@@ -206,15 +206,16 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
       const weekMetricsData = weeklyMetrics.get(weekLabel) || [];
       const avgRecovery = weekMetricsData.length > 0
         ? Math.round(weekMetricsData.reduce((sum, m) => {
-            if (m.recovery_score > 0) return sum + m.recovery_score;
-
-            const scores: number[] = [];
-            if (m.sleep_minutes > 0) scores.push(Math.min(100, (m.sleep_minutes / 480) * 100));
-            if (m.hrv > 0) scores.push(Math.min(100, (m.hrv / 80) * 100));
-            if (m.resting_hr > 0) scores.push(Math.max(0, 100 - ((m.resting_hr - 40) * 2)));
-
-            return sum + (scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0);
-          }, 0) / weekMetricsData.length)
+          // Always calculate dynamically using the service
+          const score = dailyMetricsService.calculateRecoveryScore(m, {
+            // We'd ideally pass demographic info here if available, 
+            // but for trends we can rely on default scaling or update the component to fetch demographics.
+            // Given the previous code didn't use demographics for the fallback, this is already an improvement.
+            // To be safe, we might want to fetch demographics in the parent or this component, 
+            // but for now let's use the service which handles undefined demographics gracefully.
+          });
+          return sum + score;
+        }, 0) / weekMetricsData.length)
         : 0;
 
       weeks.push({
@@ -356,11 +357,10 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
               <button
                 key={metric.id}
                 onClick={() => toggleMetric(metric.id)}
-                className={`flex items-center space-x-2 px-3 py-1.5 text-sm rounded-md transition-colors ${
-                  selectedMetrics.has(metric.id)
+                className={`flex items-center space-x-2 px-3 py-1.5 text-sm rounded-md transition-colors ${selectedMetrics.has(metric.id)
                     ? 'text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                  }`}
                 style={selectedMetrics.has(metric.id) ? { backgroundColor: metric.color } : {}}
               >
                 {selectedMetrics.has(metric.id) ? (
