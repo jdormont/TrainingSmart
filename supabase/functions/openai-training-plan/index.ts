@@ -219,8 +219,8 @@ EXERCISE VIDEO INTEGRATION:
         description = description
           .replace(/```json\s*[\s\S]*?\s*```/g, "")
           .replace(/```\s*[\s\S]*?\s*```/g, "")
-          .replace(/\`\`\`json[\s\S]*$/g, "")
-          .replace(/^\s*\`\`\`json\s*/gm, "")
+          .replace(/```json[\s\S]*$/g, "")
+          .replace(/^\s*```json\s*/gm, "")
           .replace(/\[\s*\{[\s\S]*?\}\s*\]/g, "")
           .replace(/\{\s*"name"[\s\S]*$/g, "")
           .replace(/^Workouts:?\s*$/gim, "")

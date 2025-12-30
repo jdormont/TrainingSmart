@@ -15,10 +15,9 @@ import {
   COACH_PERSONAS,
   TRAINING_GOALS,
   SKILL_LEVELS,
-  AVAILABLE_INTERESTS,
-  type UserProfile,
-  type ContentProfile
+  AVAILABLE_INTERESTS
 } from '../services/userProfileService';
+import type { StravaAthlete } from '../types';
 
 const DEFAULT_SYSTEM_PROMPT = `You are TrainingSmart AI, an elite cycling and running coach with direct access to the user's Strava training data.
 
@@ -66,7 +65,7 @@ export const SettingsPage: React.FC = () => {
   const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [athlete, setAthlete] = useState<any>(null);
+  const [athlete, setAthlete] = useState<StravaAthlete | null>(null);
   const [ouraConnected, setOuraConnected] = useState(false);
   const [calendarConnected, setCalendarConnected] = useState(false);
   const [calendarConnectedAt, setCalendarConnectedAt] = useState<Date | null>(null);
@@ -163,14 +162,36 @@ export const SettingsPage: React.FC = () => {
       setCalendarConnectedAt(status.connectedAt || null);
     };
     checkCalendarStatus();
+  }, [userProfile]);
 
-    // Handle OAuth callback
+  // Handle OAuth callback
+  useEffect(() => {
+    const handleCalendarCallback = async (code: string) => {
+      setConnectingCalendar(true);
+      try {
+        await googleCalendarService.handleOAuthCallback(code);
+        const status = await googleCalendarService.getConnectionStatus();
+        setCalendarConnected(status.connected);
+        setCalendarConnectedAt(status.connectedAt || null);
+
+        // Clean up URL
+        navigate('/settings', { replace: true });
+
+        alert('Successfully connected to Google Calendar! You can now export workouts from your training plans.');
+      } catch (error) {
+        console.error('Failed to complete Google Calendar connection:', error);
+        alert(`Failed to connect: ${(error as Error).message}`);
+      } finally {
+        setConnectingCalendar(false);
+      }
+    };
+
     const params = new URLSearchParams(location.search);
     const code = params.get('code');
     if (code) {
       handleCalendarCallback(code);
     }
-  }, [location.search, userProfile]);
+  }, [location.search, navigate]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -256,25 +277,7 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleCalendarCallback = async (code: string) => {
-    setConnectingCalendar(true);
-    try {
-      await googleCalendarService.handleOAuthCallback(code);
-      const status = await googleCalendarService.getConnectionStatus();
-      setCalendarConnected(status.connected);
-      setCalendarConnectedAt(status.connectedAt || null);
 
-      // Clean up URL
-      navigate('/settings', { replace: true });
-
-      alert('Successfully connected to Google Calendar! You can now export workouts from your training plans.');
-    } catch (error) {
-      console.error('Failed to complete Google Calendar connection:', error);
-      alert(`Failed to connect: ${(error as Error).message}`);
-    } finally {
-      setConnectingCalendar(false);
-    }
-  };
 
   const handleDisconnectCalendar = async () => {
     if (confirm('Are you sure you want to disconnect Google Calendar? Your previously exported events will remain in your calendar.')) {
@@ -546,9 +549,9 @@ export const SettingsPage: React.FC = () => {
               <Moon className="w-5 h-5 mr-2" />
               Oura Ring Integration
             </h2>
-            
+
             <p className="text-gray-600 mb-4">
-              Connect your Oura Ring to get sleep quality, recovery scores, and readiness data 
+              Connect your Oura Ring to get sleep quality, recovery scores, and readiness data
               integrated with your training insights.
             </p>
 
@@ -593,7 +596,7 @@ export const SettingsPage: React.FC = () => {
                   You'll be redirected to Oura to authorize access to your health data.
                 </p>
                 <div className="mt-2">
-                  <Link 
+                  <Link
                     to="/auth/oura/direct"
                     className="text-sm text-purple-600 hover:text-purple-700 underline"
                   >
@@ -751,11 +754,10 @@ export const SettingsPage: React.FC = () => {
                           key={persona.value}
                           type="button"
                           onClick={() => setCoachPersona(persona.value)}
-                          className={`p-4 text-left rounded-lg border transition-colors ${
-                            coachPersona === persona.value
-                              ? 'border-orange-500 bg-orange-50'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
+                          className={`p-4 text-left rounded-lg border transition-colors ${coachPersona === persona.value
+                            ? 'border-orange-500 bg-orange-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                            }`}
                         >
                           <div className="font-medium text-gray-900 mb-1">{persona.label}</div>
                           <div className="text-xs text-gray-600">{persona.description}</div>
@@ -775,11 +777,10 @@ export const SettingsPage: React.FC = () => {
                           key={goal.value}
                           type="button"
                           onClick={() => setTrainingGoal(goal.value)}
-                          className={`p-4 text-left rounded-lg border transition-colors ${
-                            trainingGoal === goal.value
-                              ? 'border-orange-500 bg-orange-50'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
+                          className={`p-4 text-left rounded-lg border transition-colors ${trainingGoal === goal.value
+                            ? 'border-orange-500 bg-orange-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                            }`}
                         >
                           <div className="font-medium text-gray-900 mb-1">{goal.label}</div>
                           <div className="text-xs text-gray-600">{goal.description}</div>
@@ -808,12 +809,11 @@ export const SettingsPage: React.FC = () => {
                         <button
                           key={level.value}
                           type="button"
-                          onClick={() => setSkillLevel(level.value as any)}
-                          className={`p-3 text-center rounded-lg border transition-colors ${
-                            skillLevel === level.value
-                              ? 'border-orange-500 bg-orange-50 text-orange-700'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
+                          onClick={() => setSkillLevel(level.value as 'beginner' | 'intermediate' | 'advanced' | 'pro')}
+                          className={`p-3 text-center rounded-lg border transition-colors ${skillLevel === level.value
+                            ? 'border-orange-500 bg-orange-50 text-orange-700'
+                            : 'border-gray-200 hover:border-gray-300'
+                            }`}
                         >
                           <div className="font-medium text-sm">{level.label}</div>
                         </button>
@@ -835,11 +835,10 @@ export const SettingsPage: React.FC = () => {
                           key={interest}
                           type="button"
                           onClick={() => toggleInterest(interest)}
-                          className={`px-3 py-2 rounded-full text-sm transition-colors ${
-                            interests.includes(interest)
-                              ? 'bg-orange-500 text-white hover:bg-orange-600'
-                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                          }`}
+                          className={`px-3 py-2 rounded-full text-sm transition-colors ${interests.includes(interest)
+                            ? 'bg-orange-500 text-white hover:bg-orange-600'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
                         >
                           {interest}
                         </button>
@@ -880,9 +879,9 @@ export const SettingsPage: React.FC = () => {
               <Bot className="w-5 h-5 mr-2" />
               AI Coach Personality
             </h2>
-            
+
             <p className="text-gray-600 mb-4">
-              Customize how your AI coach communicates with you. This system prompt defines 
+              Customize how your AI coach communicates with you. This system prompt defines
               the coach's personality, expertise, and approach to giving you training advice.
             </p>
 
@@ -913,7 +912,7 @@ export const SettingsPage: React.FC = () => {
                   <Save className="w-4 h-4 mr-2" />
                   {saved ? 'Saved!' : 'Save Changes'}
                 </Button>
-                
+
                 <Button
                   onClick={handleReset}
                   variant="outline"
@@ -937,7 +936,7 @@ export const SettingsPage: React.FC = () => {
           {/* Prompt Examples */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Example Coaching Styles</h3>
-            
+
             <div className="space-y-4">
               <div className="border border-gray-200 rounded-md p-4">
                 <h4 className="font-medium text-gray-900 mb-2">🏃 Motivational Coach</h4>

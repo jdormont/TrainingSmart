@@ -25,6 +25,13 @@ import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../utils/constants';
 import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
 
+interface AuthError {
+  message?: string;
+  response?: {
+    status?: number;
+  };
+}
+
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const [athlete, setAthlete] = useState<StravaAthlete | null>(null);
@@ -73,7 +80,8 @@ export const DashboardPage: React.FC = () => {
             stravaCacheService.getAthlete(),
             stravaCacheService.getActivities(false, 20)
           ]);
-        } catch (authError: any) {
+        } catch (error: unknown) {
+          const authError = error as AuthError;
           // If we get an authentication error, show the ghost dashboard
           if (authError?.message?.includes('authenticated') ||
             authError?.message?.includes('token') ||
@@ -147,7 +155,8 @@ export const DashboardPage: React.FC = () => {
             }
 
             console.log('=== END OURA DATA FETCH ===');
-          } catch (ouraError: any) {
+          } catch (err: unknown) {
+            const ouraError = err as Error;
             console.error('Failed to fetch Oura data:', ouraError);
             console.error('Oura error details:', {
               message: ouraError.message,

@@ -2,6 +2,34 @@ import { supabase } from './supabaseClient';
 import type { TrainingPlan, Workout } from '../types';
 import { STORAGE_KEYS } from '../utils/constants';
 
+interface DbTrainingPlan {
+  id: string;
+  name: string;
+  description: string;
+  goal: string;
+  start_date: string;
+  end_date: string;
+  created_at: string;
+  source_chat_session_id?: string;
+  chat_context_snapshot?: any;
+  user_id: string;
+}
+
+interface DbWorkout {
+  id: string;
+  name: string;
+  type: string;
+  description: string;
+  duration: number;
+  distance: number;
+  intensity: string;
+  scheduled_date: string;
+  completed: boolean;
+  google_calendar_event_id?: string;
+  plan_id: string;
+  user_id: string;
+}
+
 class TrainingPlansService {
   private async getCurrentUserId(): Promise<string | null> {
     const { data: { user } } = await supabase.auth.getUser();
@@ -27,7 +55,7 @@ class TrainingPlansService {
     cleaned = cleaned
       .replace(/```json\s*[\s\S]*?\s*```/g, '')
       .replace(/```\s*[\s\S]*?\s*```/g, '')
-      .replace(/\`\`\`json[\s\S]*$/g, '')
+      .replace(/```json[\s\S]*$/g, '')
       .replace(/\[\s*\{[\s\S]*?\}\s*\]/g, '')
       .replace(/\{\s*"name"[\s\S]*$/g, '')
       .replace(/^Workouts:?\s*$/gim, '')
@@ -36,7 +64,7 @@ class TrainingPlansService {
     return cleaned;
   }
 
-  private dbPlanToTrainingPlan(dbPlan: any, workouts: any[]): TrainingPlan {
+  private dbPlanToTrainingPlan(dbPlan: DbTrainingPlan, workouts: DbWorkout[]): TrainingPlan {
     const plan: TrainingPlan = {
       id: dbPlan.id,
       name: dbPlan.name,
@@ -155,7 +183,7 @@ class TrainingPlansService {
 
       console.log(`Creating plan "${plan.name}" with ${plan.workouts.length} workouts`);
 
-      const insertData: any = {
+      const insertData: Record<string, any> = {
         name: plan.name,
         description: plan.description,
         goal: plan.goal,

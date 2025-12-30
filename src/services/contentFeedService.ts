@@ -179,7 +179,7 @@ class ContentFeedService {
   private estimateSkillLevel(activities: StravaActivity[]): 'beginner' | 'intermediate' | 'advanced' {
     if (activities.length === 0) return 'beginner';
 
-    const avgDistance = activities.reduce((sum, a) => sum + a.distance, 0) / activities.length;
+
     const avgSpeed = activities.reduce((sum, a) => sum + a.average_speed, 0) / activities.length;
     const maxDistance = Math.max(...activities.map(a => a.distance));
 
