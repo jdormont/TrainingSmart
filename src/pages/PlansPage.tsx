@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { addDays, isSameDay } from 'date-fns';
 import { Calendar, Target, Clock, MapPin, Plus, Trash2, List, CalendarDays, MessageCircle } from 'lucide-react';
 
 import { Button } from '../components/common/Button';
@@ -14,7 +15,6 @@ import { StatsSummary } from '../components/dashboard/StatsSummary';
 import WorkoutCard from '../components/plans/WorkoutCard';
 import WeeklyPlanView from '../components/plans/WeeklyPlanView';
 import PlanModificationModal from '../components/plans/PlanModificationModal';
-import { addDays } from 'date-fns';
 import { ouraApi } from '../services/ouraApi';
 import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
 
@@ -46,6 +46,15 @@ export const PlansPage: React.FC = () => {
   const [preferences, setPreferences] = useState('');
   const [focusAreas, setFocusAreas] = useState<string[]>([]);
 
+  const loadPlans = async () => {
+    try {
+      const plans = await trainingPlansService.getPlans();
+      setSavedPlans(plans);
+    } catch (error) {
+      console.error('Failed to load plans:', error);
+    }
+  };
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -62,9 +71,7 @@ export const PlansPage: React.FC = () => {
         const stats = calculateWeeklyStats(activitiesData);
         setWeeklyStats(stats);
 
-        // Load saved plans from Supabase
-        const plans = await trainingPlansService.getPlans();
-        setSavedPlans(plans);
+        await loadPlans(); // Load plans after initial data
       } catch (err) {
         console.error('Failed to load data:', err);
         setError('Failed to load your training data.');
@@ -131,7 +138,8 @@ Additional Preferences: ${preferences || 'None'}
           distance: w.distance ? w.distance * 1609.34 : undefined,
           intensity: w.intensity || 'moderate',
           scheduledDate: workoutDate,
-          completed: false
+          completed: false,
+          status: 'planned'
         };
       });
 
@@ -188,15 +196,25 @@ Additional Preferences: ${preferences || 'None'}
     const workout = plan.workouts.find((w: Workout) => w.id === workoutId);
     if (!workout) return;
 
-    const newCompletedState = !workout.completed;
+    // Toggle logic: if completed, go to 'planned', else 'completed'
+    // This maintains the simple checkbox behavior for legacy support
+    const newStatus = workout.status === 'completed' || workout.completed ? 'planned' : 'completed';
 
+    await handleUpdateStatus(workoutId, newStatus);
+  };
+
+  const handleUpdateStatus = async (workoutId: string, newStatus: 'planned' | 'completed' | 'skipped') => {
+    const plan = savedPlans.find((p: TrainingPlan) => p.workouts.some((w: Workout) => w.id === workoutId));
+    if (!plan) return;
+
+    // Optimistic update
     setSavedPlans((prevPlans: TrainingPlan[]) =>
       prevPlans.map((p: TrainingPlan) =>
         p.id === plan.id
           ? {
             ...p,
             workouts: p.workouts.map((w: Workout) =>
-              w.id === workoutId ? { ...w, completed: newCompletedState } : w
+              w.id === workoutId ? { ...w, status: newStatus, completed: newStatus === 'completed' } : w
             )
           }
           : p
@@ -204,21 +222,74 @@ Additional Preferences: ${preferences || 'None'}
     );
 
     try {
-      await trainingPlansService.updateWorkoutCompletion(workoutId, newCompletedState);
+      await trainingPlansService.updateWorkoutStatus(workoutId, newStatus);
     } catch (err) {
-      console.error('Failed to update workout:', err);
+      console.error('Failed to update workout status:', err);
+      // Revert on failure
+      const originalWorkout = plan.workouts.find(w => w.id === workoutId);
+      if (originalWorkout) {
+        setSavedPlans((prevPlans: TrainingPlan[]) =>
+          prevPlans.map((p: TrainingPlan) =>
+            p.id === plan.id
+              ? {
+                ...p,
+                workouts: p.workouts.map((w: Workout) =>
+                  w.id === workoutId ? originalWorkout : w
+                )
+              }
+              : p
+          )
+        );
+      }
+      setError('Failed to update workout status');
+    }
+  };
+
+  const handleDeleteWorkout = async (workoutId: string) => {
+    if (!confirm('Are you sure you want to delete this workout? This cannot be undone.')) return;
+
+    const plan = savedPlans.find((p: TrainingPlan) => p.workouts.some((w: Workout) => w.id === workoutId));
+    if (!plan) return;
+
+    // Optimistic update
+    setSavedPlans((prevPlans: TrainingPlan[]) =>
+      prevPlans.map((p: TrainingPlan) =>
+        p.id === plan.id
+          ? {
+            ...p,
+            workouts: p.workouts.filter((w: Workout) => w.id !== workoutId)
+          }
+          : p
+      )
+    );
+
+    try {
+      await trainingPlansService.deleteWorkout(workoutId);
+    } catch (err) {
+      console.error('Failed to delete workout:', err);
+      // Revert (reload plans to be safe since we lost the deleted object reference easily)
+      const plans = await trainingPlansService.getPlans();
+      setSavedPlans(plans);
+      setError('Failed to delete workout');
+    }
+  };
+
+  const handleAddWorkout = async (planId: string, date: Date) => {
+    try {
+      const newWorkout = await trainingPlansService.addPlaceholderWorkout(planId, date);
       setSavedPlans((prevPlans: TrainingPlan[]) =>
         prevPlans.map((p: TrainingPlan) =>
-          p.id === plan.id
+          p.id === planId
             ? {
               ...p,
-              workouts: p.workouts.map((w: Workout) =>
-                w.id === workoutId ? { ...w, completed: !newCompletedState } : w
-              )
+              workouts: [...p.workouts, newWorkout]
             }
             : p
         )
       );
+    } catch (err) {
+      console.error('Failed to add workout:', err);
+      setError('Failed to add new workout');
     }
   };
 
@@ -328,7 +399,8 @@ Additional Preferences: ${preferences || 'None'}
           distance: w.distance ? w.distance * 1609.34 : undefined,
           intensity: w.intensity || 'moderate',
           scheduledDate: workoutDate,
-          completed: originalWorkout?.completed || false
+          completed: originalWorkout?.completed || false,
+          status: originalWorkout?.status || 'planned'
         };
       });
 
@@ -379,6 +451,121 @@ Additional Preferences: ${preferences || 'None'}
     { value: 'distance', label: 'Distance Goal' },
     { value: 'fitness', label: 'General Fitness' }
   ];
+
+  const handleMoveWorkout = async (workoutId: string, newDate: Date, strategy: 'move' | 'swap' | 'replace') => {
+    // Optimistic UI update
+    setSavedPlans((prevPlans: TrainingPlan[]) => prevPlans.map((plan: TrainingPlan) => {
+      const planWorkouts = plan.workouts;
+      const originalWorkout = planWorkouts.find((w: Workout) => w.id === workoutId);
+      if (!originalWorkout) return plan;
+
+      let updatedWorkouts: Workout[] = [...planWorkouts];
+      const originalDate = new Date(originalWorkout.scheduledDate);
+
+      // Strategy implementations
+      if (strategy === 'move') {
+        updatedWorkouts = updatedWorkouts.map(w =>
+          w.id === workoutId
+            ? { ...w, scheduledDate: newDate }
+            : w
+        );
+      } else if (strategy === 'swap') {
+        const targetWorkout = updatedWorkouts.find(w =>
+          isSameDay(new Date(w.scheduledDate), newDate)
+        );
+
+        if (targetWorkout) {
+          updatedWorkouts = updatedWorkouts.map(w => {
+            if (w.id === workoutId) return { ...w, scheduledDate: newDate };
+            if (w.id === targetWorkout.id) return { ...w, scheduledDate: originalDate };
+            return w;
+          });
+        }
+      } else if (strategy === 'replace') {
+        const targetWorkout = updatedWorkouts.find(w =>
+          isSameDay(new Date(w.scheduledDate), newDate)
+        );
+
+        if (targetWorkout) {
+          updatedWorkouts = updatedWorkouts.filter(w => w.id !== targetWorkout.id);
+          updatedWorkouts = updatedWorkouts.map(w =>
+            w.id === workoutId
+              ? { ...w, scheduledDate: newDate }
+              : w
+          );
+        }
+      }
+
+      return { ...plan, workouts: updatedWorkouts };
+    }));
+
+    try {
+      const plan = savedPlans.find(p => p.workouts.some(w => w.id === workoutId));
+      if (!plan) return;
+
+      const originalWorkout = plan.workouts.find(w => w.id === workoutId);
+      if (!originalWorkout) return; // Should exist
+
+      if (strategy === 'move') {
+        await trainingPlansService.updateWorkout(
+          originalWorkout.id,
+          originalWorkout.name,
+          originalWorkout.description,
+          originalWorkout.duration,
+          originalWorkout.distance,
+          originalWorkout.intensity,
+          newDate
+        );
+      } else if (strategy === 'swap') {
+        const targetWorkout = plan.workouts.find((w: Workout) =>
+          isSameDay(new Date(w.scheduledDate), newDate)
+        );
+        if (targetWorkout) {
+          await Promise.all([
+            trainingPlansService.updateWorkout(
+              originalWorkout.id,
+              originalWorkout.name,
+              originalWorkout.description,
+              originalWorkout.duration,
+              originalWorkout.distance,
+              originalWorkout.intensity,
+              newDate
+            ),
+            trainingPlansService.updateWorkout(
+              targetWorkout.id,
+              targetWorkout.name,
+              targetWorkout.description,
+              targetWorkout.duration,
+              targetWorkout.distance,
+              targetWorkout.intensity,
+              originalWorkout.scheduledDate
+            )
+          ]);
+        }
+      } else if (strategy === 'replace') {
+        const targetWorkout = plan.workouts.find((w: Workout) =>
+          isSameDay(new Date(w.scheduledDate), newDate)
+        );
+        if (targetWorkout) {
+          await trainingPlansService.deleteWorkout(targetWorkout.id);
+          await trainingPlansService.updateWorkout(
+            originalWorkout.id,
+            originalWorkout.name,
+            originalWorkout.description,
+            originalWorkout.duration,
+            originalWorkout.distance,
+            originalWorkout.intensity,
+            newDate
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Failed to move workout:', error);
+      alert('Failed to update workout schedule. Reloading plans...');
+      // Re-fetch to revert to server state
+      loadPlans();
+    }
+  };
 
   if (loading) {
     return (
@@ -723,8 +910,12 @@ Additional Preferences: ${preferences || 'None'}
                                   workouts={plan.workouts}
                                   startDate={plan.startDate}
                                   onToggleComplete={handleToggleWorkoutComplete}
+                                  onStatusChange={handleUpdateStatus}
+                                  onDelete={handleDeleteWorkout}
+                                  onAddWorkout={(date) => handleAddWorkout(plan.id, date)}
                                   onModifyWeek={(weekNumber, weekWorkouts) => handleOpenModifyWeek(plan.id, weekNumber, weekWorkouts)}
                                   onWorkoutsExported={handleWorkoutsExported}
+                                  onMoveWorkout={handleMoveWorkout}
                                 />
                               ) : (
                                 <div className="space-y-3">
@@ -734,7 +925,7 @@ Additional Preferences: ${preferences || 'None'}
                                       <WorkoutCard
                                         key={workout.id}
                                         workout={workout}
-                                        onToggleComplete={handleToggleWorkoutComplete}
+                                        onStatusChange={handleUpdateStatus}
                                         onWorkoutExported={handleWorkoutsExported}
                                       />
                                     ))}

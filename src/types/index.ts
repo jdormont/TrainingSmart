@@ -139,6 +139,7 @@ export interface Workout {
   intensity: 'easy' | 'moderate' | 'hard' | 'recovery';
   scheduledDate: Date;
   completed: boolean;
+  status: 'planned' | 'completed' | 'skipped';
   google_calendar_event_id?: string;
 }
 
