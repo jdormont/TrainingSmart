@@ -11,7 +11,7 @@ interface DbTrainingPlan {
   end_date: string;
   created_at: string;
   source_chat_session_id?: string;
-  chat_context_snapshot?: any;
+  chat_context_snapshot?: Record<string, unknown>;
   user_id: string;
 }
 
@@ -92,11 +92,11 @@ class TrainingPlansService {
     }
 
     if (dbPlan.chat_context_snapshot) {
-      const snapshot = dbPlan.chat_context_snapshot;
+      const snapshot = dbPlan.chat_context_snapshot as { extractedAt: string | number | Date;[key: string]: unknown };
       plan.chatContextSnapshot = {
         ...snapshot,
         extractedAt: new Date(snapshot.extractedAt)
-      };
+      } as any; // Cast to satisfy TrainingPlan type which expects ChatContextSnapshot
     }
 
     return plan;
@@ -155,14 +155,14 @@ class TrainingPlansService {
       const stored = localStorage.getItem(STORAGE_KEYS.TRAINING_PLANS);
       if (!stored) return [];
 
-      const plans = JSON.parse(stored);
-      return plans.map((plan: any) => ({
+      const plans = JSON.parse(stored) as TrainingPlan[]; // Assert specific type
+      return plans.map((plan) => ({
         ...plan,
         description: this.cleanDescription(plan.description),
         startDate: new Date(plan.startDate),
         endDate: new Date(plan.endDate),
         createdAt: new Date(plan.createdAt),
-        workouts: plan.workouts.map((w: any) => ({
+        workouts: plan.workouts.map((w) => ({
           ...w,
           scheduledDate: new Date(w.scheduledDate)
         }))
@@ -183,7 +183,7 @@ class TrainingPlansService {
 
       console.log(`Creating plan "${plan.name}" with ${plan.workouts.length} workouts`);
 
-      const insertData: Record<string, any> = {
+      const insertData: Record<string, string | number | boolean | null | Record<string, unknown>> = {
         name: plan.name,
         description: plan.description,
         goal: plan.goal,

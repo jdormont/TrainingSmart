@@ -1,5 +1,5 @@
 // Weekly Insight Service - Generates personalized training insights
-import type { StravaActivity, StravaAthlete, OuraSleepData, OuraReadinessData, ChatSession } from '../types';
+import type { StravaActivity, StravaAthlete, OuraSleepData, OuraReadinessData, ChatSession, StravaStats } from '../types';
 export type { HealthMetrics } from './healthMetricsService';
 import { openaiService } from './openaiApi';
 import { supabaseChatService } from './supabaseChatService';
@@ -27,6 +27,46 @@ interface Correlation {
   sleepEfficiency: number;
   activitySpeed: number;
   activityDistance: number;
+}
+
+interface WeeklyData {
+  week: number;
+  activities: number;
+  distance: number;
+  time: number;
+}
+
+interface TrainingPatterns {
+  trainingConsistency: {
+    weeks: WeeklyData[];
+    avgActivitiesPerWeek: number;
+    avgDistancePerWeek: number;
+    consistency: number;
+  };
+  recoveryTrends: {
+    available: boolean;
+    avgSleepHours?: number;
+    avgReadiness?: number;
+    avgSleepEfficiency?: number;
+    dataPoints?: number;
+  };
+  performanceCorrelations: {
+    available: boolean;
+    correlations?: number;
+    avgSleepBeforeRides?: number;
+  };
+  weeklyVolume: {
+    thisWeek: number;
+    lastWeek: number;
+    change: number;
+    activities: number;
+  };
+  intensityDistribution: {
+    easy: number;
+    moderate: number;
+    hard: number;
+    totalActivities: number;
+  };
 }
 
 class WeeklyInsightService {
@@ -122,7 +162,7 @@ class WeeklyInsightService {
     };
   }
 
-  private calculateConsistencyScore(weeks: any[]): number {
+  private calculateConsistencyScore(weeks: WeeklyData[]): number {
     if (weeks.length < 2) return 0;
 
     const distances = weeks.map(w => w.distance);
@@ -289,7 +329,7 @@ class WeeklyInsightService {
   // Build AI prompt for insight generation
   private buildInsightPrompt(
     athlete: StravaAthlete,
-    patterns: any,
+    patterns: TrainingPatterns,
     themes: string[]
   ): string {
     return `You are an elite cycling coach analyzing weekly training data. Generate ONE specific, actionable weekly insight.
@@ -371,7 +411,7 @@ Generate a JSON response with:
         {
           athlete,
           recentActivities: activities.slice(0, 10),
-          stats: {} as any,
+          stats: {} as unknown as StravaStats,
           weeklyVolume: {
             distance: patterns.weeklyVolume.thisWeek * 1609.34, // Convert back to meters
             time: 0,
@@ -395,7 +435,7 @@ Generate a JSON response with:
         } else {
           throw new Error('No JSON found in response');
         }
-      } catch (parseError) {
+      } catch {
         console.warn('Failed to parse AI response as JSON, using fallback');
         // Fallback insight based on patterns
         parsedResponse = this.generateFallbackInsight(patterns, themes);
@@ -444,7 +484,7 @@ Generate a JSON response with:
   }
 
   // Generate fallback insight when AI fails
-  private generateFallbackInsight(patterns: any, themes: string[]) {
+  private generateFallbackInsight(patterns: TrainingPatterns, _themes: string[]) {
     const consistency = patterns.trainingConsistency.consistency;
     const weeklyChange = patterns.weeklyVolume.change;
     const hasRecoveryData = patterns.recoveryTrends.available;

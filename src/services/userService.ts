@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import type { UserContentProfile } from '../types';
+
 
 export interface WizardData {
   training_goal: string;

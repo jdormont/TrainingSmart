@@ -16,7 +16,7 @@ import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
 import type { StravaActivity, StravaAthlete, StravaStats, ChatMessage, ChatSession, OuraSleepData, OuraReadinessData, ChatContextSnapshot } from '../types';
 import { calculateWeeklyStats } from '../utils/dataProcessing';
 import { calculateSleepScore } from '../utils/sleepScoreCalculator';
-import { format, isToday, isYesterday, subDays, addDays } from 'date-fns';
+import { format } from 'date-fns';
 
 export const ChatPage: React.FC = () => {
   const location = useLocation();
@@ -95,7 +95,8 @@ export const ChatPage: React.FC = () => {
         setSessions(savedSessions);
 
         // Load active session or create default
-        const activeSessionId = (location.state as any)?.activeSessionId || supabaseChatService.getActiveSessionId();
+        const state = location.state as { activeSessionId?: string } | null;
+        const activeSessionId = state?.activeSessionId || supabaseChatService.getActiveSessionId();
         let currentSession = activeSessionId ?
           savedSessions.find(s => s.id === activeSessionId) : null;
 
@@ -267,7 +268,7 @@ What would you like to know about your training?`;
       const trainingContext = {
         athlete,
         recentActivities: activities,
-        stats: stats || {} as StravaStats,
+        stats: stats || undefined,
         weeklyVolume: {
           distance: weeklyStats.totalDistance,
           time: weeklyStats.totalTime,
@@ -362,7 +363,7 @@ What would you like to know about your training?`;
     }
   };
 
-  const SUGGESTIONS_MAP: Record<string, Array<{ label: string; icon: React.ComponentType<any> }>> = {
+  const SUGGESTIONS_MAP: Record<string, Array<{ label: string; icon: React.ComponentType<{ className?: string }> }>> = {
     training: [
       { label: "Analyze my last week", icon: Activity },
       { label: "Build a plan for next week", icon: Calendar },
@@ -391,7 +392,7 @@ What would you like to know about your training?`;
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSendMessage(e as any);
+      handleSendMessage(e);
     }
   };
 
@@ -417,7 +418,7 @@ What would you like to know about your training?`;
       const trainingContext = {
         athlete,
         recentActivities: activities,
-        stats: stats || {} as StravaStats,
+        stats: stats || undefined,
         weeklyVolume: {
           distance: weeklyStats.totalDistance,
           time: weeklyStats.totalTime,

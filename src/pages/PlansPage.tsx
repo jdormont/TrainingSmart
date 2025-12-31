@@ -18,6 +18,8 @@ import { addDays } from 'date-fns';
 import { ouraApi } from '../services/ouraApi';
 import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
 
+type AiWorkout = Partial<Workout> & { dayOfWeek?: number };
+
 export const PlansPage: React.FC = () => {
   const [athlete, setAthlete] = useState<StravaAthlete | null>(null);
   const [activities, setActivities] = useState<StravaActivity[]>([]);
@@ -88,7 +90,7 @@ export const PlansPage: React.FC = () => {
       const trainingContext = {
         athlete,
         recentActivities: cyclingActivities,
-        stats: {} as any,
+        stats: undefined,
         weeklyVolume: {
           distance: weeklyStats.totalDistance,
           time: weeklyStats.totalTime,
@@ -116,7 +118,7 @@ Additional Preferences: ${preferences || 'None'}
       const weeks = parseInt(timeframe.split(' ')[0]);
       const planEndDate = addDays(planStartDate, weeks * 7);
 
-      const structuredWorkouts: Omit<Workout, 'id'>[] = aiWorkouts.map((w: any, index: number) => {
+      const structuredWorkouts: Omit<Workout, 'id'>[] = aiWorkouts.map((w: AiWorkout, index: number) => {
         const weekNumber = Math.floor(index / 7);
         const dayInWeek = w.dayOfWeek ?? (index % 7);
         const workoutDate = addDays(planStartDate, weekNumber * 7 + dayInWeek);
@@ -280,7 +282,7 @@ Additional Preferences: ${preferences || 'None'}
       const trainingContext = {
         athlete,
         recentActivities: cyclingActivities,
-        stats: {} as any,
+        stats: undefined,
         weeklyVolume: {
           distance: weeklyStats.totalDistance,
           time: weeklyStats.totalTime,
@@ -310,7 +312,7 @@ Additional Preferences: ${preferences || 'None'}
       );
 
 
-      const updatedWorkoutsWithDates = modifiedWorkouts.map((w: any, index: number) => {
+      const updatedWorkoutsWithDates = modifiedWorkouts.map((w: AiWorkout, index: number) => {
         const originalWorkout = modificationModal.workouts[index];
         const weekStart = new Date(modificationModal.workouts[0].scheduledDate);
         weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1);
@@ -394,8 +396,6 @@ Additional Preferences: ${preferences || 'None'}
     );
   }
 
-  const cyclingActivities = activities.filter(a => a.type === 'Ride');
-
   return (
     <div className="min-h-screen bg-gray-50">
       <NetworkErrorBanner />
@@ -445,7 +445,7 @@ Additional Preferences: ${preferences || 'None'}
                     <button
                       key={option.value}
                       type="button"
-                      onClick={() => setGoalType(option.value as any)}
+                      onClick={() => setGoalType(option.value as 'distance' | 'event' | 'fitness')}
                       className={`p-3 text-sm rounded-lg border transition-colors ${goalType === option.value
                         ? 'border-orange-500 bg-orange-50 text-orange-700'
                         : 'border-gray-200 hover:border-gray-300'

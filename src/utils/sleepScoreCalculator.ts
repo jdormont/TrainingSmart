@@ -26,10 +26,10 @@ export function calculateSleepScore(sleepData: {
   bedtime_end: string; // ISO string
   time_in_bed: number; // seconds
 }): SleepScoreComponents {
-  
+
   console.log('=== SLEEP SCORE CALCULATION DEBUG ===');
   console.log('Input sleep data:', sleepData);
-  
+
   // Convert durations to hours for easier calculation
   const totalSleepHours = sleepData.total_sleep_duration / 3600;
   const remSleepHours = sleepData.rem_sleep_duration / 3600;
@@ -37,7 +37,7 @@ export function calculateSleepScore(sleepData: {
   const lightSleepHours = sleepData.light_sleep_duration / 3600;
   const latencyMinutes = sleepData.latency / 60;
   const timeInBedHours = sleepData.time_in_bed / 3600;
-  
+
   console.log('Converted values:', {
     totalSleepHours,
     remSleepHours,
@@ -46,7 +46,7 @@ export function calculateSleepScore(sleepData: {
     latencyMinutes,
     timeInBedHours
   });
-  
+
   // Component weights (based on Oura's methodology)
   const weights = {
     totalSleep: 0.25,    // 25% - Most important
@@ -60,29 +60,28 @@ export function calculateSleepScore(sleepData: {
 
   // 1. Total Sleep Score (optimal: 7-9 hours)
   const totalSleepScore = calculateTotalSleepScore(totalSleepHours);
-  
+
   // 2. Efficiency Score (already provided as percentage)
   const efficiencyScore = Math.min(sleepData.efficiency, 100);
-  
+
   // 3. Restfulness Score (based on restless periods and awake time)
   const restfulnessScore = calculateRestfulnessScore(
-    sleepData.restless_periods, 
-    totalSleepHours,
-    timeInBedHours
+    sleepData.restless_periods,
+    totalSleepHours
   );
-  
+
   // 4. REM Sleep Score (optimal: 20-25% of total sleep)
   const remSleepScore = calculateRemSleepScore(remSleepHours, totalSleepHours);
-  
+
   // 5. Deep Sleep Score (optimal: 15-20% of total sleep)
   const deepSleepScore = calculateDeepSleepScore(deepSleepHours, totalSleepHours);
-  
+
   // 6. Sleep Latency Score (optimal: 10-20 minutes)
   const latencyScore = calculateLatencyScore(latencyMinutes);
-  
+
   // 7. Sleep Timing Score (based on bedtime consistency)
   const timingScore = calculateTimingScore(sleepData.bedtime_start);
-  
+
   // Calculate weighted total score
   const totalScore = Math.round(
     (totalSleepScore * weights.totalSleep) +
@@ -93,7 +92,7 @@ export function calculateSleepScore(sleepData: {
     (latencyScore * weights.latency) +
     (timingScore * weights.timing)
   );
-  
+
   console.log('Individual component scores:', {
     totalSleepScore,
     efficiencyScore,
@@ -103,7 +102,7 @@ export function calculateSleepScore(sleepData: {
     latencyScore,
     timingScore
   });
-  
+
   console.log('Weighted contributions:', {
     totalSleep: totalSleepScore * weights.totalSleep,
     efficiency: efficiencyScore * weights.efficiency,
@@ -113,7 +112,7 @@ export function calculateSleepScore(sleepData: {
     latency: latencyScore * weights.latency,
     timing: timingScore * weights.timing
   });
-  
+
   console.log('Final calculated score:', totalScore);
   console.log('=== END SLEEP SCORE CALCULATION ===');
 
@@ -135,7 +134,7 @@ function calculateTotalSleepScore(hours: number): number {
   // Optimal sleep: 7-9 hours = 100 points
   // 6-7 or 9-10 hours = 80-99 points
   // <6 or >10 hours = lower scores
-  
+
   if (hours >= 7 && hours <= 9) {
     return 100;
   } else if (hours >= 6 && hours < 7) {
@@ -157,11 +156,11 @@ function calculateTotalSleepScore(hours: number): number {
   }
 }
 
-function calculateRestfulnessScore(restlessPeriods: number, sleepHours: number, timeInBedHours: number): number {
+function calculateRestfulnessScore(restlessPeriods: number, sleepHours: number): number {
   // Lower restless periods = higher score
   // Normalize by sleep duration
   const restlessnessRate = restlessPeriods / (sleepHours * 60); // per minute of sleep
-  
+
   if (restlessnessRate <= 0.5) {
     return 100;
   } else if (restlessnessRate <= 1.0) {
@@ -175,7 +174,7 @@ function calculateRestfulnessScore(restlessPeriods: number, sleepHours: number, 
 
 function calculateRemSleepScore(remHours: number, totalHours: number): number {
   const remPercentage = (remHours / totalHours) * 100;
-  
+
   // Optimal REM: 20-25% of total sleep
   if (remPercentage >= 20 && remPercentage <= 25) {
     return 100;
@@ -194,7 +193,7 @@ function calculateRemSleepScore(remHours: number, totalHours: number): number {
 
 function calculateDeepSleepScore(deepHours: number, totalHours: number): number {
   const deepPercentage = (deepHours / totalHours) * 100;
-  
+
   // Optimal deep sleep: 15-20% of total sleep
   if (deepPercentage >= 15 && deepPercentage <= 20) {
     return 100;
@@ -228,7 +227,7 @@ function calculateLatencyScore(latencyMinutes: number): number {
 function calculateTimingScore(bedtimeStart: string): number {
   const bedtime = new Date(bedtimeStart);
   const hour = bedtime.getHours();
-  
+
   // Optimal bedtime: 9 PM - 11 PM (21-23)
   if (hour >= 21 && hour <= 23) {
     return 100;

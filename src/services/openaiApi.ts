@@ -1,8 +1,8 @@
 // OpenAI API service for training advice
 import axios from 'axios';
-import type { StravaActivity, StravaAthlete, StravaStats, ChatMessage, OuraSleepData, OuraReadinessData } from '../types';
+import type { StravaActivity, StravaAthlete, StravaStats, ChatMessage, OuraSleepData, OuraReadinessData, Workout } from '../types';
 import { STORAGE_KEYS } from '../utils/constants';
-import { calculateSleepScore } from '../utils/sleepScoreCalculator';
+
 
 // OpenAI Configuration
 const OPENAI_CONFIG = {
@@ -14,7 +14,7 @@ const OPENAI_CONFIG = {
 interface TrainingContext {
   athlete: StravaAthlete;
   recentActivities: StravaActivity[];
-  stats: StravaStats;
+  stats?: StravaStats;
   weeklyVolume: {
     distance: number;
     time: number;
@@ -214,7 +214,7 @@ Use the coaching style and personality defined above, while incorporating this r
     goal: string,
     timeframe: string,
     preferences: string
-  ): Promise<{ description: string; workouts: any[] }> {
+  ): Promise<{ description: string; workouts: (Partial<Workout> & { dayOfWeek?: number })[] }> {
     if (!this.supabaseUrl || !this.supabaseAnonKey) {
       throw new Error('Supabase configuration not found. Please check your environment variables.');
     }
@@ -273,11 +273,11 @@ Use the coaching style and personality defined above, while incorporating this r
   }
 
   async modifyWeeklyPlan(
-    existingWorkouts: any[],
+    existingWorkouts: (Workout | (Partial<Workout> & { dayOfWeek?: number }))[],
     modificationRequest: string,
     context: TrainingContext,
     weekNumber: number
-  ): Promise<any[]> {
+  ): Promise<(Partial<Workout> & { dayOfWeek?: number })[]> {
     if (!this.supabaseUrl || !this.supabaseAnonKey) {
       throw new Error('Supabase configuration not found. Please check your environment variables.');
     }

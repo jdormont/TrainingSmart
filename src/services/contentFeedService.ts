@@ -40,6 +40,56 @@ const CYCLING_KEYWORDS = [
   'tapering', 'century', 'gran fondo', 'criterium', 'road race'
 ];
 
+// YouTube API Interfaces
+interface YouTubeThumbnail {
+  url: string;
+  width?: number;
+  height?: number;
+}
+
+interface YouTubeSnippet {
+  publishedAt: string;
+  channelId: string;
+  title: string;
+  description: string;
+  thumbnails: {
+    default?: YouTubeThumbnail;
+    medium?: YouTubeThumbnail;
+    high?: YouTubeThumbnail;
+  };
+  channelTitle: string;
+  liveBroadcastContent?: string;
+  publishTime?: string;
+}
+
+interface YouTubeId {
+  kind: string;
+  videoId?: string;
+}
+
+interface YouTubeApiItem {
+  kind: string;
+  etag: string;
+  id: YouTubeId | string;
+  snippet: YouTubeSnippet;
+  contentDetails?: {
+    duration: string;
+    dimension: string;
+    definition: string;
+    caption: string;
+    licensedContent: boolean;
+    contentRating: any;
+    projection: string;
+  };
+  statistics?: {
+    viewCount: string;
+    likeCount: string;
+    favoriteCount: string;
+    commentCount: string;
+  };
+}
+
+
 class ContentFeedService {
   // Generate a simple hash of user profile for cache invalidation
   private generateProfileHash(profile: UserContentProfile): string {
@@ -82,7 +132,7 @@ class ContentFeedService {
       return {
         ...cache,
         timestamp: new Date(cache.timestamp),
-        content: cache.content.map((item: any) => ({
+        content: cache.content.map((item: ContentItem) => ({
           ...item,
           publishedAt: new Date(item.publishedAt)
         }))
@@ -263,7 +313,6 @@ class ContentFeedService {
 
       // 2. TRENDING/LATEST FROM CHANNELS (Secondary)
       // Fetch from a subset of top channels to keep user updated
-      const trendingCount = 5;
       const channelsToFetch = Object.entries(CYCLING_CHANNELS).slice(0, 3); // Top 3 channels only
 
       for (const [channelName, channelId] of channelsToFetch) {
@@ -320,7 +369,7 @@ class ContentFeedService {
           });
 
           const statsMap = new Map(
-            statsResponse.data.items.map((item: any) => [item.id, item])
+            statsResponse.data.items.map((item: YouTubeApiItem) => [item.id as string, item])
           );
 
           // Update content with stats
@@ -377,18 +426,26 @@ class ContentFeedService {
   }
 
   // Helper to map API response items to ContentItem[]
-  private mapYouTubeItems(items: any[], defaultAuthor: string): ContentItem[] {
-    return items.map((item: any) => {
+  private mapYouTubeItems(items: YouTubeApiItem[], defaultAuthor: string): ContentItem[] {
+    return items.map((item: YouTubeApiItem) => {
       // Use channelTitle if available, otherwise default
       const author = item.snippet.channelTitle || defaultAuthor;
 
+      // Type guards for ID handling
+      let videoId = '';
+      if (typeof item.id === 'string') {
+        videoId = item.id;
+      } else if (item.id.videoId) {
+        videoId = item.id.videoId;
+      }
+
       return {
-        id: `youtube_${item.id.videoId || item.id}_${author.replace(/\s+/g, '')}`,
+        id: `youtube_${videoId}_${author.replace(/\s+/g, '')}`,
         source: 'youtube' as const,
         type: 'video' as const,
         title: this.decodeHtmlEntities(item.snippet.title.trim()),
         description: this.decodeHtmlEntities(item.snippet.description?.substring(0, 200) || '') + '...',
-        url: `https://www.youtube.com/watch?v=${item.id.videoId || item.id}`,
+        url: `https://www.youtube.com/watch?v=${videoId}`,
         thumbnail: item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default?.url,
         author: author,
         publishedAt: new Date(item.snippet.publishedAt),
@@ -674,7 +731,7 @@ class ContentFeedService {
 
       const feedback = JSON.parse(feedbackData);
       const likedContent = Object.entries(feedback)
-        .filter(([_, type]) => type === 'like')
+        .filter(([, type]) => type === 'like')
         .map(([itemId]) => itemId);
 
       // Extract specific sub-topic interests from liked content
