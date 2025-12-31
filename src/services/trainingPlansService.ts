@@ -25,6 +25,7 @@ interface DbWorkout {
   intensity: string;
   scheduled_date: string;
   completed: boolean;
+  status: 'planned' | 'completed' | 'skipped';
   google_calendar_event_id?: string;
   plan_id: string;
   user_id: string;
@@ -82,7 +83,8 @@ class TrainingPlansService {
         distance: w.distance,
         intensity: w.intensity as Workout['intensity'],
         scheduledDate: new Date(w.scheduled_date),
-        completed: w.completed,
+        completed: w.completed, // Keep for backward compatibility view
+        status: w.status || (w.completed ? 'completed' : 'planned'), // Default if null
         google_calendar_event_id: w.google_calendar_event_id
       }))
     };
@@ -302,49 +304,183 @@ class TrainingPlansService {
     localStorage.setItem(STORAGE_KEYS.TRAINING_PLANS, JSON.stringify(filteredPlans));
   }
 
-  async updateWorkoutCompletion(workoutId: string, completed: boolean): Promise<void> {
+  async updateWorkoutStatus(workoutId: string, status: 'planned' | 'completed' | 'skipped'): Promise<void> {
     try {
       const userId = await this.getCurrentUserId();
+      // Calculate completed boolean for backward compat
+      const completed = status === 'completed';
+
       if (!userId) {
-        return this.updateLocalStorageWorkout(workoutId, completed);
+        return this.updateLocalStorageWorkoutStatus(workoutId, status);
       }
 
       const { error } = await supabase
         .from('workouts')
-        .update({ completed })
+        .update({
+          status,
+          completed // Sync boolean
+        })
         .eq('id', workoutId)
         .eq('user_id', userId);
 
       if (error) {
-        console.error('Error updating workout:', error);
+        console.error('Error updating workout status:', error);
         throw error;
       }
 
-      await supabase
-        .from('training_plans')
-        .update({ updated_at: new Date().toISOString() })
-        .eq('id', (
-          await supabase
-            .from('workouts')
-            .select('plan_id')
-            .eq('id', workoutId)
-            .single()
-        ).data?.plan_id);
+      await this.touchPlanUpdatedAt(workoutId);
     } catch (error) {
-      console.error('Error in updateWorkoutCompletion:', error);
-      this.updateLocalStorageWorkout(workoutId, completed);
+      console.error('Error in updateWorkoutStatus:', error);
+      this.updateLocalStorageWorkoutStatus(workoutId, status);
     }
   }
 
-  private updateLocalStorageWorkout(workoutId: string, completed: boolean): void {
+  // Helper to update plan timestamp
+  private async touchPlanUpdatedAt(workoutId: string) {
+    const { data } = await supabase
+      .from('workouts')
+      .select('plan_id')
+      .eq('id', workoutId)
+      .single();
+
+    if (data?.plan_id) {
+      await supabase
+        .from('training_plans')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', data.plan_id);
+    }
+  }
+
+  // Legacy boolean method wrapper
+  async updateWorkoutCompletion(workoutId: string, completed: boolean): Promise<void> {
+    return this.updateWorkoutStatus(workoutId, completed ? 'completed' : 'planned');
+  }
+
+  private updateLocalStorageWorkoutStatus(workoutId: string, status: 'planned' | 'completed' | 'skipped'): void {
     const plans = this.getLocalStoragePlans();
     const updatedPlans = plans.map(plan => ({
       ...plan,
       workouts: plan.workouts.map(w =>
-        w.id === workoutId ? { ...w, completed } : w
+        w.id === workoutId ? { ...w, status, completed: status === 'completed' } : w
       )
     }));
     localStorage.setItem(STORAGE_KEYS.TRAINING_PLANS, JSON.stringify(updatedPlans));
+  }
+
+  async deleteWorkout(workoutId: string): Promise<void> {
+    try {
+      const userId = await this.getCurrentUserId();
+      if (!userId) {
+        return this.deleteLocalStorageWorkout(workoutId);
+      }
+
+      // Get plan ID first for timestamp update
+      const { data } = await supabase
+        .from('workouts')
+        .select('plan_id')
+        .eq('id', workoutId)
+        .single();
+
+      const { error } = await supabase
+        .from('workouts')
+        .delete()
+        .eq('id', workoutId)
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      if (data?.plan_id) {
+        await supabase
+          .from('training_plans')
+          .update({ updated_at: new Date().toISOString() })
+          .eq('id', data.plan_id);
+      }
+    } catch (error) {
+      console.error('Error deleting workout:', error);
+      this.deleteLocalStorageWorkout(workoutId);
+    }
+  }
+
+  private deleteLocalStorageWorkout(workoutId: string): void {
+    const plans = this.getLocalStoragePlans();
+    const updatedPlans = plans.map(plan => ({
+      ...plan,
+      workouts: plan.workouts.filter(w => w.id !== workoutId)
+    }));
+    localStorage.setItem(STORAGE_KEYS.TRAINING_PLANS, JSON.stringify(updatedPlans));
+  }
+
+  async addPlaceholderWorkout(planId: string, scheduledDate: Date): Promise<Workout> {
+    try {
+      const userId = await this.getCurrentUserId();
+
+      const newWorkout: Partial<DbWorkout> = {
+        plan_id: planId,
+        user_id: userId || 'local',
+        name: 'New Workout',
+        type: 'bike',
+        description: 'Add description...',
+        duration: 60,
+        distance: 0,
+        intensity: 'moderate',
+        scheduled_date: scheduledDate.toISOString().split('T')[0],
+        completed: false,
+        status: 'planned'
+      };
+
+      if (!userId) {
+        return this.addLocalStorageWorkout(planId, newWorkout);
+      }
+
+      const { data, error } = await supabase
+        .from('workouts')
+        .insert(newWorkout)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return {
+        id: data.id,
+        name: data.name,
+        type: data.type as Workout['type'],
+        description: data.description,
+        duration: data.duration,
+        distance: data.distance,
+        intensity: data.intensity as Workout['intensity'],
+        scheduledDate: new Date(data.scheduled_date),
+        completed: data.completed,
+        status: data.status as Workout['status'],
+        google_calendar_event_id: data.google_calendar_event_id
+      };
+
+    } catch (error) {
+      console.error('Error adding placeholder workout:', error);
+      throw error;
+    }
+  }
+
+  private addLocalStorageWorkout(planId: string, workoutData: any): Workout {
+    const plans = this.getLocalStoragePlans();
+    const planIndex = plans.findIndex(p => p.id === planId);
+    if (planIndex === -1) throw new Error('Plan not found');
+
+    const newWorkout: Workout = {
+      id: Date.now().toString(),
+      name: workoutData.name,
+      type: workoutData.type,
+      description: workoutData.description,
+      duration: workoutData.duration,
+      distance: workoutData.distance,
+      intensity: workoutData.intensity,
+      scheduledDate: new Date(workoutData.scheduled_date),
+      completed: false,
+      status: 'planned'
+    };
+
+    plans[planIndex].workouts.push(newWorkout);
+    localStorage.setItem(STORAGE_KEYS.TRAINING_PLANS, JSON.stringify(plans));
+    return newWorkout;
   }
 
   async updateWorkout(

@@ -217,13 +217,24 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
     { id: 'recovery', label: 'Recovery Calculated', color: '#ec4899', unit: 'score', key: 'recoveryCalculated' },
   ];
 
+  interface CustomTooltipProps {
+    active?: boolean;
+    payload?: Array<{
+      value: number | string;
+      name: string;
+      dataKey: string;
+      color: string;
+    }>;
+    label?: string;
+  }
+
   // Custom tooltip
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
           <p className="font-medium text-gray-900 mb-2">{`Week of ${label}`}</p>
-          {payload.map((entry: any, index: number) => {
+          {payload.map((entry, index) => {
             const metric = metricConfigs.find(m => entry.dataKey === m.key);
             const unit = metric?.unit || '';
             return (
