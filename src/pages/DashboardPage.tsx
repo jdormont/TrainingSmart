@@ -78,7 +78,7 @@ export const DashboardPage: React.FC = () => {
         try {
           [athleteData, activitiesData] = await Promise.all([
             stravaCacheService.getAthlete(),
-            stravaCacheService.getActivities(false, 20)
+            stravaCacheService.getActivities(false, 100)
           ]);
         } catch (error: unknown) {
           const authError = error as AuthError;

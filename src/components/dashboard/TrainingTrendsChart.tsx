@@ -3,8 +3,8 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { Filter, Eye, EyeOff, LineChart as LineChartIcon, RefreshCw } from 'lucide-react';
 import { Button } from '../common/Button';
 import type { StravaActivity, StravaAthlete, DailyMetric } from '../../types';
-import { startOfWeek, format, addWeeks } from 'date-fns';
-import { healthMetricsService } from '../../services/healthMetricsService';
+import { startOfWeek, format, addWeeks, subDays } from 'date-fns';
+import { trainingMetricsService } from '../../services/trainingMetricsService';
 import { dailyMetricsService } from '../../services/dailyMetricsService';
 import type { HealthMetrics } from '../../services/weeklyInsightService';
 
@@ -40,18 +40,9 @@ interface WeeklyTrend {
   recoveryCalculated: number;
 }
 
-interface ActivityFilter {
-  id: string;
-  label: string;
-  color: string;
-  enabled: boolean;
-  distanceKey: keyof WeeklyTrend;
-  loadKey: keyof WeeklyTrend;
-  speedKey: keyof WeeklyTrend;
-  heartRateKey: keyof WeeklyTrend;
-}
 
-export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activities, athlete }) => {
+
+export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activities }) => {
   const [weeklyMetrics, setWeeklyMetrics] = useState<Map<string, DailyMetric[]>>(new Map());
   const [selectedMetrics, setSelectedMetrics] = useState<Set<string>>(new Set(['distance']));
 
@@ -80,49 +71,6 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
 
     fetchWeeklyMetrics();
   }, []);
-
-  const [filters, setFilters] = useState<ActivityFilter[]>([
-    {
-      id: 'all',
-      label: 'All Activities',
-      color: '#3b82f6',
-      enabled: true,
-      distanceKey: 'allDistance',
-      loadKey: 'allTrainingLoad',
-      speedKey: 'allAvgSpeed',
-      heartRateKey: 'allAvgHeartRate'
-    },
-    {
-      id: 'runs',
-      label: 'Runs',
-      color: '#ef4444',
-      enabled: false,
-      distanceKey: 'runDistance',
-      loadKey: 'runTrainingLoad',
-      speedKey: 'runAvgSpeed',
-      heartRateKey: 'runAvgHeartRate'
-    },
-    {
-      id: 'outdoor-rides',
-      label: 'Outdoor Rides',
-      color: '#f59e0b',
-      enabled: false,
-      distanceKey: 'outdoorRideDistance',
-      loadKey: 'outdoorRideTrainingLoad',
-      speedKey: 'outdoorRideAvgSpeed',
-      heartRateKey: 'outdoorRideAvgHeartRate'
-    },
-    {
-      id: 'virtual-rides',
-      label: 'Virtual Rides',
-      color: '#8b5cf6',
-      enabled: false,
-      distanceKey: 'virtualRideDistance',
-      loadKey: 'virtualRideTrainingLoad',
-      speedKey: 'virtualRideAvgSpeed',
-      heartRateKey: 'virtualRideAvgHeartRate'
-    }
-  ]);
 
   // Calculate weekly trends with activity type breakdown
   const weeklyTrends = useMemo((): WeeklyTrend[] => {
@@ -184,23 +132,19 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
       const weekLabel = format(weekStart, 'MMM d');
 
       let overallPerformance = 0;
-      if (athlete) {
-        const activitiesUpToThisWeek = activities.filter(activity => {
-          const activityDate = new Date(activity.start_date_local);
-          return activityDate < weekEnd;
-        });
+      const activitiesUpToThisWeek = activities.filter(activity => {
+        const activityDate = new Date(activity.start_date_local);
+        return activityDate < weekEnd;
+      });
 
-        const recentActivitiesForThisWeek = activitiesUpToThisWeek.slice(0, Math.min(28, activitiesUpToThisWeek.length));
+      const recentActivitiesForThisWeek = activitiesUpToThisWeek.filter(activity => {
+        const activityDate = new Date(activity.start_date_local);
+        return activityDate >= subDays(weekEnd, 30);
+      });
 
-        if (recentActivitiesForThisWeek.length > 0) {
-          const weekHealthMetrics = healthMetricsService.calculateHealthMetrics(
-            athlete,
-            recentActivitiesForThisWeek,
-            [],
-            []
-          );
-          overallPerformance = weekHealthMetrics.overallScore;
-        }
+      if (recentActivitiesForThisWeek.length > 0) {
+        const stravaMetrics = trainingMetricsService.calculateStravaMetrics(recentActivitiesForThisWeek);
+        overallPerformance = stravaMetrics.overallScore;
       }
 
       const weekMetricsData = weeklyMetrics.get(weekLabel) || [];
@@ -246,7 +190,7 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
     }
 
     return weeks;
-  }, [activities, athlete, weeklyMetrics]);
+  }, [activities, weeklyMetrics]);
 
 
 

@@ -62,7 +62,7 @@ class HealthMetricsService {
     const sleep = this.calculateSleep(recentSleep);
     const trainingBalance = this.calculateTrainingBalance(recentActivities);
 
-    // Calculate overall score (weighted average)
+    // Calculate dynamic weights based on available data
     const weights = {
       cardiovascular: 0.25,
       endurance: 0.25,
@@ -71,13 +71,42 @@ class HealthMetricsService {
       trainingBalance: 0.15
     };
 
-    const overallScore = Math.round(
-      cardiovascular.score * weights.cardiovascular +
-      endurance.score * weights.endurance +
-      recovery.score * weights.recovery +
-      sleep.score * weights.sleep +
-      trainingBalance.score * weights.trainingBalance
-    );
+    let totalWeight = 0;
+    let weightedSum = 0;
+
+    // Helper to add component if available
+    const addComponent = (score: number, weight: number, isAvailable: boolean) => {
+      if (isAvailable) {
+        weightedSum += score * weight;
+        totalWeight += weight;
+      }
+    };
+
+    // Check availability
+    const hasStrava = recentActivities.length > 0;
+    const hasSleep = recentSleep.length > 0;
+    const hasReadiness = recentReadiness.length > 0;
+
+    // Components dependent primarily on Strava (always assumed available if we're generating this)
+    addComponent(cardiovascular.score, weights.cardiovascular, true); // Cardio can fallback to speed variance
+    addComponent(endurance.score, weights.endurance, true);
+    addComponent(trainingBalance.score, weights.trainingBalance, true);
+
+    // Components dependent on extra data
+    // If we have readiness data OR we returned a score > 0 (meaning we estimated it), include it.
+    // However, estimateRecoveryFromTraining returns a max of 75, so it's safe to include.
+    // Let's use the hasReadiness flag or if we have enough activity data to estimate.
+    addComponent(recovery.score, weights.recovery, hasReadiness || hasStrava);
+
+    // Sleep strictly requires Oura data to be meaningful
+    // If no sleep data, we exclude this weight entirely from the denominator
+    addComponent(sleep.score, weights.sleep, hasSleep);
+
+    // Recalculate Overall Score
+    // If totalWeight is 0 (shouldn't happen with Strava data), default to 0
+    const overallScore = totalWeight > 0
+      ? Math.round(weightedSum / totalWeight)
+      : 0;
 
     // Determine data quality
     const dataQuality = this.assessDataQuality(recentActivities, recentSleep, recentReadiness);
@@ -106,8 +135,12 @@ class HealthMetricsService {
     const components = [];
     let totalScore = 0;
 
+    // Track maximum possible score based on available data
+    let maxPossibleScore = 0;
+
     // Average speed trends (40 points)
     if (activities.length >= 4) {
+      maxPossibleScore += 40;
       const speeds = activities.map(a => a.average_speed * 2.237); // Convert to mph
       const avgSpeed = speeds.reduce((sum, s) => sum + s, 0) / speeds.length;
       const recentSpeeds = speeds.slice(0, Math.floor(speeds.length / 2));
@@ -129,6 +162,7 @@ class HealthMetricsService {
 
     // Heart rate efficiency (30 points) - estimated from speed consistency
     if (activities.length > 0) {
+      maxPossibleScore += 30;
       const heartRateActivities = activities.filter(a => a.average_heartrate && a.average_heartrate > 0);
       if (heartRateActivities.length > 0) {
         const avgHR = heartRateActivities.reduce((sum, a) => sum + (a.average_heartrate || 0), 0) / heartRateActivities.length;
@@ -158,6 +192,7 @@ class HealthMetricsService {
 
     // Resting heart rate trends (30 points)
     if (sleepData.length > 0) {
+      maxPossibleScore += 30; // Only add this to max potential if we actually have the data
       const restingHRs = sleepData
         .filter(s => s.lowest_heart_rate && s.lowest_heart_rate > 0)
         .map(s => s.lowest_heart_rate);
@@ -176,7 +211,11 @@ class HealthMetricsService {
       }
     }
 
-    const finalScore = Math.min(100, Math.max(0, Math.round(totalScore)));
+    // Normalize score to 100 based on what was available
+    let finalScore = 0;
+    if (maxPossibleScore > 0) {
+      finalScore = Math.min(100, Math.max(0, Math.round((totalScore / maxPossibleScore) * 100)));
+    }
 
     return {
       score: finalScore,
