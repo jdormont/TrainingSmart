@@ -41,6 +41,7 @@ export const DashboardPage: React.FC = () => {
   const [sleepData, setSleepData] = useState<OuraSleepData | null>(null);
   const [readinessData, setReadinessData] = useState<OuraReadinessData | null>(null);
   const [dailyMetric, setDailyMetric] = useState<DailyMetric | null>(null);
+  const [dailyMetrics, setDailyMetrics] = useState<DailyMetric[]>([]);
   const [weeklyInsight, setWeeklyInsight] = useState<WeeklyInsight | null>(null);
   const [healthMetrics, setHealthMetrics] = useState<HealthMetrics | null>(null);
   const [insightLoading, setInsightLoading] = useState(false);
@@ -107,7 +108,6 @@ export const DashboardPage: React.FC = () => {
         setWeeklyStats(stats);
 
         // Fetch Oura data if authenticated
-        let hasOuraData = false;
         if (await ouraApi.isAuthenticated()) {
           console.log('Oura is authenticated, fetching recovery data...');
           setOuraLoading(true);
@@ -135,7 +135,6 @@ export const DashboardPage: React.FC = () => {
               console.log('Sleep data fields:', Object.keys(latestSleep));
               setSleepData(latestSleep);
               console.log('Sleep data set in state');
-              hasOuraData = true;
             } else {
               console.log('No sleep data available');
             }
@@ -149,7 +148,6 @@ export const DashboardPage: React.FC = () => {
               console.log('Readiness data fields:', Object.keys(latestReadiness));
               setReadinessData(latestReadiness);
               console.log('Readiness data set in state');
-              hasOuraData = true;
             } else {
               console.log('No readiness data available');
             }
@@ -169,24 +167,28 @@ export const DashboardPage: React.FC = () => {
           console.log('Oura is not authenticated, skipping recovery data fetch');
         }
 
-        // Fetch daily metrics if no Oura data
-        if (!hasOuraData) {
-          try {
-            console.log('Fetching daily metrics...');
-            const recentMetric = await dailyMetricsService.getMostRecentMetric();
-            if (recentMetric) {
-              console.log('Daily metric found:', recentMetric);
-              setDailyMetric(recentMetric);
-            } else {
-              console.log('No daily metrics available');
-            }
-          } catch (metricsError) {
-            console.error('Failed to fetch daily metrics:', metricsError);
+        // Fetch daily metrics if no Oura data (or as primary source now)
+        // We always fetch daily metrics now for the Bio-Aware Insight
+        let recentMetrics: DailyMetric[] = [];
+        try {
+          console.log('Fetching daily metrics...');
+          recentMetrics = await dailyMetricsService.getRecentMetrics(7);
+          setDailyMetrics(recentMetrics);
+
+          if (recentMetrics.length > 0) {
+            // Sort by date desc just to be sure
+            const sorted = [...recentMetrics].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            console.log('Daily metrics found:', sorted.length);
+            setDailyMetric(sorted[0]);
+          } else {
+            console.log('No daily metrics available');
           }
+        } catch (metricsError) {
+          console.error('Failed to fetch daily metrics:', metricsError);
         }
 
         // Generate weekly insight
-        await generateWeeklyInsight(athleteData, activitiesData);
+        await generateWeeklyInsight(athleteData, activitiesData, recentMetrics);
 
         // Generate health metrics
         await generateHealthMetrics(athleteData, activitiesData);
@@ -236,7 +238,7 @@ export const DashboardPage: React.FC = () => {
     window.location.reload();
   };
 
-  const generateWeeklyInsight = async (athleteData: StravaAthlete, activitiesData: StravaActivity[]) => {
+  const generateWeeklyInsight = async (athleteData: StravaAthlete, activitiesData: StravaActivity[], metrics: DailyMetric[] = []) => {
     try {
       setInsightLoading(true);
       console.log('Generating weekly insight...');
@@ -262,7 +264,8 @@ export const DashboardPage: React.FC = () => {
         athleteData,
         activitiesData,
         sleepDataForInsight,
-        readinessDataForInsight
+        readinessDataForInsight,
+        metrics
       );
 
       setWeeklyInsight(insight);
@@ -317,7 +320,8 @@ export const DashboardPage: React.FC = () => {
 
     // Clear cache and regenerate
     weeklyInsightService.clearCache();
-    await generateWeeklyInsight(athlete, activities);
+    weeklyInsightService.clearCache();
+    await generateWeeklyInsight(athlete, activities, dailyMetrics);
   };
 
   const hasOuraData = (): boolean => {

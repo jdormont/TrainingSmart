@@ -1,5 +1,5 @@
 // Weekly Insight Service - Generates personalized training insights
-import type { StravaActivity, StravaAthlete, OuraSleepData, OuraReadinessData, ChatSession, StravaStats } from '../types';
+import type { StravaActivity, StravaAthlete, OuraSleepData, OuraReadinessData, ChatSession, StravaStats, DailyMetric } from '../types';
 export type { HealthMetrics } from './healthMetricsService';
 import { openaiService } from './openaiApi';
 import { supabaseChatService } from './supabaseChatService';
@@ -15,6 +15,12 @@ export interface WeeklyInsight {
   dataPoints: string[];
   generatedAt: Date;
   weekOf: Date;
+
+  // New fields for Bio-Aware UI
+  actionLabel?: string;
+  actionLink?: string; // Deep link or route
+  pacingProgress?: number; // 0-100+ for volume vs goal
+  readinessScore?: number; // Today's recovery/readiness score
 }
 
 interface WeeklyInsightCache {
@@ -72,6 +78,7 @@ interface TrainingPatterns {
 class WeeklyInsightService {
   private readonly CACHE_KEY = 'weekly_insight_cache';
 
+  /*
   // Check if we have a valid cached insight for this week
   private getCachedInsight(): WeeklyInsight | null {
     try {
@@ -97,6 +104,7 @@ class WeeklyInsightService {
       return null;
     }
   }
+  */
 
   // Cache the insight for this week
   private cacheInsight(insight: WeeklyInsight): void {
@@ -372,19 +380,45 @@ Generate a JSON response with:
     athlete: StravaAthlete,
     activities: StravaActivity[],
     sleepData: OuraSleepData[] = [],
-    readinessData: OuraReadinessData[] = []
+    readinessData: OuraReadinessData[] = [],
+    dailyMetrics: DailyMetric[] = []
   ): Promise<WeeklyInsight> {
     console.log('Generating weekly insight...');
 
-    // Check cache first
-    const cached = this.getCachedInsight();
-    if (cached) {
-      console.log('Using cached weekly insight');
-      return cached;
-    }
+    // Skip cache for development/testing of new logic
+    // const cached = this.getCachedInsight();
+    // if (cached) {
+    //   console.log('Using cached weekly insight');
+    //   return cached;
+    // }
 
     try {
-      // Analyze patterns
+      // Analyze new Bio-Aware metrics
+      const recoveryStatus = this.analyzeRecoveryStatus(dailyMetrics, readinessData);
+      const pacingStatus = this.analyzePacingStatus(activities);
+
+      // Generate Matrix Insight based on the intersection
+      const matrixInsight = this.generateInsightMatrix(pacingStatus, recoveryStatus);
+
+      if (matrixInsight) {
+        console.log('Generated Bio-Aware Matrix Insight:', matrixInsight);
+
+        // Cache and return the matrix insight immediately
+        // Cache and return the matrix insight immediately
+        const insight: WeeklyInsight = {
+          ...matrixInsight,
+          generatedAt: new Date(),
+          weekOf: startOfWeek(new Date(), { weekStartsOn: 1 })
+        };
+
+        this.cacheInsight(insight);
+        return insight;
+      }
+
+      // Fallback to legacy AI generation if no matrix insight is triggered (e.g. perfect balance)
+      // For now, we'll stick to the matrix as primary.
+
+      // Analyze patterns (legacy)
       const patterns = this.analyzePatterns(activities, sleepData, readinessData);
       console.log('Analyzed patterns:', patterns);
 
@@ -438,7 +472,7 @@ Generate a JSON response with:
       } catch {
         console.warn('Failed to parse AI response as JSON, using fallback');
         // Fallback insight based on patterns
-        parsedResponse = this.generateFallbackInsight(patterns, themes);
+        parsedResponse = this.generateFallbackInsight(patterns);
       }
 
       const insight: WeeklyInsight = {
@@ -463,9 +497,9 @@ Generate a JSON response with:
 
       // Return fallback insight
       const patterns = this.analyzePatterns(activities, sleepData, readinessData);
-      const chatSessions = await supabaseChatService.getSessions();
-      const themes = await this.extractTrainingThemes(chatSessions);
-      const fallback = this.generateFallbackInsight(patterns, themes);
+      // const chatSessions = await supabaseChatService.getSessions();
+      // const themes = await this.extractTrainingThemes(chatSessions);
+      const fallback = this.generateFallbackInsight(patterns);
 
       const insight: WeeklyInsight = {
         id: `weekly_fallback_${Date.now()}`,
@@ -484,7 +518,7 @@ Generate a JSON response with:
   }
 
   // Generate fallback insight when AI fails
-  private generateFallbackInsight(patterns: TrainingPatterns, _themes: string[]) {
+  private generateFallbackInsight(patterns: TrainingPatterns) {
     const consistency = patterns.trainingConsistency.consistency;
     const weeklyChange = patterns.weeklyVolume.change;
     const hasRecoveryData = patterns.recoveryTrends.available;
@@ -524,6 +558,234 @@ Generate a JSON response with:
   // Clear cached insight (for testing)
   clearCache(): void {
     localStorage.removeItem(this.CACHE_KEY);
+  }
+
+  // --- Bio-Aware Logic ---
+
+  private analyzeRecoveryStatus(
+    dailyMetrics: DailyMetric[],
+    ouraReadiness: OuraReadinessData[]
+  ): { status: 'Fresh' | 'Fatigued' | 'Unknown'; score: number; reason: string } {
+    let currentScore = 0;
+    let baselineScore = 0;
+    let source = '';
+
+    // Priority 1: Daily Metrics (aggregated)
+    if (dailyMetrics.length > 0) {
+      // Sort by date descending
+      const sortedMetrics = [...dailyMetrics].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      // Get today's/latest metric
+      const latest = sortedMetrics[0];
+
+      // Try to use Recovery Score if available (0-100)
+      if (latest.recovery_score > 0) {
+        currentScore = latest.recovery_score;
+        source = 'Unified Recovery Metric';
+
+        // Calculate Baseline (last 7 days excluding today)
+        const history = sortedMetrics.slice(1, 8);
+        if (history.length >= 3) {
+          baselineScore = history.reduce((sum, m) => sum + m.recovery_score, 0) / history.length;
+        } else {
+          // Fallback if no history: compare to static threshold
+          baselineScore = 50; // Neutral baseline
+        }
+      }
+      // Fallback: HRV
+      else if (latest.hrv > 0) {
+        currentScore = latest.hrv;
+        source = 'HRV';
+        // Baseline
+        const history = sortedMetrics.slice(1, 8).filter(m => m.hrv > 0);
+        if (history.length >= 3) {
+          baselineScore = history.reduce((sum, m) => sum + m.hrv, 0) / history.length;
+        } else {
+          baselineScore = 40; // Conservative static baseline for HRV
+        }
+      }
+    }
+    // Priority 2: Oura Readiness directly
+    else if (ouraReadiness.length > 0) {
+      const sortedReadiness = [...ouraReadiness].sort((a, b) => new Date(b.day).getTime() - new Date(a.day).getTime());
+      const latest = sortedReadiness[0];
+      currentScore = latest.score;
+      source = 'Oura Readiness';
+
+      const history = sortedReadiness.slice(1, 8);
+      if (history.length >= 3) {
+        baselineScore = history.reduce((sum, r) => sum + r.score, 0) / history.length;
+      } else {
+        baselineScore = 75; // Neutral baseline for Oura
+      }
+    }
+
+    // Logic: Determine Status
+    if (currentScore === 0) {
+      return { status: 'Unknown', score: 0, reason: 'No recovery data available' };
+    }
+
+    // Default Thresholds (can be tuned)
+    let isFresh = false;
+    let isFatigued = false;
+
+    if (source === 'HRV') {
+      // HRV Logic: significant drop is bad
+      const deviation = ((currentScore - baselineScore) / baselineScore) * 100;
+      if (currentScore < 30) isFatigued = true; // Absolute low
+      else if (deviation < -10) isFatigued = true; // Drop > 10%
+      else if (deviation > 5) isFresh = true; // Increasing is usually good
+    } else {
+      // Score (0-100) Logic
+      if (currentScore < 60) isFatigued = true;
+      else if (currentScore > 85) isFresh = true;
+      // Check trends if in middle range
+      else if (currentScore < baselineScore - 10) isFatigued = true;
+      else if (currentScore > baselineScore + 5) isFresh = true;
+    }
+
+    if (isFatigued) return { status: 'Fatigued', score: currentScore, reason: `${source} is low (${Math.round(currentScore)})` };
+    if (isFresh) return { status: 'Fresh', score: currentScore, reason: `${source} is strong (${Math.round(currentScore)})` };
+
+    return { status: 'Unknown', score: currentScore, reason: `${source} is normal` }; // Treat normal as "Unknown" for matrix purposes or add "Stable"
+  }
+
+  private analyzePacingStatus(activities: StravaActivity[]): { status: 'Behind' | 'Ahead' | 'OnTrack'; progress: number; reason: string } {
+    const thisWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+    const thisWeekActivities = activities.filter(a => new Date(a.start_date_local) >= thisWeekStart);
+
+    const currentDistance = thisWeekActivities.reduce((sum, a) => sum + a.distance, 0) * 0.000621371; // miles
+
+    // Calculate Goal (Simple: Avg of last 4 weeks OR default 100 miles if pro, 50 if amateur)
+    // For now, let's derive a simple "Historic Average" from getWeeklyDistances logic
+    const weeklyDistances = this.getWeeklyDistances(activities);
+    // Remove current week (index 0 might be partial) if we want true history, 
+    // but let's just take avg of non-zero past weeks
+    const pastWeeks = weeklyDistances.filter((d: number) => d > 0);
+    let weeklyGoal = pastWeeks.length > 0 ? (pastWeeks.reduce((a: number, b: number) => a + b, 0) / pastWeeks.length) * 0.000621371 : 50;
+
+    // Minimum reasonable goal floor
+    if (weeklyGoal < 20) weeklyGoal = 30;
+
+    // Project end of week?
+    // Simple linear projection based on day of week?
+    const dayOfWeek = new Date().getDay() || 7; // Mon=1, Sun=7
+    const progressPercent = (currentDistance / weeklyGoal) * 100;
+
+    const expectedProgress = (dayOfWeek / 7) * 100;
+
+    if (progressPercent < expectedProgress - 15) {
+      return { status: 'Behind', progress: progressPercent, reason: `Only ${Math.round(currentDistance)}mi vs goal ${Math.round(weeklyGoal)}mi` };
+    } else if (progressPercent > expectedProgress + 15) {
+      return { status: 'Ahead', progress: progressPercent, reason: `${Math.round(currentDistance)}mi already (Goal: ${Math.round(weeklyGoal)}mi)` };
+    }
+
+    return { status: 'OnTrack', progress: progressPercent, reason: 'On track with weekly volume' };
+  }
+
+  private generateInsightMatrix(
+    pacing: { status: 'Behind' | 'Ahead' | 'OnTrack'; progress: number; reason: string },
+    recovery: { status: 'Fresh' | 'Fatigued' | 'Unknown'; score: number; reason: string }
+  ): WeeklyInsight | null {
+    const dayOfWeek = new Date().getDay();
+    const isEarlyWeek = dayOfWeek >= 1 && dayOfWeek <= 2; // Mon/Tue
+
+    // Scenario D: Early Week (Bio-Note)
+    if (isEarlyWeek) {
+      return {
+        id: 'early_week',
+        title: recovery.status === 'Fresh' ? 'Primed for the Week' : 'Slow Start Recommended',
+        message: recovery.status === 'Fresh'
+          ? `It's early in the week and your readiness is high (${recovery.score}). Great time to front-load a hard workout.`
+          : `Starting the week with some fatigue. Consider pushing your key workouts to Thu/Fri when you're fresher.`,
+        type: recovery.status === 'Fresh' ? 'training' : 'recovery',
+        confidence: 90,
+        generatedAt: new Date(),
+        weekOf: startOfWeek(new Date(), { weekStartsOn: 1 }),
+        dataPoints: [recovery.reason, pacing.reason],
+        actionLabel: 'Plan My Week',
+        actionLink: '/chat?initialMessage=Help+me+plan+my+week+based+on+my+current+fatigue',
+        readinessScore: recovery.score,
+        pacingProgress: pacing.progress
+      } as WeeklyInsight;
+    }
+
+    // Scenario A: Behind Pace + Fatigued (Permission to Rest)
+    if (pacing.status === 'Behind' && recovery.status === 'Fatigued') {
+      return {
+        id: 'permission_to_rest',
+        title: 'Permission to Rest',
+        message: "You're behind volume targets, but your body is fighting stress. Prioritize sleep tonight instead of chasing miles.",
+        type: 'recovery',
+        confidence: 95,
+        generatedAt: new Date(),
+        weekOf: startOfWeek(new Date(), { weekStartsOn: 1 }),
+        dataPoints: [recovery.reason, pacing.reason],
+        actionLabel: 'View Recovery Stats',
+        actionLink: '/dashboard', // Focus on recovery card
+        readinessScore: recovery.score,
+        pacingProgress: pacing.progress
+      } as WeeklyInsight;
+    }
+
+    // Scenario B: Behind Pace + Fresh (The Nudge)
+    if (pacing.status === 'Behind' && recovery.status === 'Fresh') {
+      return {
+        id: 'the_nudge',
+        title: 'Prime Time to Train',
+        message: "Your recovery scores are high, but training volume is low. You are physiologically primed for a hard session today.",
+        type: 'goal',
+        confidence: 90,
+        generatedAt: new Date(),
+        weekOf: startOfWeek(new Date(), { weekStartsOn: 1 }),
+        dataPoints: [recovery.reason, pacing.reason],
+        actionLabel: 'Plan a Workout',
+        actionLink: '/chat?initialMessage=I+am+fresh+and+behind+schedule,+suggest+a+workout',
+        readinessScore: recovery.score,
+        pacingProgress: pacing.progress
+      } as WeeklyInsight;
+    }
+
+    // Scenario C: Ahead of Pace + Fatigued (The Warning)
+    if (pacing.status === 'Ahead' && recovery.status === 'Fatigued') {
+      return {
+        id: 'the_warning',
+        title: 'Risk of Overreach',
+        message: "Great volume this week, but your Readiness is dropping. Consider swapping your next interval session for Zone 2.",
+        type: 'pattern',
+        confidence: 85,
+        generatedAt: new Date(),
+        weekOf: startOfWeek(new Date(), { weekStartsOn: 1 }),
+        dataPoints: [recovery.reason, pacing.reason],
+        actionLabel: 'Modify Plan',
+        actionLink: '/chat?initialMessage=My+recovery+is+dropping+but+volume+is+high.+How+should+I+modify+my+plan?',
+        readinessScore: recovery.score,
+        pacingProgress: pacing.progress
+      } as WeeklyInsight;
+    }
+
+    // Default to null if no strong signal, let fallback logic handle it
+    return null;
+  }
+  // Helper method to calculate weekly distances (replicated from HealthMetricsService logic)
+  private getWeeklyDistances(activities: StravaActivity[]): number[] {
+    const weeks: number[] = [];
+    const now = new Date();
+
+    for (let i = 0; i < 4; i++) {
+      const weekStart = startOfWeek(subWeeks(now, i), { weekStartsOn: 1 });
+      const weekEnd = subWeeks(weekStart, -1);
+
+      const weekActivities = activities.filter(a => {
+        const activityDate = new Date(a.start_date_local);
+        return activityDate >= weekStart && activityDate < weekEnd;
+      });
+
+      const weekDistance = weekActivities.reduce((sum, a) => sum + a.distance, 0);
+      weeks.push(weekDistance);
+    }
+
+    return weeks;
   }
 }
 

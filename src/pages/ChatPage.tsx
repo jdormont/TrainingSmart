@@ -44,6 +44,15 @@ export const ChatPage: React.FC = () => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Handle deep linking for actions (e.g. from Weekly Insight)
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const initialMsg = searchParams.get('initialMessage');
+    if (initialMsg) {
+      setInputMessage(initialMsg);
+    }
+  }, [location.search]);
+
   // Load Strava data and sessions on component mount
   useEffect(() => {
     const loadData = async () => {
