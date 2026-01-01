@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Lightbulb, TrendingUp, Heart, Target, Calendar, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import type { WeeklyInsight } from '../../services/weeklyInsightService';
 import { LoadingSpinner } from '../common/LoadingSpinner';
@@ -16,6 +17,18 @@ export const WeeklyInsightCard: React.FC<WeeklyInsightCardProps> = ({
   onRefresh
 }) => {
   const [expanded, setExpanded] = useState(false);
+  const navigate = useNavigate();
+
+  const handleAction = () => {
+    if (insight?.actionLink) {
+      if (insight.actionLink.startsWith('/chat')) {
+        // preserve query params
+        navigate(insight.actionLink);
+      } else {
+        navigate(insight.actionLink);
+      }
+    }
+  };
 
   const getInsightIcon = (type: WeeklyInsight['type']) => {
     switch (type) {
@@ -96,13 +109,23 @@ export const WeeklyInsightCard: React.FC<WeeklyInsightCardProps> = ({
             <p className="text-sm text-gray-600">Week of {currentWeek}</p>
           </div>
         </div>
-        
+
         <div className="flex items-center space-x-2">
           {/* Confidence Badge */}
           <span className={`text-xs px-2 py-1 rounded-full font-medium ${getConfidenceColor(insight.confidence)}`}>
             {insight.confidence}% confidence
           </span>
-          
+
+          {/* Readiness Score Badge (New) */}
+          {insight.readinessScore !== undefined && (
+            <span className={`text-xs px-2 py-1 rounded-full font-medium ${insight.readinessScore > 80 ? 'bg-green-100 text-green-700' :
+              insight.readinessScore < 50 ? 'bg-red-100 text-red-700' :
+                'bg-yellow-100 text-yellow-700'
+              }`}>
+              Readiness: {insight.readinessScore}
+            </span>
+          )}
+
           {/* Refresh Button */}
           {onRefresh && (
             <button
@@ -135,7 +158,7 @@ export const WeeklyInsightCard: React.FC<WeeklyInsightCardProps> = ({
                 <ChevronDown className="w-4 h-4" />
               )}
             </button>
-            
+
             {expanded && (
               <div className="mt-2 p-3 bg-gray-50 rounded-md">
                 <ul className="text-sm text-gray-600 space-y-1">
@@ -151,15 +174,43 @@ export const WeeklyInsightCard: React.FC<WeeklyInsightCardProps> = ({
           </div>
         )}
 
-        {/* Metadata */}
-        <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-          <span className={`text-xs px-2 py-1 rounded-full ${colorClasses}`}>
-            {insight.type}
-          </span>
-          <span className="text-xs text-gray-500">
-            Generated {insight.generatedAt.toLocaleDateString()}
-          </span>
+      </div>
+
+      {/* Pacing Progress Bar (New) */}
+      {insight.pacingProgress !== undefined && (
+        <div className="mt-3">
+          <div className="flex justify-between text-xs text-gray-500 mb-1">
+            <span>Weekly Volume Goal</span>
+            <span>{Math.round(insight.pacingProgress)}%</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div
+              className={`h-2 rounded-full ${insight.pacingProgress > 115 ? 'bg-yellow-500' : // Risk of overtraining
+                insight.pacingProgress < 85 ? 'bg-blue-500' :   // Building
+                  'bg-green-500' // On Track
+                }`}
+              style={{ width: `${Math.min(insight.pacingProgress, 100)}%` }}
+            ></div>
+          </div>
         </div>
+      )}
+
+      {/* Action Button (New) */}
+      {insight.actionLabel && (
+        <div className="mt-4 pt-3 border-t border-gray-100">
+          <button
+            onClick={handleAction}
+            className="w-full py-2 px-4 bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium rounded-md transition-colors flex items-center justify-center space-x-2"
+          >
+            <Target className="w-4 h-4" />
+            <span>{insight.actionLabel}</span>
+          </button>
+        </div>
+      )}
+      {/* Footer Metadata */}
+      <div className="flex items-center justify-between mt-3 text-xs text-gray-400">
+        <span>Generated {insight.generatedAt.toLocaleDateString()}</span>
+        <span className="capitalize">{insight.type} Insight</span>
       </div>
     </div>
   );
