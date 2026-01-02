@@ -566,88 +566,76 @@ Generate a JSON response with:
     dailyMetrics: DailyMetric[],
     ouraReadiness: OuraReadinessData[]
   ): { status: 'Fresh' | 'Fatigued' | 'Unknown'; score: number; reason: string } {
-    let currentScore = 0;
-    let baselineScore = 0;
-    let source = '';
-
-    // Priority 1: Daily Metrics (aggregated)
-    if (dailyMetrics.length > 0) {
-      // Sort by date descending
-      const sortedMetrics = [...dailyMetrics].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-      // Get today's/latest metric
-      const latest = sortedMetrics[0];
-
-      // Try to use Recovery Score if available (0-100)
-      if (latest.recovery_score > 0) {
-        currentScore = latest.recovery_score;
-        source = 'Unified Recovery Metric';
-
-        // Calculate Baseline (last 7 days excluding today)
-        const history = sortedMetrics.slice(1, 8);
-        if (history.length >= 3) {
-          baselineScore = history.reduce((sum, m) => sum + m.recovery_score, 0) / history.length;
-        } else {
-          // Fallback if no history: compare to static threshold
-          baselineScore = 50; // Neutral baseline
-        }
+    // We prioritize Daily Metrics (which contain HRV/RHR from Oura or Apple Health)
+    // We need at least 3 days for "Current" and ideally more for "Baseline"
+    if (dailyMetrics.length < 3) {
+      // Fallback to Oura Readiness Score if we don't have enough granular metric data
+      if (ouraReadiness.length > 0) {
+        const sorted = [...ouraReadiness].sort((a, b) => new Date(b.day).getTime() - new Date(a.day).getTime());
+        const score = sorted[0].score;
+        return {
+          status: score >= 85 ? 'Fresh' : score <= 60 ? 'Fatigued' : 'Unknown',
+          score,
+          reason: `Oura Readiness is ${score}`
+        };
       }
-      // Fallback: HRV
-      else if (latest.hrv > 0) {
-        currentScore = latest.hrv;
-        source = 'HRV';
-        // Baseline
-        const history = sortedMetrics.slice(1, 8).filter(m => m.hrv > 0);
-        if (history.length >= 3) {
-          baselineScore = history.reduce((sum, m) => sum + m.hrv, 0) / history.length;
-        } else {
-          baselineScore = 40; // Conservative static baseline for HRV
-        }
-      }
-    }
-    // Priority 2: Oura Readiness directly
-    else if (ouraReadiness.length > 0) {
-      const sortedReadiness = [...ouraReadiness].sort((a, b) => new Date(b.day).getTime() - new Date(a.day).getTime());
-      const latest = sortedReadiness[0];
-      currentScore = latest.score;
-      source = 'Oura Readiness';
-
-      const history = sortedReadiness.slice(1, 8);
-      if (history.length >= 3) {
-        baselineScore = history.reduce((sum, r) => sum + r.score, 0) / history.length;
-      } else {
-        baselineScore = 75; // Neutral baseline for Oura
-      }
+      return { status: 'Unknown', score: 0, reason: 'Insufficient data' };
     }
 
-    // Logic: Determine Status
-    if (currentScore === 0) {
-      return { status: 'Unknown', score: 0, reason: 'No recovery data available' };
+    // Sort metrics desc (newest first)
+    const sorted = [...dailyMetrics].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // 1. Current State (Last 3 Days Average)
+    const currentWindow = sorted.slice(0, 3);
+    const avgCurrentHRV = currentWindow.reduce((sum, m) => sum + m.hrv, 0) / currentWindow.length;
+    const avgCurrentRHR = currentWindow.reduce((sum, m) => sum + m.resting_hr, 0) / currentWindow.length;
+
+    // 2. Baseline (Previous 27 days, skipping the most recent 3)
+    const baselineWindow = sorted.slice(3, 30);
+    // If not enough history, use what we have, but require at least 5 days for a valid baseline
+    if (baselineWindow.length < 5) {
+      return { status: 'Unknown', score: Math.round(avgCurrentHRV), reason: 'Building baseline data...' };
     }
 
-    // Default Thresholds (can be tuned)
-    let isFresh = false;
-    let isFatigued = false;
+    const avgBaselineHRV = baselineWindow.reduce((sum, m) => sum + m.hrv, 0) / baselineWindow.length;
+    const avgBaselineRHR = baselineWindow.reduce((sum, m) => sum + m.resting_hr, 0) / baselineWindow.length;
 
-    if (source === 'HRV') {
-      // HRV Logic: significant drop is bad
-      const deviation = ((currentScore - baselineScore) / baselineScore) * 100;
-      if (currentScore < 30) isFatigued = true; // Absolute low
-      else if (deviation < -10) isFatigued = true; // Drop > 10%
-      else if (deviation > 5) isFresh = true; // Increasing is usually good
+    // 3. Determine Status
+    let status: 'Fresh' | 'Fatigued' | 'Unknown' = 'Unknown';
+    const reasonParts = [];
+
+    // Fatigued Conditions:
+    // - HRV down > 10% 
+    // - RHR up > 5bpm
+    const hrvDrop = ((avgCurrentHRV - avgBaselineHRV) / avgBaselineHRV) * 100;
+    const rhrRise = avgCurrentRHR - avgBaselineRHR;
+
+    const isFatigued = hrvDrop < -10 || rhrRise > 5;
+
+    // Fresh Conditions:
+    // - HRV stable or up ( > -5% drop is "stable")
+    // - RHR stable or down ( < 2bpm rise is "stable")
+    const isFresh = !isFatigued && (hrvDrop > -2 && rhrRise < 2);
+
+    if (isFatigued) {
+      status = 'Fatigued';
+      if (hrvDrop < -10) reasonParts.push(`HRV down ${Math.round(Math.abs(hrvDrop))}%`);
+      if (rhrRise > 5) reasonParts.push(`RHR up ${Math.round(rhrRise)}bpm`);
+    } else if (isFresh) {
+      status = 'Fresh';
+      reasonParts.push('Biometrics stable/improving');
     } else {
-      // Score (0-100) Logic
-      if (currentScore < 60) isFatigued = true;
-      else if (currentScore > 85) isFresh = true;
-      // Check trends if in middle range
-      else if (currentScore < baselineScore - 10) isFatigued = true;
-      else if (currentScore > baselineScore + 5) isFresh = true;
+      reasonParts.push('Biometrics normal');
     }
 
-    if (isFatigued) return { status: 'Fatigued', score: currentScore, reason: `${source} is low (${Math.round(currentScore)})` };
-    if (isFresh) return { status: 'Fresh', score: currentScore, reason: `${source} is strong (${Math.round(currentScore)})` };
+    // Use current Recovery Score as the display score, or calculate a proxy
+    const displayScore = currentWindow[0].recovery_score || Math.round((avgCurrentHRV / avgBaselineHRV) * 50 + 50); // Rough proxy if no score
 
-    return { status: 'Unknown', score: currentScore, reason: `${source} is normal` }; // Treat normal as "Unknown" for matrix purposes or add "Stable"
+    return {
+      status,
+      score: displayScore,
+      reason: reasonParts.join(', ') || 'No significant change'
+    };
   }
 
   private analyzePacingStatus(activities: StravaActivity[]): { status: 'Behind' | 'Ahead' | 'OnTrack'; progress: number; reason: string } {
@@ -656,31 +644,31 @@ Generate a JSON response with:
 
     const currentDistance = thisWeekActivities.reduce((sum, a) => sum + a.distance, 0) * 0.000621371; // miles
 
-    // Calculate Goal (Simple: Avg of last 4 weeks OR default 100 miles if pro, 50 if amateur)
-    // For now, let's derive a simple "Historic Average" from getWeeklyDistances logic
-    const weeklyDistances = this.getWeeklyDistances(activities);
-    // Remove current week (index 0 might be partial) if we want true history, 
-    // but let's just take avg of non-zero past weeks
-    const pastWeeks = weeklyDistances.filter((d: number) => d > 0);
-    let weeklyGoal = pastWeeks.length > 0 ? (pastWeeks.reduce((a: number, b: number) => a + b, 0) / pastWeeks.length) * 0.000621371 : 50;
+    // Dynamic Goal: Average of last 4 weeks that had data
+    const weeklyDistances = this.getWeeklyDistances(activities).filter(d => d > 10); // Filter out empty weeks
+    let weeklyGoal = weeklyDistances.length > 0
+      ? (weeklyDistances.reduce((a, b) => a + b, 0) / weeklyDistances.length) * 0.000621371
+      : 30; // Default floor
 
-    // Minimum reasonable goal floor
-    if (weeklyGoal < 20) weeklyGoal = 30;
+    // Cap goal variance (don't let it drop too low if user had a bad month)
+    weeklyGoal = Math.max(weeklyGoal, 20);
 
-    // Project end of week?
-    // Simple linear projection based on day of week?
-    const dayOfWeek = new Date().getDay() || 7; // Mon=1, Sun=7
     const progressPercent = (currentDistance / weeklyGoal) * 100;
 
-    const expectedProgress = (dayOfWeek / 7) * 100;
+    // Day of week projection (1-7)
+    const dayIndex = new Date().getDay() || 7;
+    const expectedProgress = (dayIndex / 7) * 100;
+    const buffer = 15; // +/- 15% tolerance
 
-    if (progressPercent < expectedProgress - 15) {
-      return { status: 'Behind', progress: progressPercent, reason: `Only ${Math.round(currentDistance)}mi vs goal ${Math.round(weeklyGoal)}mi` };
-    } else if (progressPercent > expectedProgress + 15) {
-      return { status: 'Ahead', progress: progressPercent, reason: `${Math.round(currentDistance)}mi already (Goal: ${Math.round(weeklyGoal)}mi)` };
-    }
+    let status: 'Behind' | 'Ahead' | 'OnTrack' = 'OnTrack';
+    if (progressPercent < expectedProgress - buffer) status = 'Behind';
+    else if (progressPercent > expectedProgress + buffer) status = 'Ahead';
 
-    return { status: 'OnTrack', progress: progressPercent, reason: 'On track with weekly volume' };
+    return {
+      status,
+      progress: progressPercent,
+      reason: `${Math.round(currentDistance)}mi / ${Math.round(weeklyGoal)}mi goal`
+    };
   }
 
   private generateInsightMatrix(
@@ -689,83 +677,109 @@ Generate a JSON response with:
   ): WeeklyInsight | null {
     const dayOfWeek = new Date().getDay();
     const isEarlyWeek = dayOfWeek >= 1 && dayOfWeek <= 2; // Mon/Tue
+    const weekOf = startOfWeek(new Date(), { weekStartsOn: 1 });
 
     // Scenario D: Early Week (Bio-Note)
     if (isEarlyWeek) {
+      // If we have recovery data, use it. If "Unknown", maybe skip to patterns? 
+      // User requirement: "Keep Planning Mode logic... add bio-note"
+      // We'll return a planning insight if we have *any* status other than Unknown, or even if unknown just say "Fresh week"
+
+      const readinessText = recovery.status === 'Fresh' ? 'High' : recovery.status === 'Fatigued' ? 'Low' : 'Stable';
+
       return {
-        id: 'early_week',
-        title: recovery.status === 'Fresh' ? 'Primed for the Week' : 'Slow Start Recommended',
+        id: 'early_week_planning',
+        title: recovery.status === 'Fresh' ? 'Green Light for Training' : 'Start Slow This Week',
         message: recovery.status === 'Fresh'
-          ? `It's early in the week and your readiness is high (${recovery.score}). Great time to front-load a hard workout.`
-          : `Starting the week with some fatigue. Consider pushing your key workouts to Thu/Fri when you're fresher.`,
-        type: recovery.status === 'Fresh' ? 'training' : 'recovery',
+          ? "Fresh week. Your readiness is High. Plan your key interval sessions for early in the week."
+          : `Fresh week, but your readiness is ${readinessText}. Consider pushing hard sessions to Thursday/Friday.`,
+        type: 'training',
         confidence: 90,
         generatedAt: new Date(),
-        weekOf: startOfWeek(new Date(), { weekStartsOn: 1 }),
+        weekOf,
         dataPoints: [recovery.reason, pacing.reason],
         actionLabel: 'Plan My Week',
-        actionLink: '/chat?initialMessage=Help+me+plan+my+week+based+on+my+current+fatigue',
+        actionLink: '/chat?initialMessage=Help+me+plan+my+week+accounting+for+my+recovery',
         readinessScore: recovery.score,
         pacingProgress: pacing.progress
-      } as WeeklyInsight;
+      };
     }
 
-    // Scenario A: Behind Pace + Fatigued (Permission to Rest)
+    // Scenario A: Behind Pace + Fatigued (The "Permission to Rest")
     if (pacing.status === 'Behind' && recovery.status === 'Fatigued') {
       return {
         id: 'permission_to_rest',
         title: 'Permission to Rest',
-        message: "You're behind volume targets, but your body is fighting stress. Prioritize sleep tonight instead of chasing miles.",
+        message: "You're behind volume targets, but your body is fighting stress (Low HRV). Prioritize sleep tonight over chasing miles.",
         type: 'recovery',
         confidence: 95,
         generatedAt: new Date(),
-        weekOf: startOfWeek(new Date(), { weekStartsOn: 1 }),
-        dataPoints: [recovery.reason, pacing.reason],
+        weekOf,
+        dataPoints: [`Readiness: ${recovery.score}`, recovery.reason, pacing.reason],
         actionLabel: 'View Recovery Stats',
-        actionLink: '/dashboard', // Focus on recovery card
+        actionLink: '/dashboard',
         readinessScore: recovery.score,
         pacingProgress: pacing.progress
-      } as WeeklyInsight;
+      };
     }
 
-    // Scenario B: Behind Pace + Fresh (The Nudge)
+    // Scenario B: Behind Pace + Fresh (The "Nudge")
     if (pacing.status === 'Behind' && recovery.status === 'Fresh') {
       return {
         id: 'the_nudge',
-        title: 'Prime Time to Train',
-        message: "Your recovery scores are high, but training volume is low. You are physiologically primed for a hard session today.",
+        title: 'Primed for Performance',
+        message: "Your recovery scores are high, but training volume is low. You are physically primed for a hard session today.",
         type: 'goal',
         confidence: 90,
         generatedAt: new Date(),
-        weekOf: startOfWeek(new Date(), { weekStartsOn: 1 }),
-        dataPoints: [recovery.reason, pacing.reason],
+        weekOf,
+        dataPoints: [`Readiness: ${recovery.score}`, recovery.reason, pacing.reason],
         actionLabel: 'Plan a Workout',
-        actionLink: '/chat?initialMessage=I+am+fresh+and+behind+schedule,+suggest+a+workout',
+        actionLink: '/chat?initialMessage=I+am+fresh+and+ready+to+train,+suggest+a+workout',
         readinessScore: recovery.score,
         pacingProgress: pacing.progress
-      } as WeeklyInsight;
+      };
     }
 
-    // Scenario C: Ahead of Pace + Fatigued (The Warning)
+    // Scenario C: Ahead of Pace + Fatigued (The "Warning")
     if (pacing.status === 'Ahead' && recovery.status === 'Fatigued') {
       return {
         id: 'the_warning',
-        title: 'Risk of Overreach',
-        message: "Great volume this week, but your Readiness is dropping. Consider swapping your next interval session for Zone 2.",
-        type: 'pattern',
+        title: 'Watch Your Load',
+        message: "Great volume this week, but your Readiness is dropping. Consider swapping tomorrow's interval session for Zone 2 recovery.",
+        type: 'recovery', // Orange/Caution implied by recovery type usually
         confidence: 85,
         generatedAt: new Date(),
-        weekOf: startOfWeek(new Date(), { weekStartsOn: 1 }),
-        dataPoints: [recovery.reason, pacing.reason],
-        actionLabel: 'Modify Plan',
-        actionLink: '/chat?initialMessage=My+recovery+is+dropping+but+volume+is+high.+How+should+I+modify+my+plan?',
+        weekOf,
+        dataPoints: [`Readiness: ${recovery.score}`, recovery.reason, pacing.reason],
+        actionLabel: 'Ask Coach for Modification',
+        actionLink: '/chat?initialMessage=My+recovery+is+dropping+but+volume+is+high.+Modify+my+plan+for+fatigue',
         readinessScore: recovery.score,
         pacingProgress: pacing.progress
-      } as WeeklyInsight;
+      };
     }
 
-    // Default to null if no strong signal, let fallback logic handle it
-    return null;
+    // Default / Catch-All: Balanced or On Track (The "Status Quo")
+    // We return this matching the Bio-Aware structure regardless of 'Unknown' status
+    // to ensure the new UI always renders.
+    const isUnknown = recovery.status === 'Unknown';
+
+    return {
+      id: isUnknown ? 'building_data' : 'balanced_status',
+      title: isUnknown ? 'Gathering Recovery Data' : 'Training Balanced',
+      message: isUnknown
+        ? `We're building your recovery baseline. Keep tracking to unlock personalized readiness insights.`
+        : `You are ${pacing.status} with your training goals and your body is responding well. Keep up the momentum!`,
+      type: 'consistency',
+      confidence: 80,
+      generatedAt: new Date(),
+      weekOf,
+      dataPoints: isUnknown ? [pacing.reason] : [`Readiness: ${recovery.score}`, recovery.reason, pacing.reason],
+      actionLabel: isUnknown ? 'View Metrics' : 'View Training Details',
+      actionLink: '/dashboard',
+      readinessScore: recovery.score, // Might be 0 if unknown, which is fine
+      pacingProgress: pacing.progress
+    };
   }
   // Helper method to calculate weekly distances (replicated from HealthMetricsService logic)
   private getWeeklyDistances(activities: StravaActivity[]): number[] {

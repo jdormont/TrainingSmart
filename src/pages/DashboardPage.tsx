@@ -172,7 +172,7 @@ export const DashboardPage: React.FC = () => {
         let recentMetrics: DailyMetric[] = [];
         try {
           console.log('Fetching daily metrics...');
-          recentMetrics = await dailyMetricsService.getRecentMetrics(7);
+          recentMetrics = await dailyMetricsService.getRecentMetrics(30);
           setDailyMetrics(recentMetrics);
 
           if (recentMetrics.length > 0) {
