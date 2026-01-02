@@ -133,11 +133,12 @@ const aiPromptStructure = {
 - Plan modification interface
 
 **Acceptance Criteria**:
-- 🔄 **IN PROGRESS** - Basic AI plan generation function exists in openaiService
-- ❌ **TODO** - Goal-setting form UI
-- ❌ **TODO** - Generated plan display interface
-- ❌ **TODO** - Plan persistence and management
-- ❌ **TODO** - Individual workout detail cards
+- ✅ **COMPLETED** - Basic AI plan generation function exists in openaiService
+- ✅ **COMPLETED** - Goal-setting form UI (Intake Wizard)
+- ✅ **COMPLETED** - Generated plan display interface (PlansPage)
+- ✅ **COMPLETED** - Plan persistence and management (Supabase)
+- ✅ **COMPLETED** - Individual workout detail cards
+- ✅ **COMPLETED** - Chat-to-Plan Integration (`ChatContextModal`)
 
 ### 5. Calendar Integration
 **User Story**: As a user, I want to export training sessions to my Google Calendar to schedule my workouts.
@@ -272,7 +273,9 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 - [x] **COMPLETED** - Advanced activity data display with trends
 - [x] **COMPLETED** - AI chat with full training context
 - [x] **COMPLETED** - Custom AI coach personality system
-- [ ] **IN PROGRESS** - Training plan generation UI
+- [x] **COMPLETED** - Custom AI coach personality system
+- [x] **COMPLETED** - Training plan generation UI (Manual & Chat-based)
+- [x] **COMPLETED** - Bio-Aware Insights System
 
 ### Phase 2: Enhanced Features
 - [x] **COMPLETED** - Google Calendar integration (one-way export)
@@ -319,6 +322,30 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 - Secure account disconnection
 - Google Calendar connection management
 - Oura Ring integration controls
+
+### 🧬 **Bio-Aware Training Insights**
+- **Matrix-Based Logic**: Analyzes intersection of *Pacing* (Volume vs Goal) and *Recovery* (HRV/Sleep/Oura).
+- **Readiness Score**: Aggregates data from multiple sources (Oura, Garmin, Apple Health via Auto-Import) to determine "Fresh" vs "Fatigued" state.
+- **Actionable Advice**: "Permission to Rest", "The Nudge", or "Ranked Workouts" based on physiological state.
+- **Deep Linking**: Insights link directly to Chat with context-aware prompts.
+
+### 📋 **Interactive Training Planner**
+- **Chat-to-Plan**:
+    - Automatic detection of planning intent in conversations.
+    - AI extraction of Goals, Schedule Constraints, and Preferences.
+    - "Review & Confirm" modal (`ChatContextModal`) before generation.
+    - structured Plan generation persisted to Supabase.
+- **Plan Management**:
+    - Drag-and-drop workout rescheduling (`@dnd-kit`).
+    - **Strava Reconciliation**: Link actual activities to planned workouts for "Plan vs Actual" analysis.
+    - Weekly Google Calendar export.
+
+### 🚀 **Onboarding & Personalization**
+- **Intake Wizard**: 3-step flow for new users:
+    1.  **Goal Setting**: Event Prep, Weight Loss, General Fitness, Performance.
+    2.  **Availability**: Weekly hour constraints.
+    3.  **Coach Persona**: Supportive, Drill Sergeant, Analytical.
+- **Dynamic System Prompt**: Global prompt updates based on selected Persona.
 
 ---
 
@@ -499,308 +526,50 @@ interface UserContentProfile {
 
 ## 🚀 FUTURE FEATURE PLANS
 
-The following features represent the next evolution of TrainingSmart AI, creating a complete training workflow from planning conversations to performance tracking.
+The following features represent the next evolution of TrainingSmart AI.
 
 ---
 
-## Feature 1: Chat-to-Plan Integration
-
+## Feature 1: Advanced Recovery Calibration (Phase 2)
 ### Overview
-Allow users to generate training plans directly from chat conversations where they've discussed their goals, constraints, and preferences. This creates a seamless flow from planning discussions to actionable training schedules.
+Move beyond simple HRV thresholds to a personalized baseline model that adapts to the user's menstrual cycle (if applicable), seasonal trends, and subjective "feeling" scores.
 
-### 1. Database Schema Updates
+### 1. Subjective Metadata
+- Add daily "Morning check-in" popup (1-5 mood, soreness location).
+- Correlate subjective feel with objective Oura data.
 
-**Tables to Modify:**
-- Add `source_chat_session_id` column to `training_plans` table (UUID, nullable, foreign key to chat_sessions)
-- Add `chat_context_snapshot` JSONB column to store relevant chat excerpts used in plan generation
-- Create index on `source_chat_session_id` for efficient lookups
-- Store bidirectional relationship between plans and the chat messages that informed them
-
-**Migration Requirements:**
-```sql
-ALTER TABLE training_plans
-  ADD COLUMN source_chat_session_id UUID REFERENCES chat_sessions(id) ON DELETE SET NULL,
-  ADD COLUMN chat_context_snapshot JSONB;
-
-CREATE INDEX idx_training_plans_chat_session ON training_plans(source_chat_session_id);
-```
-
-### 2. Chat Message Analysis Service
-
-**Create:** `chatContextExtractor.ts`
-
-**Core Functionality:**
-- Extract key information from chat conversations including:
-  - Stated goals and target events (e.g., "I want to complete a century ride")
-  - Time availability and scheduling constraints (e.g., "I can only ride weekends")
-  - Equipment available (indoor trainer, outdoor only, bike type)
-  - Injury history or current limitations mentioned
-  - Preferred workout types and intensities
-  - Specific requirements (e.g., "avoid back-to-back hard days")
-- Use AI to summarize multi-message conversations into structured data
-- Calculate confidence scores for each extracted piece of information (0-100)
-- Handle ambiguous or conflicting information gracefully with user review
-- Identify most relevant messages that contributed to each extraction
-
-**Technical Approach:**
-- Send entire chat history to AI with extraction prompt
-- Request structured JSON response with extracted fields and confidence scores
-- Link extracted data back to specific message IDs for traceability
-- Allow manual correction of extracted information
-
-### 3. Enhanced Plan Generation UI
-
-**Chat Interface Updates:**
-- Add "Create Plan from This Chat" button in chat header
-- Show button only when chat contains goal-related discussions
-- Use AI to detect planning-related conversations automatically
-- Display extracted context in pre-generation review modal
-- Allow users to edit or confirm all extracted information
-- Show which specific chat messages contributed to each data point
-
-**Plan Generation Modal:**
-- Pre-fill form fields with extracted chat context
-- Display confidence scores next to auto-filled fields
-- Highlight low-confidence extractions for user review
-- Show relevant chat excerpts inline for context
-- Allow toggling between chat-extracted and manual entry
-- Link back to source chat session for reference
-
-### 4. Plan Generation Flow
-
-**Detection Phase:**
-- Monitor chats for goal-oriented keywords and phrases
-- Categorize chat sessions based on content (goals, training, recovery, etc.)
-- Trigger suggestion to create plan when sufficient context exists
-- Use chat category to influence detection sensitivity
-
-**Context Building:**
-- Analyze entire chat history to build comprehensive context
-- Extract goals, constraints, preferences, and training history discussion
-- Include previous messages about injuries, time availability, equipment
-- Identify contradictions and flag for user resolution
-- Build structured context object for AI plan generation
-
-**Generation Phase:**
-- Pass full chat transcript along with structured context to AI
-- Include chat context in plan generation prompt
-- Generate plan that specifically references things discussed in chat
-- Create database link between chat session and generated plan
-- Add assistant message in chat confirming plan creation with link
-
-### 5. Plans Page Integration
-
-**Visual Indicators:**
-- Display chat bubble icon badge on chat-generated plans
-- Show chat category tag (training, goals, recovery, etc.)
-- Add "View Source Chat" button to navigate to original conversation
-- Display creation timestamp with "Generated from chat" label
-
-**Context Display:**
-- Show excerpts of key chat messages that informed the plan
-- Display extracted goals and constraints in plan header
-- Link specific workouts to chat discussions that inspired them
-- Show confidence scores for AI-extracted information
-
-**Plan Management:**
-- Allow regenerating plan with updated chat context
-- Filter plans by source: "From Chat" vs "Manual Creation"
-- Search plans by chat content and discussion topics
-- Track plan versions with links to triggering chat messages
-
-### 6. Context Refinement Interface
-
-**Pre-Generation Review Modal:**
-- Display all extracted information in editable form
-- Show confidence score badges (High/Medium/Low) for each field
-- Present relevant chat message excerpts for each extraction
-- Provide checkboxes to include or exclude specific constraints
-- Add free-form notes field for additional context
-- Show preview of how context will inform plan generation
-
-**Validation Logic:**
-- Require user confirmation for low-confidence extractions (<70%)
-- Highlight conflicting information for resolution
-- Suggest missing information based on plan type
-- Allow saving refined context for future plan updates
-
-### 7. Real-time Plan Updates
-
-**Change Detection:**
-- Monitor continued discussion in source chat after plan creation
-- Detect when users mention plan modifications or new constraints
-- Use AI to identify plan-relevant updates in ongoing conversations
-- Show notification badge on plan when source chat has updates
-
-**Update Workflow:**
-- Display "Updates Available from Chat" notification on plan card
-- Show diff preview of suggested changes based on new chat context
-- Allow accepting or rejecting suggested modifications
-- Track plan version history with links to triggering chat messages
-- Maintain change log showing what was modified and why
-
-### 8. Smart Suggestions in Chat
-
-**Contextual Detection:**
-- Identify natural transition points to suggest plan creation
-- Detect when user has discussed sufficient planning information
-- Avoid suggesting too early (not enough context) or too late
-- Remember if user dismissed suggestion to avoid repetition
-
-**Suggestion UI:**
-- Show inline suggestion card at appropriate moments
-- Display preview of extracted context (goals, timeline, etc.)
-- Provide "Create Plan" quick action button
-- Include "Not Now" option with don't-ask-again checkbox
-- Show confidence indicator for extraction quality
-
-### 9. Plan Discussion Mode
-
-**Special Chat Context:**
-- Create dedicated chat mode for discussing existing plans
-- Automatically load plan details into AI context
-- Reference specific workouts by name or date in conversation
-- Allow natural language queries about plan structure and rationale
-
-**Modification Flow:**
-- Enable requesting plan changes through chat
-- Parse modification requests (e.g., "move Tuesday's workout to Wednesday")
-- Show preview of planned changes before applying
-- Apply approved changes directly to plan workouts
-- Add modification notes to workout descriptions
-
-### 10. Supabase Integration
-
-**Data Persistence:**
-- Store chat-to-plan relationships in database
-- Save chat context snapshots with plans
-- Track which specific messages influenced each plan element
-- Maintain audit trail of plan modifications from chat
-
-**Query Capabilities:**
-- Search plans by chat content and topics discussed
-- Filter plans by chat session category
-- Find all plans created with a specific chat session
-- Retrieve chat excerpts that informed specific workouts
-
-**Sync Logic:**
-- Update plan metadata when source chat is modified
-- Handle chat deletion (keep plan but remove chat reference)
-- Maintain consistency between chat sessions and plans tables
-- Enable real-time updates when plans are modified via chat
+### 2. Trend Analysis
+- Detect "Overreaching" before it becomes "Overtraining".
+- Alert on 7-day trailing average deviations.
 
 ---
 
-## Feature 2: Link Strava Activities to Training Plan Workouts
-
+## Feature 2: Automated Activity Matching (Heuristic)
 ### Overview
-Connect completed Strava activities to planned workouts, enabling users to track adherence, compare planned vs actual performance, and gain insights into training consistency. Transform static plans into dynamic training logs with real performance data.
+While Manual Linking is completed, the system should eventually *auto-suggest* matches with high confidence (95%+) to reduce user friction.
 
-### 1. Database Schema Extension
+### Algorithm Refinement
+- **Time Window**: Match start times within +/- 15 mins of planned time.
+- **Distance/Duration**: Fuzzy match within 5% tolerance.
+- **Auto-Confirm**: If 1 candidate found with >95% score, link automatically and notify user.
 
-**Tables to Modify:**
-- Add `strava_activity_id` column to `workouts` table (BIGINT, nullable, unique)
-- Add `activity_match_score` column (NUMERIC, 0-100) to track matching confidence
-- Add `auto_matched` BOOLEAN to distinguish automatic vs manual linking
-- Add `match_metadata` JSONB to store algorithm details and matching reasons
-- Add `linked_at` TIMESTAMPTZ to track when activity was linked
+---
 
-**Migration Requirements:**
-```sql
-ALTER TABLE workouts
-  ADD COLUMN strava_activity_id BIGINT UNIQUE,
-  ADD COLUMN activity_match_score NUMERIC(5,2) CHECK (activity_match_score >= 0 AND activity_match_score <= 100),
-  ADD COLUMN auto_matched BOOLEAN DEFAULT false,
-  ADD COLUMN match_metadata JSONB,
-  ADD COLUMN linked_at TIMESTAMPTZ;
+## Feature 3: Race Day Strategy Generator
+### Overview
+A specialized chat mode that takes a course profile (GPX) and generates a segment-by-segment power/pacing plan.
 
-CREATE INDEX idx_workouts_strava_activity ON workouts(strava_activity_id);
-CREATE INDEX idx_workouts_auto_matched ON workouts(auto_matched) WHERE strava_activity_id IS NOT NULL;
-```
+### Inputs
+- **GPX File** of the route.
+- **Target Time**.
+- **User's Power Curve** (from Strava).
 
-**Constraints:**
-- Prevent same activity from linking to multiple workouts
-- Allow workout to have no linked activity (null permitted)
-- Cascade delete behavior when activities are unlinked
+### Outputs
+- "Cheat Sheet" for top tube taping.
+- Nutrition plan (grams of carbs/hr) overlay.
 
-### 2. Activity Matching Algorithm
 
-**Create:** `activityMatchingService.ts`
 
-**Core Matching Logic:**
-Calculate match scores (0-100) based on weighted factors:
-
-1. **Date Proximity (50% weight)**
-   - Same day: 50 points
-   - 1 day off: 40 points
-   - 2 days off: 25 points
-   - 3+ days off: 10 points
-   - Activities within planned workout window get bonus points
-
-2. **Activity Type Match (20% weight)**
-   - Exact match (Ride to bike): 20 points
-   - Related match (VirtualRide to bike): 15 points
-   - Wrong type: 0 points
-
-3. **Distance Similarity (15% weight)**
-   - Within 10% of planned: 15 points
-   - Within 20% of planned: 12 points
-   - Within 30% of planned: 8 points
-   - Greater than 30% off: scaled 0-7 points
-
-4. **Duration Similarity (15% weight)**
-   - Within 15% of planned: 15 points
-   - Within 30% of planned: 12 points
-   - Within 45% of planned: 8 points
-   - Greater than 45% off: scaled 0-7 points
-
-**Additional Considerations:**
-- Intensity alignment using heart rate zones
-- Check average pace vs planned intensity
-- Prefer activities not already linked to other workouts
-- Handle edge cases (rest days, multiple activities same day)
-
-**Match Confidence Levels:**
-- 85-100: High confidence (auto-match eligible)
-- 70-84: Medium confidence (suggest to user)
-- 50-69: Low confidence (show in manual selection)
-- <50: Not displayed as match
-
-### 3. Training Plans Service Updates
-
-**New Methods:**
-
-```typescript
-// Link workout to Strava activity
-async linkWorkoutToActivity(
-  workoutId: string,
-  stravaActivityId: number,
-  matchScore: number,
-  autoMatched: boolean,
-  metadata: object
-): Promise<void>
-
-// Unlink activity from workout
-async unlinkWorkoutActivity(workoutId: string): Promise<void>
-
-// Get workout with full activity data
-async getWorkoutWithActivity(workoutId: string): Promise<{
-  workout: Workout;
-  activity: StravaActivity | null;
-}>
-
-// Get suggested matches for workout
-async suggestActivityMatches(
-  workoutId: string,
-  activities: StravaActivity[]
-): Promise<Array<{
-  activity: StravaActivity;
-  matchScore: number;
-  reasons: string[];
-}>>
-
-// Auto-match all unlinked workouts in plan
-async autoMatchActivities(
   planId: string,
   threshold: number = 85
 ): Promise<{
