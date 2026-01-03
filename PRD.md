@@ -16,7 +16,7 @@ Solo athlete/fitness enthusiast who uses Strava to track workouts and wants AI-p
 
 ## Technical Architecture
 
-### Frontend Framework
+### Frontend Framework 
 - **React** with TypeScript
 - **Tailwind CSS** for styling
 - **Responsive design** (mobile-first approach)

@@ -11,7 +11,7 @@ Instead of generic "one-size-fits-all" plans, TrainingSmart AI adapts to *you*.
 *   **🏆 Connect with Strava**: Automatically pulls in your ride history so the AI knows your fitness level.
 *   **🤖 AI Coach Chat**: Ask questions like "I'm feeling tired today, what should I do?" or "How do I improve my hill climbing?" and get answers based on your real data.
 *   **📊 Smart Dashboard**: See your weekly progress, fatigue levels, and personalized tips at a glance.
-*   **📅 Custom Training Plans**: Generate a training plan for your specific goal (e.g., "Prepare for a Century Ride in 8 weeks") that fits your schedule.
+*   **📅 Custom Training Plans**: Generate a training plan for your specific goal (e.g., "Prepare for a Century Ride in 8 weeks") that fits your schedule. 
 
 ---
 
