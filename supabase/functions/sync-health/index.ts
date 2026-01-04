@@ -191,6 +191,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Adjust sleep minutes by dividing by 2
+    // This compensates for how the Apple Shortcut aggregates data (e.g. potential overlap of sources)
+    payload.sleep_minutes = Math.round(payload.sleep_minutes / 2);
+
     // Calculate recovery score
     const recovery_score = calculateRecoveryScore(
       payload.sleep_minutes,
