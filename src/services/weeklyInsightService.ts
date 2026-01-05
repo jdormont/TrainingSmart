@@ -147,7 +147,9 @@ class WeeklyInsightService {
       const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
 
       const weekActivities = activities.filter(a => {
-        const activityDate = new Date(a.start_date_local);
+        // Strip Z to force local time parsing
+        const dateStr = a.start_date_local.endsWith('Z') ? a.start_date_local.slice(0, -1) : a.start_date_local;
+        const activityDate = new Date(dateStr);
         return activityDate >= weekStart && activityDate <= weekEnd;
       });
 
@@ -251,12 +253,16 @@ class WeeklyInsightService {
     const lastWeek = startOfWeek(subWeeks(new Date(), 1), { weekStartsOn: 1 });
 
     const thisWeekActivities = activities.filter(a => {
-      const activityDate = new Date(a.start_date_local);
+      // Strip Z to force local time parsing
+      const dateStr = a.start_date_local.endsWith('Z') ? a.start_date_local.slice(0, -1) : a.start_date_local;
+      const activityDate = new Date(dateStr);
       return activityDate >= thisWeek;
     });
 
     const lastWeekActivities = activities.filter(a => {
-      const activityDate = new Date(a.start_date_local);
+      // Strip Z to force local time parsing
+      const dateStr = a.start_date_local.endsWith('Z') ? a.start_date_local.slice(0, -1) : a.start_date_local;
+      const activityDate = new Date(dateStr);
       return activityDate >= lastWeek && activityDate < thisWeek;
     });
 
@@ -640,7 +646,10 @@ Generate a JSON response with:
 
   private analyzePacingStatus(activities: StravaActivity[]): { status: 'Behind' | 'Ahead' | 'OnTrack'; progress: number; reason: string } {
     const thisWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
-    const thisWeekActivities = activities.filter(a => new Date(a.start_date_local) >= thisWeekStart);
+    const thisWeekActivities = activities.filter(a => {
+      const dateStr = a.start_date_local.endsWith('Z') ? a.start_date_local.slice(0, -1) : a.start_date_local;
+      return new Date(dateStr) >= thisWeekStart;
+    });
 
     const currentDistance = thisWeekActivities.reduce((sum, a) => sum + a.distance, 0) * 0.000621371; // miles
 
@@ -791,7 +800,8 @@ Generate a JSON response with:
       const weekEnd = subWeeks(weekStart, -1);
 
       const weekActivities = activities.filter(a => {
-        const activityDate = new Date(a.start_date_local);
+        const dateStr = a.start_date_local.endsWith('Z') ? a.start_date_local.slice(0, -1) : a.start_date_local;
+        const activityDate = new Date(dateStr);
         return activityDate >= weekStart && activityDate < weekEnd;
       });
 

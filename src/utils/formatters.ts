@@ -43,7 +43,9 @@ export const formatElevation = (meters: number): string => {
 };
 
 export const formatDate = (dateString: string): string => {
-  const date = new Date(dateString);
+  // Strip 'Z' if present to force local time parsing (treat as wall clock time)
+  const localDateString = dateString.endsWith('Z') ? dateString.slice(0, -1) : dateString;
+  const date = new Date(localDateString);
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -52,7 +54,9 @@ export const formatDate = (dateString: string): string => {
 };
 
 export const formatTime = (dateString: string): string => {
-  const date = new Date(dateString);
+  // Strip 'Z' if present to force local time parsing (treat as wall clock time)
+  const localDateString = dateString.endsWith('Z') ? dateString.slice(0, -1) : dateString;
+  const date = new Date(localDateString);
   return date.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
