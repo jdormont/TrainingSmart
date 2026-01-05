@@ -1,4 +1,5 @@
-import { createClient } from 'npm:@supabase/supabase-js@2'; 
+import { createClient } from 'npm:@supabase/supabase-js@2';
+import { HealthPayload, DailyMetric, calculateWeightedRecoveryScore } from './scoring.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,55 +9,6 @@ const corsHeaders = {
 
 // Hardcoded API secret for webhook-style authentication
 const API_SECRET = 'Demo-1234';
-
-interface HealthPayload {
-  user_id: string;
-  sleep_minutes: number;
-  resting_hr: number;
-  hrv: number;
-  date?: string;
-}
-
-interface DailyMetric {
-  user_id: string;
-  date: string;
-  sleep_minutes: number;
-  resting_hr: number;
-  hrv: number;
-  recovery_score: number;
-}
-
-function calculateRecoveryScore(sleep_minutes: number, hrv: number, resting_hr: number): number {
-  const validScores: number[] = [];
-
-  // Sleep Score: Only calculate if sleep_minutes > 0
-  if (sleep_minutes > 0) {
-    const sleepScore = Math.min(100, (sleep_minutes / 480) * 100);
-    validScores.push(sleepScore);
-  }
-
-  // HRV Score: Only calculate if hrv > 0
-  if (hrv > 0) {
-    const hrvScore = Math.min(100, (hrv / 80) * 100);
-    validScores.push(hrvScore);
-  }
-
-  // RHR Score: Only calculate if resting_hr > 0
-  if (resting_hr > 0) {
-    const rhrScore = Math.max(0, 100 - ((resting_hr - 40) * 2));
-    validScores.push(rhrScore);
-  }
-
-  // Return 0 if no valid scores, otherwise return the average
-  if (validScores.length === 0) {
-    return 0;
-  }
-
-  const sum = validScores.reduce((acc, score) => acc + score, 0);
-  const average = sum / validScores.length;
-
-  return Math.round(average);
-}
 
 function getTodayDate(): string {
   const now = new Date();
@@ -191,16 +143,43 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Adjust sleep minutes by dividing by 2
+    // Adjust sleep minutes by dividing by 2 (legacy requirement)
     // This compensates for how the Apple Shortcut aggregates data (e.g. potential overlap of sources)
     payload.sleep_minutes = Math.round(payload.sleep_minutes / 2);
 
+    // Fetch last 30 days of history for the user to establish baselines
+    // Calculate 30 days ago from the target date
+    const targetDateObj = new Date(date);
+    targetDateObj.setDate(targetDateObj.getDate() - 30);
+    const startDate = targetDateObj.toISOString().split('T')[0];
+
+    // Select metrics where date >= startDate AND date < current date
+    const { data: historyData, error: historyError } = await supabase
+      .from('daily_metrics')
+      .select('*')
+      .eq('user_id', payload.user_id)
+      .lt('date', date)
+      .gte('date', startDate)
+      .order('date', { ascending: false });
+
+    if (historyError) {
+      console.error('Error fetching history:', historyError);
+      // We can fail or proceed with empty history (Cold Start). 
+      // Proceeding seems safer than blocking the sync.
+    }
+
+    const history: DailyMetric[] = historyData || [];
+
     // Calculate recovery score
-    const recovery_score = calculateRecoveryScore(
-      payload.sleep_minutes,
-      payload.hrv,
-      payload.resting_hr
-    );
+    // Prepare temporary current object with all necessary fields
+    const currentMetrics = {
+      sleep_minutes: payload.sleep_minutes,
+      hrv: payload.hrv,
+      resting_hr: payload.resting_hr,
+      respiratory_rate: payload.respiratory_rate !== undefined ? payload.respiratory_rate : null
+    };
+
+    const recovery_score = calculateWeightedRecoveryScore(currentMetrics, history);
 
     // Prepare data for upsert
     const metricData: DailyMetric = {
@@ -209,6 +188,7 @@ Deno.serve(async (req: Request) => {
       sleep_minutes: payload.sleep_minutes,
       resting_hr: payload.resting_hr,
       hrv: payload.hrv,
+      respiratory_rate: payload.respiratory_rate || null, // Ensure we save it if provided
       recovery_score,
     };
 
@@ -229,8 +209,7 @@ Deno.serve(async (req: Request) => {
           message: error.message,
           details: error.details,
           hint: error.hint,
-          code: error.code,
-          raw_error: error
+          code: error.code
         }),
         {
           status: 500,
@@ -245,6 +224,10 @@ Deno.serve(async (req: Request) => {
         success: true,
         message: 'Health metrics synced successfully',
         data: data,
+        debug: {
+          history_count: history.length,
+          calculated_score: recovery_score
+        }
       }),
       {
         status: 200,
