@@ -1,7 +1,7 @@
 import React from 'react';
-import { Moon, Battery, Heart, Thermometer, Activity, TrendingUp, TrendingDown, Wind } from 'lucide-react';
+import { Moon, Battery, Heart, Activity, Wind, TrendingUp, TrendingDown } from 'lucide-react';
 import type { OuraSleepData, OuraReadinessData, DailyMetric } from '../../types';
-import { calculateSleepScore, getSleepScoreColor, getSleepScoreBgColor } from '../../utils/sleepScoreCalculator';
+import { calculateSleepScore } from '../../utils/sleepScoreCalculator';
 import { dailyMetricsService } from '../../services/dailyMetricsService';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -12,6 +12,62 @@ interface RecoveryCardProps {
   loading?: boolean;
 }
 
+const CircularProgress: React.FC<{ score: number; size?: number; strokeWidth?: number; label: string }> = ({
+  score,
+  size = 180,
+  strokeWidth = 12,
+  label
+}) => {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = radius * 2 * Math.PI;
+  const offset = circumference - (score / 100) * circumference;
+
+  // Color logic
+  let colorClass = 'text-red-500';
+  let bgClass = 'text-red-100';
+  if (score >= 80) {
+    colorClass = 'text-green-500';
+    bgClass = 'text-green-100';
+  } else if (score >= 50) {
+    colorClass = 'text-yellow-500';
+    bgClass = 'text-yellow-100';
+  }
+
+  return (
+    <div className="relative flex flex-col items-center justify-center" style={{ width: size, height: size }}>
+      <svg className="transform -rotate-90 w-full h-full">
+        <circle
+          className={bgClass}
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          fill="transparent"
+          r={radius}
+          cx={size / 2}
+          cy={size / 2}
+        />
+        <circle
+          className={`${colorClass} transition-all duration-1000 ease-out`}
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          fill="transparent"
+          r={radius}
+          cx={size / 2}
+          cy={size / 2}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+        <span className={`text-5xl font-bold ${colorClass.replace('text-', 'text-')}`}>
+          {Math.round(score)}
+        </span>
+        <span className="text-sm text-gray-500 font-medium mt-1">{label}</span>
+      </div>
+    </div>
+  );
+};
+
 export const RecoveryCard: React.FC<RecoveryCardProps> = ({
   sleepData,
   readinessData,
@@ -20,65 +76,14 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
 }) => {
   const { userProfile } = useAuth();
 
-  // Debug logging for data received
-  console.log('=== RECOVERY CARD DEBUG ===');
-  console.log('Sleep data received:', sleepData);
-  console.log('Readiness data received:', readinessData);
-  console.log('Daily metric received:', dailyMetric);
-  console.log('Loading state:', loading);
-
-  if (sleepData) {
-    console.log('Sleep data fields available:', Object.keys(sleepData));
-    console.log('Key sleep metrics:', {
-      total_sleep_duration: sleepData.total_sleep_duration,
-      efficiency: sleepData.efficiency,
-      lowest_heart_rate: sleepData.lowest_heart_rate,
-      deep_sleep_duration: sleepData.deep_sleep_duration,
-      rem_sleep_duration: sleepData.rem_sleep_duration,
-      restless_periods: sleepData.restless_periods
-    });
-  }
-
-  if (readinessData) {
-    console.log('Readiness data fields available:', Object.keys(readinessData));
-    console.log('Readiness score:', readinessData.score);
-    console.log('Readiness contributors:', readinessData.contributors);
-  }
-
-  // Helper function to safely format numbers and handle missing data
-  const safeNumber = (value: number | undefined | null, fallback: string = '--'): string => {
-    console.log('safeNumber called with:', { value, fallback, result: value === undefined || value === null || isNaN(value) || value === 0 ? fallback : Math.round(value).toString() });
-    if (value === undefined || value === null || isNaN(value) || value === 0) {
-      return fallback;
-    }
-    return Math.round(value).toString();
-  };
-
-  // Helper function to safely format duration
-  const safeDuration = (seconds: number | undefined | null): string => {
-    console.log('safeDuration called with:', { seconds });
-    if (!seconds || isNaN(seconds) || seconds === 0) {
-      return '--';
-    }
-    const result = formatDuration(seconds);
-    console.log('safeDuration result:', result);
-    return result;
-  };
-
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <div className="animate-pulse">
-          <div className="flex items-center mb-4">
-            <div className="w-6 h-6 bg-gray-200 rounded mr-2"></div>
-            <div className="h-5 bg-gray-200 rounded w-32"></div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 h-full min-h-[300px] animate-pulse">
+        <div className="flex flex-col md:flex-row gap-6 h-full">
+          <div className="w-full md:w-1/3 bg-gray-100 rounded-xl h-48 md:h-auto"></div>
+          <div className="w-full md:w-2/3 grid grid-cols-2 gap-4">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="text-center">
-                <div className="h-8 bg-gray-200 rounded mb-1"></div>
-                <div className="h-4 bg-gray-200 rounded"></div>
-              </div>
+              <div key={i} className="bg-gray-100 rounded-xl h-24"></div>
             ))}
           </div>
         </div>
@@ -88,269 +93,177 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
 
   if (!sleepData && !readinessData && !dailyMetric) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <div className="text-center text-gray-500">
-          <Moon className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-          <p className="text-sm">No recovery data available</p>
-          <p className="text-xs">Connect your Oura Ring or sync health data to see recovery metrics</p>
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <div className="text-center text-gray-500 py-12">
+          <Moon className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+          <p className="text-base font-medium">No recovery data available</p>
+          <p className="text-sm mt-1">Connect your Oura Ring or sync health data.</p>
         </div>
       </div>
     );
   }
 
-  const hasOuraData = sleepData || readinessData;
-  const usingDailyMetrics = !hasOuraData && dailyMetric;
+  // --- Data preparation ---
+  const hasOuraData = !!(sleepData || readinessData);
+  const usingDailyMetrics = !hasOuraData && !!dailyMetric;
 
-  const formatDuration = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    return `${hours}h ${minutes}m`;
-  };
-
-  const getScoreColor = (score: number): string => {
-    if (score >= 85) return 'text-green-600';
-    if (score >= 70) return 'text-yellow-600';
-    return 'text-red-600';
-  };
-
-  const getScoreBgColor = (score: number): string => {
-    if (score >= 85) return 'bg-green-50';
-    if (score >= 70) return 'bg-yellow-50';
-    return 'bg-red-50';
-  };
-
-  const getTrendIcon = (current: number, previous: number) => {
-    if (current > previous) return <TrendingUp className="w-3 h-3 text-green-500" />;
-    if (current < previous) return <TrendingDown className="w-3 h-3 text-red-500" />;
-    return null;
-  };
-
-  // Calculate sleep score using our algorithm
-  const sleepScore = sleepData ? calculateSleepScore(sleepData) : null;
-
-  console.log('Sleep score calculation:', {
-    hasSleepData: !!sleepData,
-    sleepScore: sleepScore,
-    totalScore: sleepScore?.totalScore
-  });
-
+  // Sleep Score
+  const sleepScoreObj = sleepData ? calculateSleepScore(sleepData) : null;
   const demographic = userProfile?.gender || userProfile?.age_bucket ? {
     gender: userProfile.gender,
     ageBucket: userProfile.age_bucket
   } : undefined;
-
   const individualScores = dailyMetric ? dailyMetricsService.calculateIndividualScores(dailyMetric, demographic) : null;
 
-  /* Calculates recovery score dynamically from available metrics */
-  const displayRecoveryScore = dailyMetric ? (() => {
-    // Determine which scores are available (non-null)
+  const sleepVal = sleepScoreObj ? sleepScoreObj.totalScore : (individualScores?.sleepScore ?? 0);
+  const sleepDuration = sleepData ? sleepData.total_sleep_duration : (dailyMetric?.sleep_minutes ? dailyMetric.sleep_minutes * 60 : 0);
+
+  // HRV & RHR
+  const hrvVal = sleepData?.average_hrv ?? dailyMetric?.hrv ?? 0;
+  const rhrVal = sleepData?.lowest_heart_rate ?? dailyMetric?.resting_hr ?? 0;
+
+  const hrvScore = individualScores?.hrvScore ?? 0;
+  const rhrScore = individualScores?.rhrScore ?? 0;
+
+  // Overall Score
+  let overallScore = 0;
+  let statusText = "Recovery Needed"; // Default low
+
+  if (readinessData) {
+    overallScore = readinessData.score;
+  } else if (usingDailyMetrics) {
+    // Calculate locally
     const scores: number[] = [];
-
-    // Sleep Score (only if minutes > 0)
-    if (dailyMetric.sleep_minutes > 0 && individualScores?.sleepScore !== null) {
-      scores.push(individualScores.sleepScore!);
+    if (individualScores?.sleepScore) scores.push(individualScores.sleepScore);
+    if (individualScores?.hrvScore) scores.push(individualScores.hrvScore);
+    if (individualScores?.rhrScore) scores.push(individualScores.rhrScore);
+    if (scores.length > 0) {
+      overallScore = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
     }
+  }
 
-    // HRV Score
-    if (dailyMetric.hrv > 0 && individualScores?.hrvScore !== null) {
-      scores.push(individualScores.hrvScore!);
-    }
+  // Status Text Logic - Updated thresholds
+  if (overallScore >= 80) statusText = "Prime State";
+  else if (overallScore >= 50) statusText = "Strained / Normal";
+  else statusText = "Recovery Needed";
 
-    // RHR Score
-    if (dailyMetric.resting_hr > 0 && individualScores?.rhrScore !== null) {
-      scores.push(individualScores.rhrScore!);
-    }
+  // Gradient / Background logic based on Overall Score for the Hero Card
+  let heroBg = "bg-red-50";
+  if (overallScore >= 80) heroBg = "bg-green-50";
+  else if (overallScore >= 50) heroBg = "bg-yellow-50";
 
-    if (scores.length === 0) return 0;
+  // Helper formatting
+  const formatDuration = (secs: number) => {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    return `${h}h ${m}m`;
+  };
 
-    const sum = scores.reduce((acc, score) => acc + score, 0);
-    return Math.round(sum / scores.length);
-  })() : 0;
+  // Helper for metric card colors
+  const getMetricCardClass = (score: number) => {
+    if (score >= 80) return "bg-green-50 border-green-100";
+    if (score >= 50) return "bg-yellow-50 border-yellow-100";
+    return "bg-red-50 border-red-100";
+  };
+
+  const getMetricIconClass = (score: number) => {
+    if (score >= 80) return "text-green-600";
+    if (score >= 50) return "text-yellow-600";
+    return "text-red-600";
+  };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-gray-900 flex items-center">
-          <Moon className="w-5 h-5 mr-2 text-purple-500" />
-          Recovery Status
+    <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="p-6">
+        <h3 className="font-bold text-lg text-gray-900 mb-6 flex items-center">
+          Recovery & Sleep
         </h3>
-        {sleepData && (
-          <span className="text-xs text-gray-500">
-            {new Date(sleepData.day).toLocaleDateString()}
-          </span>
-        )}
-        {usingDailyMetrics && dailyMetric && (
-          <span className="text-xs text-gray-500">
-            {new Date(dailyMetric.date).toLocaleDateString()}
-          </span>
-        )}
-      </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {/* Recovery (Overall) - Daily Metrics or Readiness - Oura */}
-        {readinessData ? (
-          <div className={`text-center p-3 rounded-lg ${getScoreBgColor(readinessData.score)}`}>
-            <div className="flex items-center justify-center mb-1">
-              <Battery className="w-4 h-4 mr-1 text-green-600" />
-            </div>
-            <div className={`text-2xl font-bold ${getScoreColor(readinessData.score)}`}>
-              {safeNumber(readinessData.score)}
-            </div>
-            <div className="text-xs text-gray-600">Readiness</div>
-          </div>
-        ) : usingDailyMetrics ? (
-          <div className={`text-center p-3 rounded-lg ${getScoreBgColor(displayRecoveryScore)}`}>
-            <div className="flex items-center justify-center mb-1">
-              <Battery className="w-4 h-4 mr-1 text-green-600" />
-            </div>
-            <div className={`text-2xl font-bold ${getScoreColor(displayRecoveryScore)}`}>
-              {displayRecoveryScore}
-            </div>
-            <div className="text-xs text-gray-600">Overall Recovery</div>
-            <div className="text-xs text-gray-500">Calculated</div>
-          </div>
-        ) : null}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* LEFT COL: HERO - Overall Recovery */}
+          <div className={`col-span-1 rounded-2xl ${heroBg} p-8 flex flex-col items-center justify-center text-center relative min-h-[300px]`}>
 
-        {/* Sleep Score - Oura or Daily Metrics */}
-        {sleepData ? (
-          <div className={`text-center p-3 rounded-lg ${sleepScore ? getSleepScoreBgColor(sleepScore.totalScore) : 'bg-purple-50'}`}>
-            <div className="flex items-center justify-center mb-1">
-              <Moon className="w-4 h-4 mr-1 text-purple-600" />
-            </div>
-            <div className={`text-2xl font-bold ${sleepScore ? getSleepScoreColor(sleepScore.totalScore) : 'text-gray-900'}`}>
-              {sleepScore ? sleepScore.totalScore : '--'}
-            </div>
-            <div className="text-xs text-gray-600">Sleep Score</div>
-            <div className="text-xs text-gray-500">
-              {sleepScore ? 'Calculated' : `Delta: ${safeNumber(sleepData.sleep_score_delta, '0')}`}
-            </div>
-          </div>
-        ) : usingDailyMetrics && individualScores?.sleepScore !== null ? (
-          <div className={`text-center p-3 rounded-lg ${getScoreBgColor(individualScores.sleepScore!)}`}>
-            <div className="flex items-center justify-center mb-1">
-              <Moon className="w-4 h-4 mr-1 text-purple-600" />
-            </div>
-            <div className={`text-2xl font-bold ${getScoreColor(individualScores.sleepScore!)}`}>
-              {individualScores.sleepScore}
-            </div>
-            <div className="text-xs text-gray-600">Sleep Score</div>
-            <div className="text-xs text-gray-500">{Math.round(dailyMetric!.sleep_minutes / 60)}h {dailyMetric!.sleep_minutes % 60}m</div>
-          </div>
-        ) : null}
+            <CircularProgress
+              score={overallScore}
+              label="Overall Recovery"
+            />
 
-        {/* HRV Score - Daily Metrics */}
-        {usingDailyMetrics && individualScores?.hrvScore !== null && (
-          <div className={`text-center p-3 rounded-lg ${getScoreBgColor(individualScores.hrvScore!)}`}>
-            <div className="flex items-center justify-center mb-1">
-              <Activity className="w-4 h-4 mr-1 text-blue-600" />
+            {/* Moved subLabel outside of CircularProgress to avoid overlap */}
+            <div className="mt-6 text-sm font-semibold text-gray-600 uppercase tracking-wide">
+              {statusText}
             </div>
-            <div className={`text-2xl font-bold ${getScoreColor(individualScores.hrvScore!)}`}>
-              {individualScores.hrvScore}
-            </div>
-            <div className="text-xs text-gray-600">HRV Score</div>
-            <div className="text-xs text-gray-500">{dailyMetric!.hrv}ms</div>
-          </div>
-        )}
 
-        {/* Sleep Duration or Resting HR */}
-        {sleepData ? (
-          <div className="text-center p-3 rounded-lg bg-blue-50">
-            <div className="flex items-center justify-center mb-1">
-              <Activity className="w-4 h-4 mr-1 text-blue-600" />
-            </div>
-            <div className="text-lg font-bold text-gray-900">
-              {safeDuration(sleepData.total_sleep_duration)}
-            </div>
-            <div className="text-xs text-gray-600">Sleep Time</div>
           </div>
-        ) : usingDailyMetrics && individualScores?.rhrScore !== null ? (
-          <div className={`text-center p-3 rounded-lg ${getScoreBgColor(individualScores.rhrScore!)}`}>
-            <div className="flex items-center justify-center mb-1">
-              <Heart className="w-4 h-4 mr-1 text-red-600" />
-            </div>
-            <div className={`text-2xl font-bold ${getScoreColor(individualScores.rhrScore!)}`}>
-              {individualScores.rhrScore}
-            </div>
-            <div className="text-xs text-gray-600">RHR Score</div>
-            <div className="text-xs text-gray-500">{dailyMetric!.resting_hr} bpm</div>
-          </div>
-        ) : null}
 
-        {/* Respiratory Rate - Daily Metrics */}
-        {usingDailyMetrics && dailyMetric!.respiratory_rate && (
-          <div className="text-center p-3 rounded-lg bg-cyan-50">
-            <div className="flex items-center justify-center mb-1">
-              <Wind className="w-4 h-4 mr-1 text-cyan-600" />
-            </div>
-            <div className="text-2xl font-bold text-gray-900">
-              {dailyMetric!.respiratory_rate}
-            </div>
-            <div className="text-xs text-gray-600">Respiratory Rate</div>
-            <div className="text-xs text-gray-500">br/min</div>
-          </div>
-        )}
+          {/* RIGHT COL: METRICS GRID */}
+          <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-        {/* Resting Heart Rate - Oura only */}
-        {sleepData && (
-          <div className="text-center p-3 rounded-lg bg-red-50">
-            <div className="flex items-center justify-center mb-1">
-              <Heart className="w-4 h-4 mr-1 text-red-600" />
+            {/* Sleep Card */}
+            <div className={`rounded-xl p-5 flex flex-col justify-between border ${getMetricCardClass(sleepVal)}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <Moon className={`w-5 h-5 ${getMetricIconClass(sleepVal)}`} />
+                <span className="text-sm font-medium text-gray-600">Sleep Score</span>
+              </div>
+              <div>
+                <div className="text-3xl font-bold text-gray-900">{sleepVal || '--'}</div>
+                <div className="text-sm text-gray-500 mt-1">{formatDuration(sleepDuration)}</div>
+              </div>
             </div>
-            <div className="text-lg font-bold text-gray-900">
-              {safeNumber(sleepData.lowest_heart_rate, '--')}
-            </div>
-            <div className="text-xs text-gray-600">Resting HR</div>
-          </div>
-        )}
-      </div>
 
-      {usingDailyMetrics && (
-        <div className="mt-4 text-xs text-center text-gray-500 italic">
+            {/* HRV Card */}
+            <div className={`rounded-xl p-5 flex flex-col justify-between border ${getMetricCardClass(hrvScore)}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <Activity className={`w-5 h-5 ${getMetricIconClass(hrvScore)}`} />
+                <span className="text-sm font-medium text-gray-600">HRV Score</span>
+              </div>
+              <div>
+                <div className="text-3xl font-bold text-gray-900">{Math.round(hrvScore) || '--'}</div>
+                <div className="text-sm text-gray-500 mt-1">{Math.round(hrvVal)} ms</div>
+              </div>
+            </div>
+
+            {/* RHR Card */}
+            <div className={`rounded-xl p-5 flex flex-col justify-between border ${getMetricCardClass(rhrScore)}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <Heart className={`w-5 h-5 ${getMetricIconClass(rhrScore)}`} />
+                <span className="text-sm font-medium text-gray-600">RHR Score</span>
+              </div>
+              <div>
+                <div className="text-3xl font-bold text-gray-900">
+                  {rhrScore || '--'}
+                </div>
+                <div className="text-sm text-gray-500 mt-1">{Math.round(rhrVal)} bpm</div>
+              </div>
+            </div>
+
+            {/* Respiratory Rate Card */}
+            <div className="bg-cyan-50 border border-cyan-100 rounded-xl p-5 flex flex-col justify-between">
+              <div className="flex items-center gap-2 mb-2">
+                <Wind className="w-5 h-5 text-cyan-600" />
+                <span className="text-sm font-medium text-gray-600">Respiratory Rate</span>
+              </div>
+              <div>
+                <div className="text-3xl font-bold text-gray-900">
+                  {dailyMetric?.respiratory_rate ?? '--'}
+                </div>
+                <div className="text-sm text-gray-500 mt-1">br/min</div>
+
+                {dailyMetric?.respiratory_rate && (
+                  <div className="w-full bg-cyan-200/50 rounded-full h-1.5 mt-3 overflow-hidden">
+                    <div className="bg-cyan-500 h-1.5 rounded-full" style={{ width: '60%' }}></div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Footer Text */}
+        <div className="mt-8 text-xs text-gray-400 text-center border-t border-gray-100 pt-4">
           Recovery efficiency is calculated as a weighted balance of HRV (50%), RHR (30%), and Sleep (20%) normalized against your 30-day baseline.
         </div>
-      )}
-
-      {/* Additional Details */}
-      {sleepData && (
-        <div className="mt-4 pt-4 border-t border-gray-200">
-          <div className="grid grid-cols-3 gap-4 text-sm">
-            <div className="text-center">
-              <div className="font-medium text-gray-900">
-                {safeDuration(sleepData.deep_sleep_duration)}
-              </div>
-              <div className="text-gray-600">Deep Sleep</div>
-            </div>
-            <div className="text-center">
-              <div className="font-medium text-gray-900">
-                {safeDuration(sleepData.rem_sleep_duration)}
-              </div>
-              <div className="text-gray-600">REM Sleep</div>
-            </div>
-            <div className="text-center">
-              <div className="font-medium text-gray-900">
-                {safeNumber(sleepData.efficiency)}%
-              </div>
-              <div className="text-gray-600">Efficiency</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Training Recommendation */}
-      {readinessData && (
-        <div className="mt-4 pt-4 border-t border-gray-200">
-          <div className="text-center">
-            <div className="text-sm font-medium text-gray-900 mb-1">
-              Training Recommendation
-            </div>
-            <div className={`text-sm ${getScoreColor(readinessData.score)}`}>
-              {(readinessData.score && readinessData.score >= 85) ? '🟢 Ready for intense training' :
-                (readinessData.score && readinessData.score >= 70) ? '🟡 Moderate training recommended' :
-                  '🔴 Focus on recovery today'}
-            </div>
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 };
