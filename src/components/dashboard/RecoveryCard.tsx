@@ -1,5 +1,5 @@
 import React from 'react';
-import { Moon, Battery, Heart, Thermometer, Activity, TrendingUp, TrendingDown } from 'lucide-react';
+import { Moon, Battery, Heart, Thermometer, Activity, TrendingUp, TrendingDown, Wind } from 'lucide-react';
 import type { OuraSleepData, OuraReadinessData, DailyMetric } from '../../types';
 import { calculateSleepScore, getSleepScoreColor, getSleepScoreBgColor } from '../../utils/sleepScoreCalculator';
 import { dailyMetricsService } from '../../services/dailyMetricsService';
@@ -187,6 +187,30 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* Recovery (Overall) - Daily Metrics or Readiness - Oura */}
+        {readinessData ? (
+          <div className={`text-center p-3 rounded-lg ${getScoreBgColor(readinessData.score)}`}>
+            <div className="flex items-center justify-center mb-1">
+              <Battery className="w-4 h-4 mr-1 text-green-600" />
+            </div>
+            <div className={`text-2xl font-bold ${getScoreColor(readinessData.score)}`}>
+              {safeNumber(readinessData.score)}
+            </div>
+            <div className="text-xs text-gray-600">Readiness</div>
+          </div>
+        ) : usingDailyMetrics ? (
+          <div className={`text-center p-3 rounded-lg ${getScoreBgColor(displayRecoveryScore)}`}>
+            <div className="flex items-center justify-center mb-1">
+              <Battery className="w-4 h-4 mr-1 text-green-600" />
+            </div>
+            <div className={`text-2xl font-bold ${getScoreColor(displayRecoveryScore)}`}>
+              {displayRecoveryScore}
+            </div>
+            <div className="text-xs text-gray-600">Overall Recovery</div>
+            <div className="text-xs text-gray-500">Calculated</div>
+          </div>
+        ) : null}
+
         {/* Sleep Score - Oura or Daily Metrics */}
         {sleepData ? (
           <div className={`text-center p-3 rounded-lg ${sleepScore ? getSleepScoreBgColor(sleepScore.totalScore) : 'bg-purple-50'}`}>
@@ -211,30 +235,6 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
             </div>
             <div className="text-xs text-gray-600">Sleep Score</div>
             <div className="text-xs text-gray-500">{Math.round(dailyMetric!.sleep_minutes / 60)}h {dailyMetric!.sleep_minutes % 60}m</div>
-          </div>
-        ) : null}
-
-        {/* Recovery Score - Daily Metrics or Readiness - Oura */}
-        {readinessData ? (
-          <div className={`text-center p-3 rounded-lg ${getScoreBgColor(readinessData.score)}`}>
-            <div className="flex items-center justify-center mb-1">
-              <Battery className="w-4 h-4 mr-1 text-green-600" />
-            </div>
-            <div className={`text-2xl font-bold ${getScoreColor(readinessData.score)}`}>
-              {safeNumber(readinessData.score)}
-            </div>
-            <div className="text-xs text-gray-600">Readiness</div>
-          </div>
-        ) : usingDailyMetrics ? (
-          <div className={`text-center p-3 rounded-lg ${getScoreBgColor(displayRecoveryScore)}`}>
-            <div className="flex items-center justify-center mb-1">
-              <Battery className="w-4 h-4 mr-1 text-green-600" />
-            </div>
-            <div className={`text-2xl font-bold ${getScoreColor(displayRecoveryScore)}`}>
-              {displayRecoveryScore}
-            </div>
-            <div className="text-xs text-gray-600">Recovery</div>
-            <div className="text-xs text-gray-500">Calculated</div>
           </div>
         ) : null}
 
@@ -276,6 +276,20 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
           </div>
         ) : null}
 
+        {/* Respiratory Rate - Daily Metrics */}
+        {usingDailyMetrics && dailyMetric!.respiratory_rate && (
+          <div className="text-center p-3 rounded-lg bg-cyan-50">
+            <div className="flex items-center justify-center mb-1">
+              <Wind className="w-4 h-4 mr-1 text-cyan-600" />
+            </div>
+            <div className="text-2xl font-bold text-gray-900">
+              {dailyMetric!.respiratory_rate}
+            </div>
+            <div className="text-xs text-gray-600">Respiratory Rate</div>
+            <div className="text-xs text-gray-500">br/min</div>
+          </div>
+        )}
+
         {/* Resting Heart Rate - Oura only */}
         {sleepData && (
           <div className="text-center p-3 rounded-lg bg-red-50">
@@ -289,6 +303,12 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
           </div>
         )}
       </div>
+
+      {usingDailyMetrics && (
+        <div className="mt-4 text-xs text-center text-gray-500 italic">
+          Recovery efficiency is calculated as a weighted balance of HRV (50%), RHR (30%), and Sleep (20%) normalized against your 30-day baseline.
+        </div>
+      )}
 
       {/* Additional Details */}
       {sleepData && (

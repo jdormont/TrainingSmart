@@ -260,6 +260,7 @@ export interface DailyMetric {
   sleep_minutes: number;
   resting_hr: number;
   hrv: number;
+  respiratory_rate?: number;
   recovery_score: number;
   created_at?: string;
   updated_at?: string;
