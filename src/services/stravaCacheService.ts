@@ -1,40 +1,19 @@
 import { supabase } from './supabaseClient';
 import { stravaApi } from './stravaApi';
-import { tokenStorageService } from './tokenStorageService';
+// import { tokenStorageService } from './tokenStorageService';
 import type { StravaAthlete, StravaActivity } from '../types';
 
 const CACHE_DURATION_MS = 15 * 60 * 1000;
 
 class StravaCacheService {
-  private async getStravaUserId(): Promise<string> {
-    const tokens = await tokenStorageService.getTokens('strava');
-
-    if (!tokens) {
-      const legacyTokens = localStorage.getItem('strava_tokens');
-      if (!legacyTokens) {
-        throw new Error('Not authenticated with Strava');
-      }
-
-      try {
-        const parsedTokens = JSON.parse(legacyTokens);
-        if (parsedTokens.athlete?.id) {
-          return parsedTokens.athlete.id.toString();
-        }
-      } catch (e) {
-        throw new Error('Not authenticated with Strava');
-      }
-    }
-
-    if (tokens?.athlete?.id) {
-      return tokens.athlete.id.toString();
-    }
-
-    const athlete = await stravaApi.getAthlete();
-    return athlete.id.toString();
+  private async getCurrentUserId(): Promise<string> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+    return user.id;
   }
 
   async getAthlete(forceRefresh = false): Promise<StravaAthlete> {
-    const userId = await this.getStravaUserId();
+    const userId = await this.getCurrentUserId();
 
     if (!forceRefresh) {
       const cached = await this.getCachedAthlete(userId);
@@ -51,7 +30,7 @@ class StravaCacheService {
   }
 
   async getActivities(forceRefresh = false, limit = 20): Promise<StravaActivity[]> {
-    const userId = await this.getStravaUserId();
+    const userId = await this.getCurrentUserId();
 
     if (!forceRefresh) {
       const cached = await this.getCachedActivities(userId, limit);
@@ -168,7 +147,7 @@ class StravaCacheService {
 
   async clearCache(): Promise<void> {
     try {
-      const userId = await this.getStravaUserId();
+      const userId = await this.getCurrentUserId();
       await Promise.all([
         supabase.from('strava_athlete_cache').delete().eq('user_id', userId),
         supabase.from('strava_activities_cache').delete().eq('user_id', userId)
@@ -186,7 +165,7 @@ class StravaCacheService {
     activitiesAge?: number;
   }> {
     try {
-      const userId = await this.getStravaUserId();
+      const userId = await this.getCurrentUserId();
 
       const [athleteResult, activitiesResult] = await Promise.all([
         supabase

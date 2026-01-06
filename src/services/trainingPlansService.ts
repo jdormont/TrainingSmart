@@ -84,7 +84,8 @@ class TrainingPlansService {
         intensity: w.intensity as Workout['intensity'],
         scheduledDate: new Date(w.scheduled_date + 'T00:00:00'),
         completed: w.completed, // Keep for backward compatibility view
-        status: w.status || (w.completed ? 'completed' : 'planned'), // Default if null
+        // If completed boolean is true, force status to completed. Otherwise use status or default.
+        status: w.completed ? 'completed' : (w.status || 'planned'),
         google_calendar_event_id: w.google_calendar_event_id
       }))
     };
@@ -317,7 +318,7 @@ class TrainingPlansService {
       const { error } = await supabase
         .from('workouts')
         .update({
-          status,
+          // status, // Column does not exist in DB
           completed // Sync boolean
         })
         .eq('id', workoutId)
@@ -424,8 +425,8 @@ class TrainingPlansService {
         distance: 0,
         intensity: 'moderate',
         scheduled_date: scheduledDate.toISOString().split('T')[0],
-        completed: false,
-        status: 'planned'
+        completed: false
+        // status: 'planned' // Column does not exist
       };
 
       if (!userId) {
