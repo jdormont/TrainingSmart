@@ -31,7 +31,7 @@ export const DraggableWorkoutCard: React.FC<DraggableWorkoutCardProps> = ({
             style={style}
             {...listeners}
             {...attributes}
-            className={`h-full ${isDragging ? 'opacity-30' : ''}`} // Ghost effect
+            className={`w-full ${isDragging ? 'opacity-30' : ''}`} // Ghost effect
         >
             <WorkoutCard
                 workout={workout}

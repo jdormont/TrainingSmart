@@ -214,7 +214,7 @@ Use the coaching style and personality defined above, while incorporating this r
     goal: string,
     timeframe: string,
     preferences: string
-  ): Promise<{ description: string; workouts: (Partial<Workout> & { dayOfWeek?: number })[] }> {
+  ): Promise<{ description: string; workouts: (Partial<Workout> & { dayOfWeek?: number; week?: number })[] }> {
     if (!this.supabaseUrl || !this.supabaseAnonKey) {
       throw new Error('Supabase configuration not found. Please check your environment variables.');
     }

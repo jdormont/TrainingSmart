@@ -65,6 +65,24 @@ class TrainingPlansService {
     return cleaned;
   }
 
+  private sanitizeIntensity(intensity: string): Workout['intensity'] {
+    const validIntensities: Workout['intensity'][] = ['easy', 'moderate', 'hard', 'recovery'];
+    const normalized = intensity?.toLowerCase().trim();
+
+    if (validIntensities.includes(normalized as Workout['intensity'])) {
+      return normalized as Workout['intensity'];
+    }
+
+    // Map common variations
+    if (normalized === 'rest' || normalized === 'light') return 'recovery';
+    if (normalized === 'medium' || normalized === 'tempo') return 'moderate';
+    if (normalized === 'vigorous' || normalized === 'intense' || normalized === 'threshold' || normalized === 'vo2max') return 'hard';
+    if (normalized === 'base' || normalized === 'zone2') return 'easy';
+
+    // Default fallback
+    return 'moderate';
+  }
+
   private dbPlanToTrainingPlan(dbPlan: DbTrainingPlan, workouts: DbWorkout[]): TrainingPlan {
     const plan: TrainingPlan = {
       id: dbPlan.id,
@@ -200,7 +218,7 @@ class TrainingPlansService {
       }
 
       if (plan.chatContextSnapshot) {
-        insertData.chat_context_snapshot = plan.chatContextSnapshot;
+        insertData.chat_context_snapshot = plan.chatContextSnapshot as unknown as Record<string, unknown>;
       }
 
       const { data: newPlan, error: planError } = await supabase
@@ -217,18 +235,20 @@ class TrainingPlansService {
       console.log(`Created plan with ID: ${newPlan.id}`);
 
       if (plan.workouts.length > 0) {
-        const workoutsToInsert = plan.workouts.map(w => ({
-          plan_id: newPlan.id,
-          user_id: userId,
-          name: w.name,
-          type: w.type,
-          description: w.description,
-          duration: w.duration,
-          distance: w.distance,
-          intensity: w.intensity,
-          scheduled_date: w.scheduledDate.toISOString().split('T')[0],
-          completed: w.completed
-        }));
+        const workoutsToInsert = plan.workouts
+          .filter(w => w.type !== 'rest' && !w.name.toLowerCase().includes('rest day')) // Filter out rest days
+          .map(w => ({
+            plan_id: newPlan.id,
+            user_id: userId,
+            name: w.name,
+            type: w.type,
+            description: w.description,
+            duration: w.duration,
+            distance: w.distance,
+            intensity: this.sanitizeIntensity(w.intensity),
+            scheduled_date: w.scheduledDate.toISOString().split('T')[0],
+            completed: w.completed
+          }));
 
         console.log(`Inserting ${workoutsToInsert.length} workouts for plan ${newPlan.id}`);
 
@@ -506,7 +526,7 @@ class TrainingPlansService {
           description,
           duration,
           distance,
-          intensity,
+          intensity: this.sanitizeIntensity(intensity),
           scheduled_date: scheduledDate.toISOString().split('T')[0]
         })
         .eq('id', workoutId)

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { addDays, isSameDay } from 'date-fns';
+import { addDays, isSameDay, startOfWeek } from 'date-fns';
 import { Calendar, Target, Clock, MapPin, Plus, Trash2, List, CalendarDays, MessageCircle } from 'lucide-react';
 
 import { Button } from '../components/common/Button';
@@ -18,7 +18,7 @@ import PlanModificationModal from '../components/plans/PlanModificationModal';
 import { ouraApi } from '../services/ouraApi';
 import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
 
-type AiWorkout = Partial<Workout> & { dayOfWeek?: number };
+type AiWorkout = Partial<Workout> & { dayOfWeek?: number; week?: number };
 
 export const PlansPage: React.FC = () => {
   const [athlete, setAthlete] = useState<StravaAthlete | null>(null);
@@ -121,13 +121,19 @@ Additional Preferences: ${preferences || 'None'}
         planDescription
       );
 
-      const planStartDate = new Date();
+      const planStartDate = startOfWeek(new Date(), { weekStartsOn: 1 }); // Always start on Monday
       const weeks = parseInt(timeframe.split(' ')[0]);
       const planEndDate = addDays(planStartDate, weeks * 7);
 
       const structuredWorkouts: Omit<Workout, 'id'>[] = aiWorkouts.map((w: AiWorkout, index: number) => {
-        const weekNumber = Math.floor(index / 7);
+        // Use explicit week if available (1-based to 0-based), otherwise fallback to index math (only if every day has a workout)
+        // Since we now allow skipping days, index / 7 is unreliable.
+        // Fallback: if no week provided, assume it's just a flat list and we probably can't do better than index/7, 
+        // but the prompt should now enforce week.
+        const weekNumber = w.week ? (w.week - 1) : Math.floor(index / 7);
         const dayInWeek = w.dayOfWeek ?? (index % 7);
+
+        // Calculate date: Start Date (Monday) + (Week # * 7) + (Day #)
         const workoutDate = addDays(planStartDate, weekNumber * 7 + dayInWeek);
 
         return {

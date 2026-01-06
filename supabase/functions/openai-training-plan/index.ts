@@ -81,6 +81,11 @@ CURRENT FITNESS LEVEL:
 
 PREFERENCES: ${preferences}
 
+CRITICAL SCHEDULING CONSTRAINTS (HIGHEST PRIORITY):
+1. **Adhere strictly to the user's PREFERENCES above.** If they ask for "Long rides on Tuesday", you MUST schedule a long ride on Tuesday, overriding any default logic.
+2. **Maximum 1 workout per day** unless the user explicitly asks for "double days" or "two-a-days".
+3. **DO NOT generate workout objects for "Rest Days".** If a day is a rest day, simply do not include a workout object for that day in the array. The UI handles empty days as rest days.
+
 RESPONSE FORMAT:
 You must respond with a valid JSON object containing exactly two fields:
 1. "overview": A markdown-formatted string with the plan philosophy, progression strategy, and key focus areas.
@@ -88,16 +93,17 @@ You must respond with a valid JSON object containing exactly two fields:
 
 WORKOUT OBJECT STRUCTURE:
 {
+  "week": number, // The week number this workout belongs to, starting at 1
+  "dayOfWeek": number, // 0=Monday through 6=Sunday
   "name": "Short descriptive name",
-  "type": "bike" | "run" | "swim" | "strength" | "rest",
+  "type": "bike" | "run" | "swim" | "strength", // DO NOT USE "rest"
   "description": "Detailed instructions with YouTube links. Format: [Video Title](URL) by Channel Name",
   "duration": number (minutes),
-  "distance": number (miles, optional),
-  "intensity": "easy" | "moderate" | "hard" | "recovery",
-  "dayOfWeek": number (0=Monday through 6=Sunday)
+  "distance": number (miles, optional, required for rides/runs),
+  "intensity": "easy" | "moderate" | "hard" | "recovery"
 }
 
-Create ${numWorkouts} workouts with a balanced weekly structure.`;
+Create ${numWorkouts} workouts with a balanced weekly structure, defaulting to rest days where appropriate by omitting workouts.`;
 
     console.log("Generating training plan with OpenAI (JSON Mode)...");
 

@@ -13,6 +13,7 @@ interface WorkoutCardProps {
   compact?: boolean;
   className?: string; // Support for DragOverlay styling
   onWorkoutExported?: () => void;
+  onToggleComplete?: (workoutId: string) => void;
 }
 
 const INTENSITY_COLORS = {

@@ -297,7 +297,7 @@ export default function WeeklyPlanView({
                     <div className="space-y-2 flex-1 min-h-[100px]">
                       {day.workouts.length > 0 ? (
                         day.workouts.map(workout => (
-                          <div key={workout.id} className="h-full">
+                          <div key={workout.id} className="w-full">
                             <DraggableWorkoutCard
                               workout={workout}
                               onToggleComplete={onToggleComplete}
