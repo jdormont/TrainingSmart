@@ -26,10 +26,10 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
   // Calculate HR zones (standard 5-zone model)
   const calculateHRZones = (avgHR: number): HRZone[] => {
     if (!avgHR || avgHR === 0) return [];
-    
+
     // Estimate max HR (220 - age, but we'll use 190 as reasonable default)
     const estimatedMaxHR = 190;
-    
+
     const zones: HRZone[] = [
       { zone: 1, name: 'Recovery', min: 0.5, max: 0.6, color: '#10B981', percentage: 0 },
       { zone: 2, name: 'Aerobic', min: 0.6, max: 0.7, color: '#3B82F6', percentage: 0 },
@@ -39,7 +39,7 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
     ];
 
     // Simple estimation: assume normal distribution around average HR
-    const currentZone = zones.find(z => 
+    const currentZone = zones.find(z =>
       avgHR >= (z.min * estimatedMaxHR) && avgHR <= (z.max * estimatedMaxHR)
     );
 
@@ -66,23 +66,23 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
   // Find personal records
   const findPRs = () => {
     const prs = [];
-    
+
     // Longest distance
-    const longestRide = similarActivities.reduce((longest, ride) => 
+    const longestRide = similarActivities.reduce((longest, ride) =>
       ride.distance > longest.distance ? ride : longest, activity);
     if (longestRide.id === activity.id) {
       prs.push({ type: 'Distance PR', value: formatDistance(activity.distance) });
     }
 
     // Fastest average speed
-    const fastestRide = similarActivities.reduce((fastest, ride) => 
+    const fastestRide = similarActivities.reduce((fastest, ride) =>
       ride.average_speed > fastest.average_speed ? ride : fastest, activity);
     if (fastestRide.id === activity.id) {
       prs.push({ type: 'Speed PR', value: formatPace(activity.average_speed, activity.type) });
     }
 
     // Most elevation
-    const hilliest = similarActivities.reduce((highest, ride) => 
+    const hilliest = similarActivities.reduce((highest, ride) =>
       (ride.total_elevation_gain || 0) > (highest.total_elevation_gain || 0) ? ride : highest, activity);
     if (hilliest.id === activity.id && activity.total_elevation_gain > 0) {
       prs.push({ type: 'Elevation PR', value: `${Math.round(activity.total_elevation_gain * 3.28084)}ft` });
@@ -125,19 +125,21 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
   // Generate static map URL (using a simple service)
   const getStaticMapUrl = () => {
     if (!activity.map?.summary_polyline) return null;
-    
+
     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
     if (!apiKey || apiKey.includes('your_google_maps_api_key')) {
       return null; // No valid API key
     }
-    
+
     // Security warning for production
     if (import.meta.env.PROD) {
       console.warn('🚨 SECURITY WARNING: Google Maps API key is exposed in frontend! Consider using a backend proxy.');
     }
-    
+
     return `https://maps.googleapis.com/maps/api/staticmap?size=400x200&path=enc:${activity.map.summary_polyline}&key=${apiKey}`;
   };
+
+  const staticMapUrl = getStaticMapUrl();
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -176,19 +178,19 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
               <div className="text-2xl font-bold text-gray-900">{formatDistance(activity.distance)}</div>
               <div className="text-sm text-gray-600">Distance</div>
             </div>
-            
+
             <div className="bg-green-50 rounded-lg p-4 text-center">
               <Clock className="w-6 h-6 text-green-600 mx-auto mb-2" />
               <div className="text-2xl font-bold text-gray-900">{formatDuration(activity.moving_time)}</div>
               <div className="text-sm text-gray-600">Moving Time</div>
             </div>
-            
+
             <div className="bg-orange-50 rounded-lg p-4 text-center">
               <TrendingUp className="w-6 h-6 text-orange-600 mx-auto mb-2" />
               <div className="text-2xl font-bold text-gray-900">{formatPace(activity.average_speed, activity.type)}</div>
               <div className="text-sm text-gray-600">Avg Speed</div>
             </div>
-            
+
             {activity.total_elevation_gain > 0 && (
               <div className="bg-purple-50 rounded-lg p-4 text-center">
                 <Mountain className="w-6 h-6 text-purple-600 mx-auto mb-2" />
@@ -198,7 +200,7 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
                 <div className="text-sm text-gray-600">Elevation</div>
               </div>
             )}
-            
+
             {activity.average_heartrate && (
               <div className="bg-red-50 rounded-lg p-4 text-center">
                 <Heart className="w-6 h-6 text-red-600 mx-auto mb-2" />
@@ -206,7 +208,7 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
                 <div className="text-sm text-gray-600">Avg HR</div>
               </div>
             )}
-            
+
             {activity.max_speed && (
               <div className="bg-yellow-50 rounded-lg p-4 text-center">
                 <Zap className="w-6 h-6 text-yellow-600 mx-auto mb-2" />
@@ -254,45 +256,35 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
           )}
 
           {/* Route Map */}
-          {activity.map?.summary_polyline && (
+          {/* Route Map */}
+          {staticMapUrl && (
             <div className="bg-gray-50 rounded-lg p-4">
               <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
                 <MapPin className="w-5 h-5 mr-2 text-blue-500" />
                 Route
               </h3>
-              {getStaticMapUrl() ? (
-                <div className="bg-gray-200 rounded-lg h-48 overflow-hidden">
-                  <img
-                    src={getStaticMapUrl()!}
-                    alt="Activity route map"
-                    className="w-full h-full object-cover rounded-lg"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = 'none';
-                      const parent = target.parentElement;
-                      if (parent) {
-                        parent.innerHTML = `
-                          <div class="w-full h-full flex items-center justify-center">
-                            <div class="text-center text-gray-600">
-                              <div class="w-8 h-8 mx-auto mb-2">🗺️</div>
-                              <p class="text-sm">Failed to load route map</p>
-                              <p class="text-xs">Check your Google Maps API key</p>
-                            </div>
+              <div className="bg-gray-200 rounded-lg h-48 overflow-hidden">
+                <img
+                  src={staticMapUrl}
+                  alt="Activity route map"
+                  className="w-full h-full object-cover rounded-lg"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const parent = target.parentElement;
+                    if (parent) {
+                      parent.innerHTML = `
+                        <div class="w-full h-full flex items-center justify-center">
+                          <div class="text-center text-gray-600">
+                            <div class="w-8 h-8 mx-auto mb-2">🗺️</div>
+                            <p class="text-sm">Failed to load route map</p>
                           </div>
-                        `;
-                      }
-                    }}
-                  />
-                </div>
-              ) : (
-                <div className="bg-gray-200 rounded-lg h-48 flex items-center justify-center">
-                  <div className="text-center text-gray-600">
-                    <MapPin className="w-8 h-8 mx-auto mb-2" />
-                    <p className="text-sm">Route map would display here</p>
-                    <p className="text-xs">(Requires Google Maps API key)</p>
-                  </div>
-                </div>
-              )}
+                        </div>
+                      `;
+                    }
+                  }}
+                />
+              </div>
             </div>
           )}
 
