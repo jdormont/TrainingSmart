@@ -39,11 +39,11 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Check for API key in headers
-    const apiKey = req.headers.get('x-api-key');
-    if (!apiKey) {
+    // Extract Authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'Missing x-api-key header' }),
+        JSON.stringify({ error: 'Missing Authorization header' }),
         {
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -51,36 +51,48 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Verify API key
-    if (apiKey !== API_SECRET) {
+    // Parse Bearer token
+    const tokenParts = authHeader.split(' ');
+    if (tokenParts.length !== 2 || tokenParts[0] !== 'Bearer') {
       return new Response(
-        JSON.stringify({ error: 'Invalid API key' }),
+        JSON.stringify({ error: 'Invalid Authorization header format. Expected "Bearer <token>"' }),
         {
-          status: 403,
+          status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
       );
     }
+    const ingestKey = tokenParts[1];
 
     // Create Supabase admin client with service role key (bypasses RLS)
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Parse request body
-    const payload: HealthPayload = await req.json();
+    // Look up user by ingest_key
+    const { data: userProfile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('user_id')
+      .eq('ingest_key', ingestKey)
+      .single();
 
-    // Validate required fields
-    if (!payload.user_id || typeof payload.user_id !== 'string') {
+    if (profileError || !userProfile) {
+      console.error('Auth failed:', profileError);
       return new Response(
-        JSON.stringify({ error: 'Missing or invalid user_id field' }),
+        JSON.stringify({ error: 'Unauthorized: Invalid ingest key' }),
         {
-          status: 400,
+          status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
       );
     }
 
+    const userId = userProfile.user_id;
+
+    // Parse request body
+    const payload: HealthPayload = await req.json();
+
+    // Validate required fields (Removed user_id check as we determine it from token)
     if (
       typeof payload.sleep_minutes !== 'number' ||
       typeof payload.resting_hr !== 'number' ||
@@ -88,7 +100,7 @@ Deno.serve(async (req: Request) => {
     ) {
       return new Response(
         JSON.stringify({
-          error: 'Invalid payload. Required fields: user_id (string), sleep_minutes (number), resting_hr (number), hrv (number)',
+          error: 'Invalid payload. Required fields: sleep_minutes (number), resting_hr (number), hrv (number)',
         }),
         {
           status: 400,
@@ -144,7 +156,6 @@ Deno.serve(async (req: Request) => {
     }
 
     // Adjust sleep minutes by dividing by 2 (legacy requirement)
-    // This compensates for how the Apple Shortcut aggregates data (e.g. potential overlap of sources)
     payload.sleep_minutes = Math.round(payload.sleep_minutes / 2);
 
     // Fetch last 30 days of history for the user to establish baselines
@@ -157,21 +168,18 @@ Deno.serve(async (req: Request) => {
     const { data: historyData, error: historyError } = await supabase
       .from('daily_metrics')
       .select('*')
-      .eq('user_id', payload.user_id)
+      .eq('user_id', userId) // Use authenticated userId
       .lt('date', date)
       .gte('date', startDate)
       .order('date', { ascending: false });
 
     if (historyError) {
       console.error('Error fetching history:', historyError);
-      // We can fail or proceed with empty history (Cold Start). 
-      // Proceeding seems safer than blocking the sync.
     }
 
     const history: DailyMetric[] = historyData || [];
 
     // Calculate recovery score
-    // Prepare temporary current object with all necessary fields
     const currentMetrics = {
       sleep_minutes: payload.sleep_minutes,
       hrv: payload.hrv,
@@ -183,12 +191,12 @@ Deno.serve(async (req: Request) => {
 
     // Prepare data for upsert
     const metricData: DailyMetric = {
-      user_id: payload.user_id,
+      user_id: userId, // Use authenticated userId
       date,
       sleep_minutes: payload.sleep_minutes,
       resting_hr: payload.resting_hr,
       hrv: payload.hrv,
-      respiratory_rate: payload.respiratory_rate || null, // Ensure we save it if provided
+      respiratory_rate: payload.respiratory_rate || null,
       recovery_score,
     };
 
@@ -206,10 +214,7 @@ Deno.serve(async (req: Request) => {
       return new Response(
         JSON.stringify({
           error: 'Database upsert failed',
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
+          message: error.message
         }),
         {
           status: 500,
@@ -226,7 +231,8 @@ Deno.serve(async (req: Request) => {
         data: data,
         debug: {
           history_count: history.length,
-          calculated_score: recovery_score
+          calculated_score: recovery_score,
+          authenticated_as: userId
         }
       }),
       {
