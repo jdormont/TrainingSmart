@@ -180,7 +180,7 @@ Use the coaching style and personality defined above, while incorporating this r
             'Authorization': `Bearer ${this.supabaseAnonKey}`,
             'Content-Type': 'application/json',
           },
-          timeout: 45000, // 45s timeout for chat response
+          timeout: 60000, // 60s timeout for chat response
         }
       );
 
@@ -236,7 +236,7 @@ Use the coaching style and personality defined above, while incorporating this r
             'Authorization': `Bearer ${this.supabaseAnonKey}`,
             'Content-Type': 'application/json',
           },
-          timeout: 60000,
+          timeout: 300000, // 5 minute timeout for plan generation
         }
       );
 
@@ -260,7 +260,10 @@ Use the coaching style and personality defined above, while incorporating this r
         if (error.response?.status === 401) {
           throw new Error('Invalid OpenAI API key. Please check your configuration.');
         }
-        const message = error.response?.data?.error?.message || error.message;
+
+        // Try to interpret the error message from the backend response
+        const backendError = error.response?.data?.error;
+        const message = typeof backendError === 'string' ? backendError : (backendError?.message || error.message);
         throw new Error(`OpenAI API error: ${message}`);
       }
 
@@ -303,7 +306,7 @@ Use the coaching style and personality defined above, while incorporating this r
             'Authorization': `Bearer ${this.supabaseAnonKey}`,
             'Content-Type': 'application/json',
           },
-          timeout: 30000,
+          timeout: 120000, // 2 minute timeout for plan modification
         }
       );
 
@@ -322,7 +325,10 @@ Use the coaching style and personality defined above, while incorporating this r
         if (error.response?.status === 401) {
           throw new Error('Invalid OpenAI API key. Please check your configuration.');
         }
-        const message = error.response?.data?.error?.message || error.message;
+
+        // Try to interpret the error message from the backend response
+        const backendError = error.response?.data?.error;
+        const message = typeof backendError === 'string' ? backendError : (backendError?.message || error.message);
         throw new Error(`OpenAI API error: ${message}`);
       }
 

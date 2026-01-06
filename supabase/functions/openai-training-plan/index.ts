@@ -82,47 +82,24 @@ CURRENT FITNESS LEVEL:
 PREFERENCES: ${preferences}
 
 RESPONSE FORMAT:
-You must respond with TWO sections:
+You must respond with a valid JSON object containing exactly two fields:
+1. "overview": A markdown-formatted string with the plan philosophy, progression strategy, and key focus areas.
+2. "workouts": An array of workout objects.
 
-1. OVERVIEW: A markdown-formatted overview of the plan including philosophy, progression strategy, and key focus areas.
-
-2. WORKOUTS: A JSON array of structured workouts. Wrap in \`\`\`json code block.
-
-JSON FORMAT EXAMPLE:
-\`\`\`json
-[
-  {
-    "name": "Easy Recovery Ride",
-    "type": "bike",
-    "description": "Zone 1-2 easy spinning. Focus on smooth pedaling. [Video](https://youtube.com/watch?v=xyz) by GCN",
-    "duration": 45,
-    "distance": 15,
-    "intensity": "easy",
-    "dayOfWeek": 1
-  },
-  {
-    "name": "Rest Day",
-    "type": "rest",
-    "description": "Complete rest or light stretching/yoga",
-    "duration": 0,
-    "intensity": "recovery",
-    "dayOfWeek": 2
-  }
-]
-\`\`\`
-
-WORKOUT STRUCTURE:
-- name: Short descriptive name
-- type: "bike", "run", "swim", "strength", or "rest"
-- description: Detailed instructions with YouTube links for exercises
-- duration: Number in minutes
-- distance: Number in miles (optional, omit for rest/strength)
-- intensity: "easy", "moderate", "hard", or "recovery"
-- dayOfWeek: 0=Monday through 6=Sunday (spread workouts throughout the week)
+WORKOUT OBJECT STRUCTURE:
+{
+  "name": "Short descriptive name",
+  "type": "bike" | "run" | "swim" | "strength" | "rest",
+  "description": "Detailed instructions with YouTube links. Format: [Video Title](URL) by Channel Name",
+  "duration": number (minutes),
+  "distance": number (miles, optional),
+  "intensity": "easy" | "moderate" | "hard" | "recovery",
+  "dayOfWeek": number (0=Monday through 6=Sunday)
+}
 
 Create ${numWorkouts} workouts with a balanced weekly structure.`;
 
-    console.log("Generating training plan with OpenAI...");
+    console.log("Generating training plan with OpenAI (JSON Mode)...");
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -136,19 +113,15 @@ Create ${numWorkouts} workouts with a balanced weekly structure.`;
           {
             role: "system",
             content: `You are an expert cycling coach creating personalized cycling training plans.
-
-CRITICAL: You must respond with BOTH a markdown overview AND a JSON workout array.
-
-EXERCISE VIDEO INTEGRATION:
-- Include YouTube video links in workout descriptions
-- Use format: [Video Title](https://youtube.com/watch?v=VIDEO_ID) by Creator Name
-- Prioritize: GCN, TrainerRoad, Dylan Johnson, Cam Nicholls
-- Focus on videos with 100k+ views from established cycling channels`,
+You output strictly valid JSON.
+Include YouTube video links in workout descriptions using format: [Video Title](https://youtube.com/watch?v=VIDEO_ID) by Creator Name.
+Prioritize: GCN, TrainerRoad, Dylan Johnson, Cam Nicholls.`,
           },
           { role: "user", content: prompt },
         ],
-        max_tokens: 2500,
+        max_tokens: 12000,
         temperature: 0.7,
+        response_format: { type: "json_object" },
       }),
     });
 
@@ -160,81 +133,43 @@ EXERCISE VIDEO INTEGRATION:
 
     const data = await response.json();
     const content = data.choices[0].message.content;
+    const finishReason = data.choices[0].finish_reason;
 
-    console.log("Received response, parsing workouts...");
+    console.log(`Received response (finish_reason: ${finishReason}), parsing JSON...`);
 
-    let jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
-    if (!jsonMatch) {
-      jsonMatch = content.match(/```\s*\n\s*\[\s*\{[\s\S]*?\}\s*\]\s*\n\s*```/);
-    }
-    if (!jsonMatch) {
-      const startIndex = content.indexOf("[{");
-      const endIndex = content.lastIndexOf("}]");
-      if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-        const jsonString = content.substring(startIndex, endIndex + 2);
-        jsonMatch = [content, jsonString];
-      }
-    }
-    if (!jsonMatch) {
-      const startIndex = content.indexOf("[");
-      const endIndex = content.lastIndexOf("]");
-      if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-        const jsonString = content.substring(startIndex, endIndex + 1);
-        jsonMatch = [content, jsonString];
-      }
+    if (finishReason === 'length') {
+      console.warn("Response was truncated due to token limit!");
     }
 
-    let workouts = [];
-    let description = content;
-
-    if (jsonMatch) {
+    let result;
+    try {
+      // First try parsing directly
+      result = JSON.parse(content);
+    } catch (directParseError) {
+      console.log("Direct JSON parse failed, attempting to strip Markdown...");
       try {
-        const jsonString = jsonMatch[1] || jsonMatch[0];
-        const cleanedJson = jsonString
-          .replace(/^\s*```json?\s*/gm, "")
-          .replace(/\s*```\s*$/gm, "")
-          .trim();
+        // Fallback: Strip markdown code blocks and try again
+        const cleaned = content
+          .replace(/^\s*```json\s*/, "") // Remove start block
+          .replace(/^\s*```\s*/, "")     // Remove start block generic
+          .replace(/\s*```\s*$/, "");    // Remove end block
 
-        workouts = JSON.parse(cleanedJson);
-
-        if (!Array.isArray(workouts)) {
-          workouts = [workouts];
-        }
-
-        console.log(`Successfully parsed ${workouts.length} workouts`);
-
-        const workoutsHeaderIndex = content.toLowerCase().indexOf("workouts");
-        if (workoutsHeaderIndex !== -1) {
-          const beforeWorkouts = content.substring(0, workoutsHeaderIndex);
-          const afterWorkouts = content.substring(workoutsHeaderIndex);
-
-          const overviewEnd = afterWorkouts.search(/```|^\s*\[|\{.*"name":/m);
-          if (overviewEnd !== -1) {
-            description = beforeWorkouts + afterWorkouts.substring(0, overviewEnd);
-          } else {
-            description = beforeWorkouts;
-          }
-        }
-
-        description = description
-          .replace(/```json\s*[\s\S]*?\s*```/g, "")
-          .replace(/```\s*[\s\S]*?\s*```/g, "")
-          .replace(/```json[\s\S]*$/g, "")
-          .replace(/^\s*```json\s*/gm, "")
-          .replace(/\[\s*\{[\s\S]*?\}\s*\]/g, "")
-          .replace(/\{\s*"name"[\s\S]*$/g, "")
-          .replace(/^Workouts:?\s*$/gim, "")
-          .replace(/^\s*\*\*json\s*/gim, "")
-          .trim();
-      } catch (parseError) {
-        console.error("Failed to parse workout JSON:", parseError);
-        throw new Error("Failed to parse workout data from AI response");
+        result = JSON.parse(cleaned);
+      } catch (cleanedParseError) {
+        console.error("Failed to parse JSON response:", cleanedParseError);
+        console.log("Raw content causing error:", content.substring(0, 500) + "..."); // Log start of content
+        throw new Error(`Failed to parse AI response as JSON. Finish reason: ${finishReason}`);
       }
     }
 
-    if (workouts.length === 0) {
-      throw new Error("AI did not return any workouts. Please try again.");
+    const { overview, workouts } = result;
+    const description = overview || "No overview provided.";
+
+    if (!Array.isArray(workouts) || workouts.length === 0) {
+      throw new Error("AI did not return any workouts in the expected format.");
     }
+
+    console.log(`Successfully parsed ${workouts.length} workouts`);
 
     return new Response(
       JSON.stringify({ description, workouts }),
