@@ -8,7 +8,11 @@ export const calculateWeeklyStats = (activities: StravaActivity[]): WeeklyStats 
 
   // Filter activities for current week
   const weekActivities = activities.filter(activity => {
-    const activityDate = new Date(activity.start_date_local);
+    // Strip Z to force local time parsing
+    const dateStr = activity.start_date_local.endsWith('Z')
+      ? activity.start_date_local.slice(0, -1)
+      : activity.start_date_local;
+    const activityDate = new Date(dateStr);
     return activityDate >= weekStart && activityDate <= weekEnd;
   });
 
@@ -36,7 +40,7 @@ export const calculateTrainingLoad = (activities: StravaActivity[]): number => {
   // Simple training load calculation based on time and intensity
   return activities.reduce((load, activity) => {
     const timeHours = activity.moving_time / 3600;
-    const intensityFactor = activity.average_heartrate ? 
+    const intensityFactor = activity.average_heartrate ?
       Math.min(activity.average_heartrate / 150, 1.5) : 1.0;
     return load + (timeHours * intensityFactor);
   }, 0);
@@ -62,7 +66,7 @@ export const getActivityTypeBreakdown = (activities: StravaActivity[]) => {
 
 export const getRecentPerformanceTrend = (activities: StravaActivity[], activityType?: string) => {
   let filteredActivities = activities;
-  
+
   if (activityType) {
     filteredActivities = activities.filter(a => a.type === activityType);
   }

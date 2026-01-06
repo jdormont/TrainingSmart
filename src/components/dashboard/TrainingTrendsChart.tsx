@@ -82,7 +82,11 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
       const weekEnd = addWeeks(weekStart, 1);
 
       const weekActivities = activities.filter(activity => {
-        const activityDate = new Date(activity.start_date_local);
+        // Strip Z to force local time parsing
+        const dateStr = activity.start_date_local.endsWith('Z')
+          ? activity.start_date_local.slice(0, -1)
+          : activity.start_date_local;
+        const activityDate = new Date(dateStr);
         return activityDate >= weekStart && activityDate < weekEnd;
       });
 
@@ -133,12 +137,20 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
 
       let overallPerformance = 0;
       const activitiesUpToThisWeek = activities.filter(activity => {
-        const activityDate = new Date(activity.start_date_local);
+        // Strip Z to force local time parsing
+        const dateStr = activity.start_date_local.endsWith('Z')
+          ? activity.start_date_local.slice(0, -1)
+          : activity.start_date_local;
+        const activityDate = new Date(dateStr);
         return activityDate < weekEnd;
       });
 
       const recentActivitiesForThisWeek = activitiesUpToThisWeek.filter(activity => {
-        const activityDate = new Date(activity.start_date_local);
+        // Strip Z to force local time parsing
+        const dateStr = activity.start_date_local.endsWith('Z')
+          ? activity.start_date_local.slice(0, -1)
+          : activity.start_date_local;
+        const activityDate = new Date(dateStr);
         return activityDate >= subDays(weekEnd, 30);
       });
 
