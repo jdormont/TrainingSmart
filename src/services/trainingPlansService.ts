@@ -71,8 +71,8 @@ class TrainingPlansService {
       name: dbPlan.name,
       description: this.cleanDescription(dbPlan.description),
       goal: dbPlan.goal,
-      startDate: new Date(dbPlan.start_date),
-      endDate: new Date(dbPlan.end_date),
+      startDate: new Date(dbPlan.start_date + 'T00:00:00'),
+      endDate: new Date(dbPlan.end_date + 'T00:00:00'),
       createdAt: new Date(dbPlan.created_at),
       workouts: workouts.map(w => ({
         id: w.id,
@@ -82,7 +82,7 @@ class TrainingPlansService {
         duration: w.duration,
         distance: w.distance,
         intensity: w.intensity as Workout['intensity'],
-        scheduledDate: new Date(w.scheduled_date),
+        scheduledDate: new Date(w.scheduled_date + 'T00:00:00'),
         completed: w.completed, // Keep for backward compatibility view
         status: w.status || (w.completed ? 'completed' : 'planned'), // Default if null
         google_calendar_event_id: w.google_calendar_event_id
