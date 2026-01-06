@@ -6,12 +6,8 @@ import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { Button } from '../components/common/Button';
 import { ActivityCard } from '../components/dashboard/ActivityCard';
 import { ActivityDetailModal } from '../components/dashboard/ActivityDetailModal';
-import { StatsSummary } from '../components/dashboard/StatsSummary';
-import { TrainingTrendsChart } from '../components/dashboard/TrainingTrendsChart';
-import { RecoveryCard } from '../components/dashboard/RecoveryCard';
-import { WeeklyInsightCard } from '../components/dashboard/WeeklyInsightCard';
-import { HealthSpiderChart } from '../components/dashboard/HealthSpiderChart';
-import { StravaOnlySpiderChart } from '../components/dashboard/StravaOnlySpiderChart';
+import { DashboardHero } from '../components/dashboard/DashboardHero';
+import { AnalyticsContainer } from '../components/dashboard/AnalyticsContainer';
 import { IntakeWizard } from '../components/onboarding/IntakeWizard';
 import { weeklyInsightService } from '../services/weeklyInsightService';
 import { healthMetricsService } from '../services/healthMetricsService';
@@ -45,20 +41,11 @@ export const DashboardPage: React.FC = () => {
   const [weeklyInsight, setWeeklyInsight] = useState<WeeklyInsight | null>(null);
   const [healthMetrics, setHealthMetrics] = useState<HealthMetrics | null>(null);
   const [insightLoading, setInsightLoading] = useState(false);
-  const [healthLoading, setHealthLoading] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [ouraLoading, setOuraLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedActivity, setSelectedActivity] = useState<StravaActivity | null>(null);
   const [showAllActivities, setShowAllActivities] = useState(false);
   const [isStravaConnected, setIsStravaConnected] = useState(false);
-
-  // Collapsible widget states
-  const [weeklyInsightCollapsed, setWeeklyInsightCollapsed] = useState(false);
-  const [healthOverviewCollapsed, setHealthOverviewCollapsed] = useState(false);
-
-  // View mode toggle
-  const [viewMode, setViewMode] = useState<'auto' | 'full' | 'strava'>('auto');
 
   // Onboarding wizard state
   const [showWizard, setShowWizard] = useState(false);
@@ -110,7 +97,6 @@ export const DashboardPage: React.FC = () => {
         // Fetch Oura data if authenticated
         if (await ouraApi.isAuthenticated()) {
           console.log('Oura is authenticated, fetching recovery data...');
-          setOuraLoading(true);
           try {
             console.log('=== OURA DATA FETCH DEBUG ===');
             const [recentSleep, recentReadiness] = await Promise.all([
@@ -160,8 +146,6 @@ export const DashboardPage: React.FC = () => {
               message: ouraError.message,
               stack: ouraError.stack
             });
-          } finally {
-            setOuraLoading(false);
           }
         } else {
           console.log('Oura is not authenticated, skipping recovery data fetch');
@@ -279,7 +263,6 @@ export const DashboardPage: React.FC = () => {
 
   const generateHealthMetrics = async (athleteData: StravaAthlete, activitiesData: StravaActivity[]) => {
     try {
-      setHealthLoading(true);
       console.log('Generating health metrics...');
 
       // Get Oura data for health metrics
@@ -310,8 +293,6 @@ export const DashboardPage: React.FC = () => {
       console.log('Health metrics generated:', metrics);
     } catch (error) {
       console.error('Failed to generate health metrics:', error);
-    } finally {
-      setHealthLoading(false);
     }
   };
 
@@ -322,18 +303,6 @@ export const DashboardPage: React.FC = () => {
     weeklyInsightService.clearCache();
     weeklyInsightService.clearCache();
     await generateWeeklyInsight(athlete, activities, dailyMetrics);
-  };
-
-  const hasOuraData = (): boolean => {
-    return (sleepData !== null && sleepData !== undefined) ||
-      (readinessData !== null && readinessData !== undefined);
-  };
-
-  const getEffectiveViewMode = (): 'full' | 'strava' => {
-    if (viewMode === 'strava') return 'strava';
-    if (viewMode === 'full') return 'full';
-
-    return hasOuraData() ? 'full' : 'strava';
   };
 
   // Find similar activities for comparison
@@ -517,230 +486,83 @@ export const DashboardPage: React.FC = () => {
     <div className="min-h-screen bg-gray-50">
       <NetworkErrorBanner />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Welcome Header */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Welcome back, {athlete?.firstname}! 👋
-          </h1>
-          <p className="text-gray-600">
-            Here's your training overview and recent activities
-          </p>
-        </div>
 
-        {/* Action Header */}
-        <div className="mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Button
-              variant="primary"
-              size="lg"
-              onClick={() => navigate(ROUTES.CHAT)}
-              className="w-full"
-            >
-              <MessageCircle className="w-5 h-5 mr-2" />
-              Chat with AI Coach
-            </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={() => navigate(ROUTES.PLANS)}
-              className="w-full"
-            >
-              <Calendar className="w-5 h-5 mr-2" />
-              Generate New Plan
-            </Button>
-          </div>
-        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main Stage (Left/Top) */}
+          <div className="lg:col-span-2 space-y-6">
+            <DashboardHero
+              athlete={athlete}
+              weeklyInsight={weeklyInsight}
+              weeklyStats={weeklyStats}
+              onRefreshInsight={handleRefreshInsight}
+              insightLoading={insightLoading}
+            />
 
-        {/* Weekly Insight */}
-        <div className="mb-8 bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="p-4 border-b border-gray-200">
-            <button
-              onClick={() => setWeeklyInsightCollapsed(!weeklyInsightCollapsed)}
-              className="w-full flex items-center justify-between text-left hover:bg-gray-50 -m-4 p-4 rounded-t-lg transition-colors"
-            >
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Weekly Insight</h2>
-                <p className="text-sm text-gray-600">AI-generated training insights based on your data</p>
-              </div>
-              {weeklyInsightCollapsed ? (
-                <ChevronDown className="w-5 h-5 text-gray-400" />
-              ) : (
-                <ChevronUp className="w-5 h-5 text-gray-400" />
-              )}
-            </button>
-          </div>
-
-          {!weeklyInsightCollapsed && (
-            <div className="p-6 pt-0">
-              <WeeklyInsightCard
-                insight={weeklyInsight}
-                loading={insightLoading}
-                onRefresh={handleRefreshInsight}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Health Overview */}
-        <div className="mb-8 bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="p-4 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => setHealthOverviewCollapsed(!healthOverviewCollapsed)}
-                className="flex-1 flex items-center justify-between text-left hover:bg-gray-50 -m-4 p-4 rounded-t-lg transition-colors"
-              >
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Health Overview</h2>
-                  <p className="text-sm text-gray-600">
-                    {getEffectiveViewMode() === 'strava'
-                      ? 'Training performance based on Strava data'
-                      : 'Holistic view of your fitness and recovery metrics'}
-                  </p>
-                </div>
-                {healthOverviewCollapsed ? (
-                  <ChevronDown className="w-5 h-5 text-gray-400" />
-                ) : (
-                  <ChevronUp className="w-5 h-5 text-gray-400" />
-                )}
-              </button>
-
-              {!healthOverviewCollapsed && (
-                <div className="ml-4 flex items-center bg-gray-100 rounded-lg p-1">
-                  <button
-                    onClick={() => setViewMode('auto')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === 'auto'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                      }`}
-                  >
-                    Auto
-                  </button>
-                  <button
-                    onClick={() => setViewMode('full')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === 'full'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                      }`}
-                    disabled={!hasOuraData()}
-                  >
-                    Full
-                  </button>
-                  <button
-                    onClick={() => setViewMode('strava')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === 'strava'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                      }`}
-                  >
-                    Training
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {!healthOverviewCollapsed && (
-            <div className="p-6 pt-0">
-              {getEffectiveViewMode() === 'strava' ? (
-                athlete && (
-                  <StravaOnlySpiderChart
-                    athlete={athlete}
-                    activities={activities}
-                    loading={healthLoading}
-                  />
-                )
-              ) : (
-                <HealthSpiderChart
-                  healthMetrics={healthMetrics}
-                  loading={healthLoading}
-                />
-              )}
-            </div>
-          )}
-        </div>
-
-        {weeklyStats && (
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">This Week</h2>
-            <StatsSummary weeklyStats={weeklyStats} />
-          </div>
-        )}
-
-        {/* Recovery Data */}
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Recovery & Sleep</h2>
-          <RecoveryCard
-            sleepData={sleepData}
-            readinessData={readinessData}
-            dailyMetric={dailyMetric}
-            loading={ouraLoading}
-          />
-        </div>
-
-        {/* Training Trends Chart */}
-        {activities.length > 0 && (
-          <div className="mb-8">
-            <TrainingTrendsChart
+            <AnalyticsContainer
               activities={activities}
               athlete={athlete}
               healthMetrics={healthMetrics}
+              sleepData={sleepData}
+              readinessData={readinessData}
+              dailyMetric={dailyMetric}
+              loading={loading}
             />
           </div>
-        )}
 
-        {/* Recent Activities */}
-        <div>
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">Recent Activities</h2>
-            <span className="text-sm text-gray-500">
-              Showing {displayedActivities.length} of {activities.length} activities
-            </span>
-          </div>
-
-          {activities.length === 0 ? (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-              <div className="text-gray-400 text-6xl mb-4">🏃</div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                No Activities Found
-              </h3>
-              <p className="text-gray-600">
-                Start tracking your workouts on Strava to see them here!
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {displayedActivities.map((activity: StravaActivity) => (
-                  <ActivityCard
-                    key={activity.id}
-                    activity={activity}
-                    onClick={() => handleActivityClick(activity)}
-                  />
-                ))}
+          {/* Right Rail (Recent Activities) */}
+          <div className="lg:col-span-1">
+            <div className="sticky top-4 space-y-4">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-xl font-semibold text-gray-900">Recent Activities</h2>
+                <span className="text-sm text-gray-500">
+                  {displayedActivities.length} / {activities.length}
+                </span>
               </div>
 
-              {activities.length > INITIAL_ACTIVITIES_COUNT && (
-                <div className="mt-6 text-center">
-                  <button
-                    onClick={() => setShowAllActivities(!showAllActivities)}
-                    className="inline-flex items-center px-6 py-3 bg-white border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 hover:border-gray-400 transition-colors shadow-sm"
-                  >
-                    {showAllActivities ? (
-                      <>
-                        <ChevronUp className="w-5 h-5 mr-2" />
-                        Show Less
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown className="w-5 h-5 mr-2" />
-                        Load More ({activities.length - INITIAL_ACTIVITIES_COUNT} more)
-                      </>
-                    )}
-                  </button>
+              {activities.length === 0 ? (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+                  <div className="text-gray-400 text-6xl mb-4">🏃</div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    No Activities Found
+                  </h3>
+                  <p className="text-gray-600">
+                    Start tracking your workouts on Strava to see them here!
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {displayedActivities.map((activity: StravaActivity) => (
+                    <ActivityCard
+                      key={activity.id}
+                      activity={activity}
+                      onClick={() => handleActivityClick(activity)}
+                    />
+                  ))}
+
+                  {activities.length > INITIAL_ACTIVITIES_COUNT && (
+                    <div className="text-center pt-2">
+                      <button
+                        onClick={() => setShowAllActivities(!showAllActivities)}
+                        className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-700 font-medium hover:bg-gray-50 transition-colors shadow-sm w-full justify-center"
+                      >
+                        {showAllActivities ? (
+                          <>
+                            <ChevronUp className="w-4 h-4 mr-2" />
+                            Show Less
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown className="w-4 h-4 mr-2" />
+                            Load More
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
-            </>
-          )}
+            </div>
+          </div>
         </div>
 
         {/* Activity Detail Modal */}

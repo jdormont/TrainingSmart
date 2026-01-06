@@ -2,8 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Filter, Eye, EyeOff, LineChart as LineChartIcon, RefreshCw } from 'lucide-react';
 import { Button } from '../common/Button';
-import type { StravaActivity, StravaAthlete, DailyMetric } from '../../types';
-import { startOfWeek, format, addWeeks, subDays } from 'date-fns';
+import type { StravaActivity, StravaAthlete, DailyMetric, OuraReadinessData } from '../../types';
+import { startOfWeek, format, addWeeks, subDays, isSameWeek } from 'date-fns';
 import { trainingMetricsService } from '../../services/trainingMetricsService';
 import { dailyMetricsService } from '../../services/dailyMetricsService';
 import type { HealthMetrics } from '../../services/weeklyInsightService';
@@ -12,6 +12,7 @@ interface TrainingTrendsChartProps {
   activities: StravaActivity[];
   athlete?: StravaAthlete | null;
   healthMetrics?: HealthMetrics | null;
+  todayReadiness?: OuraReadinessData | null;
 }
 
 interface WeeklyTrend {
@@ -42,9 +43,9 @@ interface WeeklyTrend {
 
 
 
-export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activities }) => {
+export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activities, todayReadiness }) => {
   const [weeklyMetrics, setWeeklyMetrics] = useState<Map<string, DailyMetric[]>>(new Map());
-  const [selectedMetrics, setSelectedMetrics] = useState<Set<string>>(new Set(['distance']));
+  const [selectedMetrics, setSelectedMetrics] = useState<Set<string>>(new Set(['performance', 'recovery']));
 
   useEffect(() => {
     const fetchWeeklyMetrics = async () => {
@@ -159,19 +160,35 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
         overallPerformance = stravaMetrics.overallScore;
       }
 
+      // Calculate Recovery
       const weekMetricsData = weeklyMetrics.get(weekLabel) || [];
-      const avgRecovery = weekMetricsData.length > 0
-        ? Math.round(weekMetricsData.reduce((sum, m) => {
-          // Always calculate dynamically using the service
-          const score = dailyMetricsService.calculateRecoveryScore(m, {
-            // We'd ideally pass demographic info here if available, 
-            // but for trends we can rely on default scaling or update the component to fetch demographics.
-            // Given the previous code didn't use demographics for the fallback, this is already an improvement.
-            // To be safe, we might want to fetch demographics in the parent or this component, 
-            // but for now let's use the service which handles undefined demographics gracefully.
+
+      // Inject today's readiness if valid and this is the current week
+      const metricsForCalculation = [...weekMetricsData];
+      if (todayReadiness && isSameWeek(weekStart, now, { weekStartsOn: 1 })) {
+        const todayStr = format(now, 'yyyy-MM-dd');
+        const exists = metricsForCalculation.some(m => m.date === todayStr);
+
+        if (!exists && todayReadiness.day === todayStr) {
+          metricsForCalculation.push({
+            id: 'virtual-today',
+            user_id: 'current',
+            date: todayStr,
+            recovery_score: todayReadiness.score,
+            sleep_minutes: 0,
+            resting_hr: 0,
+            hrv: 0
           });
+        }
+      }
+
+      const avgRecovery = metricsForCalculation.length > 0
+        ? Math.round(metricsForCalculation.reduce((sum, m) => {
+          // Use existing score if available, otherwise calculate fallback
+          // This aligns with the Recovery Tab logic which prioritizes the synced score
+          const score = m.recovery_score || dailyMetricsService.calculateRecoveryScore(m, {});
           return sum + score;
-        }, 0) / weekMetricsData.length)
+        }, 0) / metricsForCalculation.length)
         : 0;
 
       weeks.push({
@@ -202,7 +219,7 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
     }
 
     return weeks;
-  }, [activities, weeklyMetrics]);
+  }, [activities, weeklyMetrics, todayReadiness]);
 
 
 
