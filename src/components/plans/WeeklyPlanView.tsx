@@ -243,7 +243,7 @@ export default function WeeklyPlanView({
           return (
             <div key={weekIndex} className="bg-white rounded-lg border border-gray-200 p-6">
               {/* Header */}
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900">
                     Week {weekIndex + 1} - {format(week.weekStart, 'MMM d, yyyy')}
@@ -254,13 +254,13 @@ export default function WeeklyPlanView({
                     </p>
                   )}
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
                   {weekWorkouts.length > 0 && (
                     <Button
                       variant="secondary"
                       onClick={() => handleExportWeek(weekIndex, weekWorkouts)}
                       loading={isExporting}
-                      className="flex items-center space-x-2"
+                      className="flex items-center justify-center space-x-2"
                     >
                       <Calendar className="w-4 h-4" />
                       <span>Export to Calendar</span>
@@ -270,7 +270,7 @@ export default function WeeklyPlanView({
                     <Button
                       variant="secondary"
                       onClick={() => onModifyWeek(weekIndex + 1, weekWorkouts)}
-                      className="flex items-center space-x-2"
+                      className="flex items-center justify-center space-x-2"
                     >
                       <Wand2 className="w-4 h-4" />
                       <span>Modify Week</span>
@@ -294,7 +294,7 @@ export default function WeeklyPlanView({
                       </div>
                     </div>
 
-                    <div className="space-y-2 flex-1 min-h-[100px]">
+                    <div className="space-y-2 flex-1 min-h-[60px] md:min-h-[100px]">
                       {day.workouts.length > 0 ? (
                         day.workouts.map(workout => (
                           <div key={workout.id} className="w-full">
@@ -307,7 +307,7 @@ export default function WeeklyPlanView({
                           </div>
                         ))
                       ) : (
-                        <div className="h-full min-h-[80px] bg-gray-50/50 rounded-lg border border-dashed border-gray-300 flex flex-col items-center justify-center space-y-2 p-2 group hover:border-blue-300 hover:bg-blue-50/10 transition-colors">
+                        <div className="h-full min-h-[60px] md:min-h-[80px] bg-gray-50/50 rounded-lg border border-dashed border-gray-300 flex flex-col items-center justify-center space-y-2 p-2 group hover:border-blue-300 hover:bg-blue-50/10 transition-colors">
                           <span className="text-xs text-gray-400 group-hover:text-blue-400 pointer-events-none">Rest Day</span>
                           {onAddWorkout && (
                             <button

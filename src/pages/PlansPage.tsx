@@ -594,18 +594,18 @@ Additional Preferences: ${preferences || 'None'}
       <NetworkErrorBanner />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
               Training Plans
             </h1>
-            <p className="text-gray-600">
+            <p className="text-gray-600 text-sm md:text-base">
               AI-generated cycling plans based on your Strava data
             </p>
           </div>
           <Button
             onClick={() => setShowForm(true)}
-            className="flex items-center space-x-2"
+            className="flex items-center justify-center space-x-2 w-full md:w-auto"
           >
             <Plus className="w-4 h-4" />
             <span>New Plan</span>
@@ -622,7 +622,7 @@ Additional Preferences: ${preferences || 'None'}
 
         {/* Plan Generation Form */}
         {showForm && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6 mb-8">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               Generate New Cycling Plan
             </h3>
@@ -633,7 +633,7 @@ Additional Preferences: ${preferences || 'None'}
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Goal Type
                 </label>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {goalTypeOptions.map((option) => (
                     <button
                       key={option.value}

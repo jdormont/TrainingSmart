@@ -26,7 +26,7 @@ export const ChatPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [extractedContext, setExtractedContext] = useState<ChatContextSnapshot | null>(null);
@@ -511,8 +511,8 @@ What would you like to know about your training?`;
     <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
       <NetworkErrorBanner />
       <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar */}
-        <div className={`${sidebarOpen ? 'block' : 'hidden'} lg:block flex-shrink-0`}>
+        {/* Desktop Sidebar */}
+        <div className="hidden lg:block flex-shrink-0">
           <SessionSidebar
             sessions={sessions}
             activeSessionId={activeSession?.id || null}
@@ -523,12 +523,36 @@ What would you like to know about your training?`;
           />
         </div>
 
+        {/* Mobile Sidebar Overlay */}
+        {sidebarOpen && (
+          <div className="lg:hidden fixed inset-0 z-50 flex">
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 bg-black/50 transition-opacity"
+              onClick={() => setSidebarOpen(false)}
+            />
+
+            {/* Sidebar content */}
+            <div className="relative flex-1 flex flex-col max-w-xs w-full bg-white transform transition-transform duration-300 ease-in-out">
+              <SessionSidebar
+                sessions={sessions}
+                activeSessionId={activeSession?.id || null}
+                onSessionSelect={handleSessionSelect}
+                onSessionCreate={handleSessionCreate}
+                onSessionDelete={handleSessionDelete}
+                onSessionRename={handleSessionRename}
+                onClose={() => setSidebarOpen(false)}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Main Chat Area */}
         <div className="flex-1 flex flex-col min-w-0">
           {/* Header */}
           <div className="bg-white border-b border-gray-200 p-4 flex-shrink-0">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center space-x-3 w-full md:w-auto">
                 <button
                   onClick={() => setSidebarOpen(!sidebarOpen)}
                   className="lg:hidden p-2 text-gray-400 hover:text-gray-600"
@@ -536,34 +560,36 @@ What would you like to know about your training?`;
                   {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
                 </button>
 
-                <div>
-                  <h1 className="text-xl font-semibold text-gray-900">
+                <div className="min-w-0 flex-1">
+                  <h1 className="text-lg md:text-xl font-semibold text-gray-900 truncate">
                     {activeSession?.name || 'AI Training Coach'}
                   </h1>
                   {activeSession?.description && (
-                    <p className="text-sm text-gray-600">{activeSession.description}</p>
+                    <p className="text-xs md:text-sm text-gray-600 truncate">{activeSession.description}</p>
                   )}
                 </div>
               </div>
 
               {activeSession && (
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center justify-between md:justify-end space-x-2 w-full md:w-auto pt-2 md:pt-0 border-t md:border-t-0 border-gray-100">
                   {showPlanButton && (
                     <button
                       onClick={handleExtractContext}
                       disabled={extracting}
-                      className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                     >
                       <Calendar className="w-4 h-4" />
                       <span>{extracting ? 'Extracting...' : 'Create Plan'}</span>
                     </button>
                   )}
-                  <span className={`text-xs px-2 py-1 rounded-full ${supabaseChatService.getCategoryColor(activeSession.category)}`}>
-                    {supabaseChatService.getCategoryIcon(activeSession.category)} {activeSession.category}
-                  </span>
-                  <span className="text-xs text-gray-500">
-                    {activeSession.messages.length} messages
-                  </span>
+                  <div className="flex items-center space-x-2">
+                    <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${supabaseChatService.getCategoryColor(activeSession.category)}`}>
+                      {supabaseChatService.getCategoryIcon(activeSession.category)} {activeSession.category}
+                    </span>
+                    <span className="text-xs text-gray-500 whitespace-nowrap">
+                      {activeSession.messages.length} msgs
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
@@ -572,13 +598,13 @@ What would you like to know about your training?`;
           {/* Training Summary */}
           {athlete && activities.length > 0 && (
             <div className="bg-white border-b border-gray-200 p-4 flex-shrink-0">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
                 <div>
-                  <span className="text-gray-500">Recent Activities:</span>
+                  <span className="text-gray-500">Recent:</span>
                   <span className="font-medium ml-1">{activities.length}</span>
                 </div>
                 <div>
-                  <span className="text-gray-500">This Week:</span>
+                  <span className="text-gray-500">Distance:</span>
                   <span className="font-medium ml-1">
                     {(calculateWeeklyStats(activities).totalDistance * 0.000621371).toFixed(1)} mi
                   </span>

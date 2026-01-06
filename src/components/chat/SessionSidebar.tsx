@@ -11,6 +11,7 @@ interface SessionSidebarProps {
   onSessionCreate: (name: string, category: ChatSession['category'], description?: string) => void | Promise<void>;
   onSessionDelete: (sessionId: string) => void | Promise<void>;
   onSessionRename: (sessionId: string, newName: string) => void | Promise<void>;
+  onClose?: () => void;
 }
 
 const SessionSidebar: React.FC<SessionSidebarProps> = ({
@@ -19,7 +20,8 @@ const SessionSidebar: React.FC<SessionSidebarProps> = ({
   onSessionSelect,
   onSessionCreate,
   onSessionDelete,
-  onSessionRename
+  onSessionRename,
+  onClose
 }) => {
   const [showNewSessionForm, setShowNewSessionForm] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
@@ -27,6 +29,13 @@ const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [newSessionCategory, setNewSessionCategory] = useState<ChatSession['category']>('training');
   const [newSessionDescription, setNewSessionDescription] = useState('');
   const [editName, setEditName] = useState('');
+
+  const handleSelectSession = (sessionId: string) => {
+    onSessionSelect(sessionId);
+    if (onClose) {
+      onClose();
+    }
+  };
 
   const handleCreateSession = (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,6 +46,10 @@ const SessionSidebar: React.FC<SessionSidebarProps> = ({
     setNewSessionDescription('');
     setNewSessionCategory('training');
     setShowNewSessionForm(false);
+
+    if (onClose) {
+      onClose();
+    }
   };
 
   const handleRename = (sessionId: string) => {
@@ -58,19 +71,29 @@ const SessionSidebar: React.FC<SessionSidebarProps> = ({
   ];
 
   return (
-    <div className="w-80 bg-white border-r border-gray-200 flex flex-col h-screen">
+    <div className="w-80 bg-white border-r border-gray-200 flex flex-col h-full">
       {/* Header */}
       <div className="p-4 border-b border-gray-200 flex-shrink-0">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-gray-900">Chat Sessions</h2>
-          <Button
-            onClick={() => setShowNewSessionForm(true)}
-            size="sm"
-            className="flex items-center space-x-1"
-          >
-            <Plus className="w-3 h-3" />
-            <span>New</span>
-          </Button>
+          <div className="flex items-center space-x-2">
+            <Button
+              onClick={() => setShowNewSessionForm(true)}
+              size="sm"
+              className="flex items-center space-x-1"
+            >
+              <Plus className="w-3 h-3" />
+              <span>New</span>
+            </Button>
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 lg:hidden"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* New Session Form */}
@@ -140,10 +163,10 @@ const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 <div
                   key={session.id}
                   className={`group rounded-md p-3 cursor-pointer transition-colors ${activeSessionId === session.id
-                      ? 'bg-orange-50 border border-orange-200'
-                      : 'hover:bg-gray-50'
+                    ? 'bg-orange-50 border border-orange-200'
+                    : 'hover:bg-gray-50'
                     }`}
-                  onClick={() => onSessionSelect(session.id)}
+                  onClick={() => handleSelectSession(session.id)}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
