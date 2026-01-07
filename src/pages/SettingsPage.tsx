@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Save, RotateCcw, Bot, User, Settings, Moon, Activity, Calendar as CalendarIcon, TrendingUp, Target } from 'lucide-react';
+import { Save, RotateCcw, Bot, User, Settings, Moon, Activity, Calendar as CalendarIcon, TrendingUp, Target, Watch, Copy, Eye, EyeOff, Download } from 'lucide-react';
 import { Button } from '../components/common/Button';
 import { stravaApi } from '../services/stravaApi';
 import { stravaCacheService } from '../services/stravaCacheService';
@@ -84,6 +84,10 @@ export const SettingsPage: React.FC = () => {
   const [interests, setInterests] = useState<string[]>([]);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
+
+  // New state for API Key display
+  const [showKeys, setShowKeys] = useState(false);
+  const [copying, setCopying] = useState(false);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -324,9 +328,9 @@ export const SettingsPage: React.FC = () => {
     try {
       await Promise.all([
         userProfileService.updateUserProfile({
-          training_goal: trainingGoal || null,
-          weekly_hours: weeklyHours || null,
-          coach_persona: coachPersona || null
+          training_goal: trainingGoal || undefined,
+          weekly_hours: weeklyHours || undefined,
+          coach_persona: coachPersona || undefined
         }),
         userProfileService.updateContentProfile({
           skill_level: skillLevel,
@@ -690,6 +694,99 @@ export const SettingsPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Apple Watch Health Sync */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
+              <Watch className="w-5 h-5 mr-2 text-red-500" />
+              Apple Watch Health Sync
+            </h2>
+
+            <div className="space-y-6">
+              {/* Step 1 */}
+              <div>
+                <p className="text-gray-700 mb-3 font-medium">1. Download the Shortcut</p>
+                <p className="text-sm text-gray-600 mb-3">
+                  First, download the official TrainingSmart iOS Shortcut. This allows you to sync your health data from Apple Health to the app.
+                </p>
+                <a
+                  href="https://www.icloud.com/shortcuts/28b55a5f799d43e49d9023a9fe1c6050"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Download Shortcut
+                </a>
+              </div>
+
+              <div className="border-t border-gray-200"></div>
+
+              {/* Step 2 */}
+              <div>
+                <p className="text-gray-700 mb-3 font-medium">2. Configure with your API Key</p>
+                <p className="text-sm text-gray-600 mb-3">
+                  Next, copy your personal API Key. Add it to the first "Text" field in the Shortcut setup or settings.
+                </p>
+
+                <div className="relative">
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
+                    Your Ingest Key
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        readOnly
+                        value={userProfile?.ingest_key || 'Loading...'}
+                        className="block w-full pl-3 pr-10 py-2 text-sm font-mono bg-gray-50 border border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500"
+                      />
+                      {/* Mask overlay */}
+                      {!showKeys && (
+                        <div className="absolute inset-0 bg-gray-50 border border-gray-300 rounded-md flex items-center px-3">
+                          <span className="text-gray-400">••••••••-••••-••••-••••-••••••••••••</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => setShowKeys(!showKeys)}
+                      className="p-2 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 border border-gray-200"
+                      title={showKeys ? "Hide Key" : "Show Key"}
+                    >
+                      {showKeys ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+
+                    <Button
+                      onClick={() => {
+                        if (userProfile?.ingest_key) {
+                          navigator.clipboard.writeText(userProfile.ingest_key);
+                          setCopying(true);
+                          setTimeout(() => setCopying(false), 2000);
+                        }
+                      }}
+                      variant="outline"
+                      className="flex-shrink-0"
+                    >
+                      {copying ? (
+                        <span className="text-green-600 flex items-center">
+                          Copied!
+                        </span>
+                      ) : (
+                        <span className="flex items-center">
+                          <Copy className="w-4 h-4 mr-2" />
+                          Copy
+                        </span>
+                      )}
+                    </Button>
+                  </div>
+                  <p className="mt-2 text-xs text-gray-500">
+                    Keep this key private. It grants write access to your health metrics.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Training Profile */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
@@ -792,6 +889,8 @@ export const SettingsPage: React.FC = () => {
               </div>
 
               {/* Section B: Content Personalization */}
+
+
               <div className="pt-6 border-t border-gray-200">
                 <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
                   <Settings className="w-5 h-5 mr-2 text-orange-500" />
@@ -998,6 +1097,6 @@ EXERCISE VIDEO GUIDELINES:
           </div>
         </div>
       </div>
-    </div>
+    </div >
   );
 };

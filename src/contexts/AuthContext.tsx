@@ -13,6 +13,7 @@ interface UserProfile {
   training_goal?: string;
   weekly_hours?: number;
   coach_persona?: string;
+  ingest_key?: string;
   created_at: string;
   updated_at: string;
 }

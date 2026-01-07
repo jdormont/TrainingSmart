@@ -265,3 +265,14 @@ export interface DailyMetric {
   created_at?: string;
   updated_at?: string;
 }
+
+export interface UserProfile {
+  id: string;
+  user_id: string;
+  full_name: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  is_admin: boolean;
+  ingest_key?: string;
+  created_at: string;
+  updated_at: string;
+}
