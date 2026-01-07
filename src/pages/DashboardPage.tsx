@@ -51,7 +51,7 @@ export const DashboardPage: React.FC = () => {
   const [showWizard, setShowWizard] = useState(false);
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
-  const INITIAL_ACTIVITIES_COUNT = 9;
+  const INITIAL_ACTIVITIES_COUNT = 5;
 
   useEffect(() => {
     const fetchData = async () => {
