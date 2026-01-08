@@ -1,6 +1,6 @@
 // OpenAI API service for training advice
 import axios from 'axios';
-import type { StravaActivity, StravaAthlete, StravaStats, ChatMessage, OuraSleepData, OuraReadinessData, Workout } from '../types';
+import type { StravaActivity, StravaAthlete, StravaStats, ChatMessage, OuraSleepData, OuraReadinessData, Workout, DailyMetric } from '../types';
 import { STORAGE_KEYS } from '../utils/constants';
 
 
@@ -23,6 +23,7 @@ interface TrainingContext {
   recovery?: {
     sleepData: OuraSleepData | null;
     readinessData: OuraReadinessData | null;
+    dailyMetric?: DailyMetric | null; // Added manual/synced metric support
     sleepScore?: number;
   };
   userProfile?: {
@@ -106,29 +107,48 @@ RESPONSE GUIDELINES:
 
     // Build recovery context string
     let recoveryContext = '';
-    if (context.recovery?.sleepData || context.recovery?.readinessData) {
+    const recovery = context.recovery;
+
+    if (recovery?.sleepData || recovery?.readinessData || recovery?.dailyMetric) {
       recoveryContext = '\n\nRECOVERY DATA:';
 
-      if (context.recovery.sleepData) {
-        const sleep = context.recovery.sleepData;
+      // 1. Prioritize Oura Data found
+      if (recovery.sleepData) {
+        const sleep = recovery.sleepData;
         const sleepHours = Math.round((sleep.total_sleep_duration / 3600) * 10) / 10;
         const deepSleepMin = Math.round(sleep.deep_sleep_duration / 60);
         const remSleepMin = Math.round(sleep.rem_sleep_duration / 60);
 
         recoveryContext += `
-- Last night's sleep: ${sleepHours}h total (${sleep.efficiency}% efficiency)
+- Last night's sleep (Oura): ${sleepHours}h total (${sleep.efficiency}% efficiency)
 - Sleep quality: ${deepSleepMin}min deep sleep, ${remSleepMin}min REM sleep
 - Sleep disturbances: ${sleep.restless_periods} restless periods
 - Resting heart rate: ${sleep.lowest_heart_rate} bpm`;
 
-        if (context.recovery.sleepScore) {
+        if (recovery.sleepScore) {
           recoveryContext += `
-- Sleep score: ${context.recovery.sleepScore}/100`;
+- Sleep score: ${recovery.sleepScore}/100`;
+        }
+      }
+      // 2. Fallback to Daily Metric (Apple Health / Manual)
+      else if (recovery.dailyMetric) {
+        const dm = recovery.dailyMetric;
+        const sleepHours = Math.round((dm.sleep_minutes / 60) * 10) / 10;
+
+        recoveryContext += `
+- Last night's sleep (Health Data): ${sleepHours}h total
+- Resting heart rate: ${dm.resting_hr} bpm
+- HRV (RMSSD): ${dm.hrv} ms`;
+
+        if (dm.recovery_score) {
+          recoveryContext += `
+- Calculated Recovery Score: ${dm.recovery_score}/100`;
         }
       }
 
-      if (context.recovery.readinessData) {
-        const readiness = context.recovery.readinessData;
+      // Readiness Data (Oura)
+      if (recovery.readinessData) {
+        const readiness = recovery.readinessData;
         recoveryContext += `
 - Readiness score: ${readiness.score}/100
 - Recovery recommendation: ${readiness.score >= 85 ? 'Ready for intense training' :

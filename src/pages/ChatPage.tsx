@@ -7,13 +7,14 @@ import { openaiService } from '../services/openaiApi';
 import { supabaseChatService } from '../services/supabaseChatService';
 import { chatContextExtractor } from '../services/chatContextExtractor';
 import { userProfileService } from '../services/userProfileService';
+import { dailyMetricsService } from '../services/dailyMetricsService';
 import { convertMarkdownToHtml } from '../utils/markdownToHtml';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { Button } from '../components/common/Button';
 import SessionSidebar from '../components/chat/SessionSidebar';
 import { ChatContextModal } from '../components/chat/ChatContextModal';
 import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
-import type { StravaActivity, StravaAthlete, StravaStats, ChatMessage, ChatSession, OuraSleepData, OuraReadinessData, ChatContextSnapshot } from '../types';
+import type { StravaActivity, StravaAthlete, StravaStats, ChatMessage, ChatSession, OuraSleepData, OuraReadinessData, ChatContextSnapshot, DailyMetric } from '../types';
 import { calculateWeeklyStats } from '../utils/dataProcessing';
 import { calculateSleepScore } from '../utils/sleepScoreCalculator';
 import { format } from 'date-fns';
@@ -42,6 +43,9 @@ export const ChatPage: React.FC = () => {
   // Oura recovery data
   const [sleepData, setSleepData] = useState<OuraSleepData | null>(null);
   const [readinessData, setReadinessData] = useState<OuraReadinessData | null>(null);
+
+  // Daily Metric data (HealthKit/Manual)
+  const [dailyMetric, setDailyMetric] = useState<DailyMetric | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -98,6 +102,17 @@ export const ChatPage: React.FC = () => {
           } catch (ouraError) {
             console.warn('Could not load Oura data for AI coach:', ouraError);
           }
+        }
+
+        // Load Daily Metrics (HealthKit/Manual)
+        try {
+          const latestMetric = await dailyMetricsService.getMostRecentMetric();
+          if (latestMetric) {
+            setDailyMetric(latestMetric);
+            console.log('Daily metric loaded for AI coach:', latestMetric);
+          }
+        } catch (metricError) {
+          console.warn('Could not load daily metrics:', metricError);
         }
 
         // Load chat sessions
@@ -290,6 +305,7 @@ What would you like to know about your training?`;
         recovery: {
           sleepData,
           readinessData,
+          dailyMetric,
           sleepScore
         },
         userProfile: userProfile ? {
@@ -444,6 +460,7 @@ What would you like to know about your training?`;
         recovery: {
           sleepData,
           readinessData,
+          dailyMetric,
           sleepScore
         }
       };
