@@ -1,50 +1,35 @@
-// Utility to convert markdown-like text to HTML for better readability
+import { marked } from 'marked';
+
+// Configure marked to ensure GFM is enabled (it is by default in newer versions but explicit is good)
+// and to match the styling expectations
+marked.use({
+  gfm: true,
+  breaks: true,
+});
 
 export const convertMarkdownToHtml = (text: string): string => {
-  let html = text;
-  
-  // Convert headers
-  html = html.replace(/^### (.*$)/gm, '<h3 class="text-lg font-semibold text-gray-900 mt-6 mb-3">$1</h3>');
-  html = html.replace(/^## (.*$)/gm, '<h2 class="text-xl font-bold text-gray-900 mt-8 mb-4">$1</h2>');
-  html = html.replace(/^# (.*$)/gm, '<h1 class="text-2xl font-bold text-gray-900 mt-8 mb-4">$1</h1>');
-  
-  // Convert bold text
-  html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-gray-900">$1</strong>');
-  
-  // Convert markdown links to clickable HTML links
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline">$1</a>');
-  
-  // Convert bullet points
-  html = html.replace(/^- (.*$)/gm, '<li class="ml-4 mb-1">• $1</li>');
-  html = html.replace(/^ {2}- (.*$)/gm, '<li class="ml-8 mb-1">◦ $1</li>');
-  
-  // Convert numbered lists
-  html = html.replace(/^\d+\. (.*$)/gm, '<li class="ml-4 mb-2 list-decimal">$1</li>');
-  
-  // Wrap consecutive list items in ul tags
-  html = html.replace(/(<li class="ml-4[^>]*>.*?<\/li>\s*)+/gs, '<ul class="mb-4">$&</ul>');
-  html = html.replace(/(<li class="ml-8[^>]*>.*?<\/li>\s*)+/gs, '<ul class="mb-2">$&</ul>');
-  
-  // Convert line breaks to paragraphs
-  const paragraphs = html.split('\n\n').filter(p => p.trim());
-  html = paragraphs.map(p => {
-    const trimmed = p.trim();
-    // Don't wrap if it's already an HTML element
-    if (trimmed.startsWith('<')) {
-      return trimmed;
-    }
-    // Don't wrap empty lines
-    if (!trimmed) {
-      return '';
-    }
-    return `<p class="mb-3 text-gray-700 leading-relaxed">${trimmed}</p>`;
-  }).join('\n');
-  
-  // Clean up any double-wrapped elements
-  html = html.replace(/<p[^>]*>(<h[1-6][^>]*>.*?<\/h[1-6]>)<\/p>/g, '$1');
-  html = html.replace(/<p[^>]*>(<ul[^>]*>.*?<\/ul>)<\/p>/gs, '$1');
-  
-  return html;
+  if (!text) return '';
+
+  // parse returns a Promise if async is true, but synchronous by default for strings
+  const rawHtml = marked.parse(text) as string;
+
+  // Post-process to add specific Tailwind classes matching the original design
+  // This is a lightweight way to style without a full custom renderer
+  return rawHtml
+    .replace(/<h1>/g, '<h1 class="text-2xl font-bold text-gray-900 mt-8 mb-4">')
+    .replace(/<h2>/g, '<h2 class="text-xl font-bold text-gray-900 mt-8 mb-4">')
+    .replace(/<h3>/g, '<h3 class="text-lg font-semibold text-gray-900 mt-6 mb-3">')
+    .replace(/<p>/g, '<p class="mb-3 text-gray-700 leading-relaxed">')
+    .replace(/<ul>/g, '<ul class="mb-4 list-disc list-outside ml-4">')
+    .replace(/<ol>/g, '<ol class="mb-4 list-decimal list-outside ml-4">')
+    .replace(/<li>/g, '<li class="mb-1 text-gray-700">')
+    .replace(/<a /g, '<a class="text-blue-600 hover:text-blue-800 underline" target="_blank" rel="noopener noreferrer" ')
+    .replace(/<blockquote>/g, '<blockquote class="border-l-4 border-gray-300 pl-4 italic text-gray-600 my-4">')
+    .replace(/<table>/g, '<div class="overflow-x-auto mb-4"><table class="min-w-full divide-y divide-gray-200 border border-gray-200">')
+    .replace(/<\/table>/g, '</table></div>')
+    .replace(/<thead>/g, '<thead class="bg-gray-50">')
+    .replace(/<th>/g, '<th scope="col" class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">')
+    .replace(/<td>/g, '<td class="px-3 py-2 whitespace-nowrap text-sm text-gray-700 border-b border-gray-100">');
 };
 
 export const stripMarkdown = (text: string): string => {
@@ -54,5 +39,6 @@ export const stripMarkdown = (text: string): string => {
     .replace(/\*(.*?)\*/g, '$1') // Remove italic
     .replace(/^[-*+]\s/gm, '• ') // Convert bullets
     .replace(/^\d+\.\s/gm, '') // Remove numbered list markers
+    .replace(/\|/g, ' ') // Remove table pipes
     .trim();
 };

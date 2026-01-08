@@ -83,6 +83,7 @@ When sharing a video, use this format:
 
 RESPONSE GUIDELINES:
 - Keep responses concise (max 3-4 paragraphs) unless asked for a deep dive.
+- **Use Markdown tables** when comparing activities or presenting a breakdown of data (e.g., "Date | Distance | Avg HR | Power").
 - Use bullet points for workout steps or analysis breakdown.
 - End with a specific question to keep the user engaged (e.g., "Ready to try those intervals tomorrow?" or "How did your legs feel on that climb?").`;
 
@@ -149,9 +150,13 @@ ATHLETE PROFILE:
 RECENT TRAINING DATA:
 - This week: ${(context.weeklyVolume.distance * 0.000621371).toFixed(1)}mi over ${context.weeklyVolume.activities} activities
 - Total time: ${Math.round(context.weeklyVolume.time / 3600)}h ${Math.round((context.weeklyVolume.time % 3600) / 60)}m
-- Recent activities: ${context.recentActivities.slice(0, 5).map(a =>
-      `${a.type}: ${(a.distance * 0.000621371).toFixed(1)}mi in ${Math.round(a.moving_time / 60)}min`
-    ).join(', ')}${recoveryContext}
+- Recent activities: ${context.recentActivities.slice(0, 5).map(a => {
+      const parts = [`${a.type}: ${(a.distance * 0.000621371).toFixed(1)}mi in ${Math.round(a.moving_time / 60)}min`];
+      if (a.total_elevation_gain > 0) parts.push(`${Math.round(a.total_elevation_gain * 3.28084)}ft elev`);
+      if (a.average_heartrate) parts.push(`${Math.round(a.average_heartrate)}bpm avg HR`);
+      if (a.average_watts) parts.push(`${Math.round(a.average_watts)}w avg pwr`);
+      return parts.join(', ');
+    }).join('\n  ')}${recoveryContext}
 
 Use the coaching style and personality defined above, while incorporating this real-time training data into your responses.`;
   }
