@@ -279,9 +279,9 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 
 ### Phase 2: Enhanced Features
 - [x] **COMPLETED** - Google Calendar integration (one-way export)
-- [ ] Advanced data visualization
-- [ ] Training plan persistence
-- [ ] Goal setting and tracking
+- [x] **COMPLETED** - Advanced data visualization (Bio-Aware Insights, Training Trends)
+- [x] **COMPLETED** - Training plan persistence
+- [x] **COMPLETED** - Goal setting and tracking (Intake Wizard)
 
 ### Phase 3: Polish & Deploy
 - [ ] Error handling and edge cases
@@ -300,9 +300,12 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 - Secure token storage
 
 ### 📊 **Dashboard & Data Visualization**
+- **[NEW]** Redesigned 2-column layout with Hero component
+- **[NEW]** Enhanced Recovery Card with weighted score visualization & grid layout
+- **[NEW]** Respiratory Rate tracking and trend analysis
 - Beautiful activity cards with detailed metrics
 - Weekly stats summary with visual indicators
-- Advanced 8-week training trends chart
+- Advanced 8-week training trends chart with improved metrics logic
 - Activity filtering (All, Runs, Outdoor Rides, Virtual Rides)
 - Multiple metrics (Distance, Training Load, Speed, Heart Rate)
 - Responsive design with hover effects
@@ -324,9 +327,12 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 - Oura Ring integration controls
 
 ### 🧬 **Bio-Aware Training Insights**
-- **Matrix-Based Logic**: Analyzes intersection of *Pacing* (Volume vs Goal) and *Recovery* (HRV/Sleep/Oura).
-- **Readiness Score**: Aggregates data from multiple sources (Oura, Garmin, Apple Health via Auto-Import) to determine "Fresh" vs "Fatigued" state.
-- **Actionable Advice**: "Permission to Rest", "The Nudge", or "Ranked Workouts" based on physiological state.
+- **Updated Logic**: 30-day baseline comparison for accurate anomaly detection.
+- **Weighted Recovery Score**: Composed of Sleep Quality, HRV, and Resting Heart Rate (RHR).
+- **Matrix-Based Analysis**: Analyzes intersection of *Pacing* (Volume vs Goal) and *Recovery*.
+- **Readiness Score**: Aggregates data from multiple sources to determine "Fresh" vs "Fatigued" state.
+- **Actionable Advice**: "Permission to Rest", "The Nudge", or "Ranked Workouts".
+- **Apple Watch Health Sync**: Imports Sleep, HRV, and RHR via iOS Shortcut & Edge Function.
 - **Deep Linking**: Insights link directly to Chat with context-aware prompts.
 
 ### 📋 **Interactive Training Planner**
@@ -336,9 +342,10 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
     - "Review & Confirm" modal (`ChatContextModal`) before generation.
     - structured Plan generation persisted to Supabase.
 - **Plan Management**:
-    - Drag-and-drop workout rescheduling (`@dnd-kit`).
+    - **[NEW]** Drag-and-drop workout rescheduling (`@dnd-kit`).
     - **Strava Reconciliation**: Link actual activities to planned workouts for "Plan vs Actual" analysis.
     - Weekly Google Calendar export.
+    - Full persistence via Supabase.
 
 ### 🚀 **Onboarding & Personalization**
 - **Intake Wizard**: 3-step flow for new users:
@@ -347,33 +354,28 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
     3.  **Coach Persona**: Supportive, Drill Sergeant, Analytical.
 - **Dynamic System Prompt**: Global prompt updates based on selected Persona.
 
+### � **Personalized Content Feed (Phase 1)**
+- **Hybrid Interest Search**: Hybrid interest-based search algorithm.
+- **Multi-Source Support**: Architecture for YouTube, Instagram, and RSS.
+- **AI Scoring**: Content scoring based on user profile and chat history.
+- **Rich UI**: Home page content stream with interactive cards.
+
 ---
 
 ## 🚧 REMAINING WORK
 
-### 📋 **Training Plan Generator (High Priority)**
-- Goal-setting form (race type, distance, timeline)
-- AI-generated plan display interface
-- Plan persistence and management
-- Individual workout detail cards
-- Plan modification capabilities
+### 📋 **Training Plan Generator (Enhancements)**
+- [ ] Advanced periodization logic
+- [ ] Plan templates library
+- [ ] Recurring season schedules
 
-### 📺 **Personalized Content Feed (Phase 1 - IN PROGRESS)**
-- ✅ **COMPLETED** - Content feed architecture and data models
-- ✅ **COMPLETED** - YouTube API integration with cycling channels
-- ✅ **COMPLETED** - AI-powered content scoring based on user profile
-- ✅ **COMPLETED** - Home page content stream with rich cards
-- ✅ **COMPLETED** - User profile analysis from chat/Strava data
-
-### 📺 **Content Feed - Future Phases**
+### 📺 **Content Feed - Phases 2 & 3**
 - **Phase 2**: Instagram API, RSS feeds (Bicycling, Outside Magazine)
 - **Phase 3**: Machine learning recommendations, user feedback
 
-### 👤 **User Profile Setup Chat (TODO)**
-- New chat session type for gathering user preferences
-- Structured questions about cycling interests, gear, goals
-- Profile data integration with content feed recommendations
-- Onboarding flow for new users
+### 👤 **User Profile & Onboarding (Refinements)**
+- [ ] Advanced equipment tracking (bike weight, sensors)
+- [ ] More granular availability settings (am/pm preferences)
 
 ### 📅 **Google Calendar Integration (COMPLETED)**
 - ✅ Google OAuth 2.0 authentication with token storage
