@@ -18,10 +18,12 @@ import { DirectOuraAuth } from './components/auth/DirectOuraAuth';
 import { DirectStravaAuth } from './components/auth/DirectStravaAuth';
 import PrivacyPage from './pages/PrivacyPage';
 import { ROUTES } from './utils/constants';
+import { PostHogPageView } from './components/common/PostHogPageView';
 
 function App() {
   return (
     <Router>
+      <PostHogPageView />
       <AuthProvider>
         <div className="min-h-screen bg-gray-50">
           <Header />

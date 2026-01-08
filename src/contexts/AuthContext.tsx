@@ -82,13 +82,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   // Effect to identify user in analytics when profile is loaded
+  const lastIdentifiedUser = React.useRef<string | null>(null);
+
   useEffect(() => {
     if (user && userProfile) {
-      analytics.identify(user.id, {
-        email: user.email,
-        status: userProfile.status,
-        coach_persona: userProfile.coach_persona
-      });
+      // proper de-duplication to avoid "duplicate setPersonProperties" warnings
+      const identityKey = `${user.id}-${userProfile.status}-${userProfile.coach_persona}`;
+
+      if (lastIdentifiedUser.current !== identityKey) {
+        analytics.identify(user.id, {
+          email: user.email,
+          status: userProfile.status,
+          coach_persona: userProfile.coach_persona
+        });
+        lastIdentifiedUser.current = identityKey;
+      }
+    } else if (!user) {
+      lastIdentifiedUser.current = null;
     }
   }, [user, userProfile]);
 

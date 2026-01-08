@@ -9,8 +9,11 @@ if (isProduction) {
     posthog.init(POSTHOG_KEY, {
         api_host: POSTHOG_HOST,
         person_profiles: 'identified_only',
-        capture_pageview: false // We'll handle this manually if needed, or rely on router transitions if we add page tracking later
+        capture_pageview: false, // Handled manually
+        // debug: true // Disabled for production
     });
+} else {
+    console.log('PostHog not initialized: VITE_POSTHOG_KEY not found');
 }
 
 export const analytics = {
@@ -37,6 +40,14 @@ export const analytics = {
             posthog.reset();
         } else {
             console.log('[Analytics] Reset user');
+        }
+    },
+
+    pageView: () => {
+        if (isProduction) {
+            posthog.capture('$pageview');
+        } else {
+            console.log(`[Analytics] Page View: ${window.location.pathname}`);
         }
     }
 };
