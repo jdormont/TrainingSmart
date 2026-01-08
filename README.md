@@ -13,6 +13,8 @@ Instead of generic "one-size-fits-all" plans, TrainingSmart AI adapts to *you*.
 *   **📊 Smart Dashboard**: See your weekly progress, fatigue levels, and personalized tips at a glance.
 *   **📅 Custom Training Plans**: Generate a training plan for your specific goal (e.g., "Prepare for a Century Ride in 8 weeks") that fits your schedule. 
 
+*   **📺 Personalized Content**: A "TikTok-style" feed of cycling videos and articles curated by AI to match your specific interests and goals.
+
 ---
 
 ## Application Guide
@@ -21,10 +23,10 @@ Here is a tour of the main features you'll use in TrainingSmart AI:
 
 ### 📊 Dashboard
 The mission control for your training.
-*   **Health Overview**: A "Spider Chart" that visualizes your current fitness across multiple dimensions (Endurance, Speed, Recovery, Consistency) compared to your historical baseline.
-*   **Weekly Insights**: AI-generated summary of your week. It analyzes your recent volume and intensity to tell you if you're on track or overtraining.
-*   **Recovery & Sleep**: If you connect an **Oura Ring**, this section shows your Sleep and Readiness scores. The AI uses this to recommend rest days when you're burnt out.
-*   **Recent Activities**: A quick list of your latest Strava rides.
+*   **Hero Overview**: A new split-view header showing your Primary Training Focus and top status alerts.
+*   **Bio-Aware Recovery**: Weighted recovery score combining **Sleep**, **HRV**, and **Resting Heart Rate**, plus a new **Respiratory Rate** tracker.
+*   **Training Trends**: An 8-week lookback at your volume and intensity to prevent overtraining.
+*   **Recent Activities**: Quick access to your latest Strava rides with detailed performance metrics.
 
 ### 🤖 AI Coach Chat
 Talk to a coach who actually knows you.
@@ -35,13 +37,15 @@ Talk to a coach who actually knows you.
 ### 📅 Training Plans
 Structured paths to hit your goals.
 *   **AI Plan Generator**: Tell the app your goal (e.g., "Gran Fondo next month"), your available time (e.g., "6 hours/week"), and your focus areas. It will build a full schedule for you.
-*   **Calendar & List Views**: See your upcoming workouts in a format that works for you.
+*   **Drag-and-Drop Management**: Need to move a workout? Just drag it to a new day. The plan automatically updates.
+*   **Strava Reconciliation**: The app links your *actual* rides to your *planned* workouts to track adherence.
 *   **Google Calendar Sync**: One-click export of your workouts to your personal Google Calendar so you never miss a session.
 *   **Modify Weeks**: Sick or busy? Ask the AI to "rewrite this week" to accommodate your schedule change.
 
 ### ⚙️ Settings
 Customize your experience.
 *   **Integrations**: Connect or disconnect your **Strava**, **Oura Ring**, and **Google Calendar** accounts.
+*   **Apple Watch Sync**: Sync your Sleep and HRV data directly from Apple Health using our iOS Shortcut helper.
 *   **AI Personality**: You can customize the "System Prompt" of your coach. Want a drill sergeant? A supportive cheerleader? A science-nerd physiologist? You can change the AI's personality to match your motivational style.
 
 ---
