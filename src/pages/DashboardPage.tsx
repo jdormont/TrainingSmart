@@ -20,6 +20,7 @@ import { MessageCircle, ChevronDown, ChevronUp, Calendar, Link2Off, Activity } f
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../utils/constants';
 import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
+import { analytics } from '../lib/analytics';
 
 interface AuthError {
   message?: string;
@@ -315,6 +316,7 @@ export const DashboardPage: React.FC = () => {
   };
 
   const handleActivityClick = (activity: StravaActivity) => {
+    analytics.track('activity_card_clicked', { type: activity.type, id: activity.id });
     setSelectedActivity(activity);
   };
 

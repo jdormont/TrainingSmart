@@ -17,6 +17,7 @@ import type { StravaActivity, StravaAthlete, StravaStats, ChatMessage, ChatSessi
 import { calculateWeeklyStats } from '../utils/dataProcessing';
 import { calculateSleepScore } from '../utils/sleepScoreCalculator';
 import { format } from 'date-fns';
+import { analytics } from '../lib/analytics';
 
 export const ChatPage: React.FC = () => {
   const location = useLocation();
@@ -255,6 +256,9 @@ What would you like to know about your training?`;
     // Add message to current session
     supabaseChatService.addMessageToSession(activeSession.id, userMessage);
 
+    // Track message sent
+    analytics.track('chat_message_sent', { category: activeSession.category });
+
     setInputMessage('');
     setLoading(true);
     setError(null);
@@ -337,6 +341,10 @@ What would you like to know about your training?`;
 
   const handleSessionCreate = async (name: string, category: ChatSession['category'], description?: string) => {
     const newSession = await supabaseChatService.createSession(name, category, description);
+
+    // Track session creation
+    analytics.track('chat_session_created', { category });
+
     const updatedSessions = await supabaseChatService.getSessions();
     setSessions(updatedSessions);
     setActiveSession(newSession);

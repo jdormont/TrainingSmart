@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { stravaApi } from '../../services/stravaApi';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { ROUTES } from '../../utils/constants';
+import { analytics } from '../../lib/analytics';
 
 export const AuthCallback: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -55,6 +56,9 @@ export const AuthCallback: React.FC = () => {
 
         setDebugInfo('Exchanging code for access tokens...');
         await stravaApi.exchangeCodeForTokens(code);
+
+        // Track successful connection
+        analytics.track('provider_connected', { provider: 'strava' });
 
         setIsAuth(true);
         setDebugInfo('Success! Redirecting to dashboard...');

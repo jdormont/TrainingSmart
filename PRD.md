@@ -1004,7 +1004,3 @@ These two features work together to create a complete, intelligent training work
 Together, they transform TrainingSmart AI from a planning tool into a comprehensive training management system that understands user goals (from chat), generates personalized plans (AI-powered), tracks actual performance (Strava integration), and provides insights into training effectiveness (analytics).
 
 The seamless integration creates a continuous feedback loop where conversations inform plans, plans guide training, activities track execution, and analytics fuel new conversations about progress and adjustments.
-
----
-
-This PRD provides bolt.new with specific, actionable requirements that can be implemented step-by-step, starting with the core MVP functionality and building up to advanced features.

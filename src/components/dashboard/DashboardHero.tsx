@@ -7,6 +7,7 @@ import type { StravaAthlete, WeeklyStats } from '../../types';
 import type { WeeklyInsight } from '../../services/weeklyInsightService';
 import { formatDistance, formatDuration } from '../../utils/formatters';
 import { ROUTES } from '../../utils/constants';
+import { analytics } from '../../lib/analytics';
 
 interface DashboardHeroProps {
     athlete: StravaAthlete | null;
@@ -169,7 +170,10 @@ export const DashboardHero: React.FC<DashboardHeroProps> = ({
                     <Button
                         variant="primary"
                         size="lg"
-                        onClick={() => navigate(ROUTES.CHAT)}
+                        onClick={() => {
+                            analytics.track('insight_action_taken', { type: 'chat' });
+                            navigate(ROUTES.CHAT);
+                        }}
                         className="w-full justify-center shadow-orange-100 shadow-lg hover:shadow-xl transition-all"
                     >
                         <MessageCircle className="w-5 h-5 mr-2" />
@@ -178,7 +182,10 @@ export const DashboardHero: React.FC<DashboardHeroProps> = ({
                     <Button
                         variant="outline"
                         size="lg"
-                        onClick={() => navigate(ROUTES.PLANS)}
+                        onClick={() => {
+                            analytics.track('insight_action_taken', { type: 'plans' });
+                            navigate(ROUTES.PLANS);
+                        }}
                         className="w-full justify-center bg-white hover:bg-gray-50"
                     >
                         <Calendar className="w-5 h-5 mr-2" />

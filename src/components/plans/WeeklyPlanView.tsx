@@ -19,6 +19,7 @@ import {
 import { DraggableWorkoutCard } from './DraggableWorkoutCard';
 import { DroppableDayColumn } from './DroppableDayColumn';
 import { ConflictResolutionModal } from './ConflictResolutionModal';
+import { analytics } from '../../lib/analytics';
 
 interface WeeklyPlanViewProps {
   workouts: Workout[];
@@ -150,6 +151,7 @@ export default function WeeklyPlanView({
     } else {
       // Simple move
       onMoveWorkout?.(sourceWorkoutId, targetDate, 'move');
+      analytics.track('workout_rescheduled', { method: 'drag', type: 'move' });
     }
   };
 
@@ -160,6 +162,7 @@ export default function WeeklyPlanView({
   const handleSwap = () => {
     if (conflictModal.sourceWorkout && conflictModal.targetDate) {
       onMoveWorkout?.(conflictModal.sourceWorkout.id, conflictModal.targetDate, 'swap');
+      analytics.track('workout_rescheduled', { method: 'drag', type: 'swap' });
       closeConflictModal();
     }
   };
@@ -167,6 +170,7 @@ export default function WeeklyPlanView({
   const handleReplace = () => {
     if (conflictModal.sourceWorkout && conflictModal.targetDate) {
       onMoveWorkout?.(conflictModal.sourceWorkout.id, conflictModal.targetDate, 'replace');
+      analytics.track('workout_rescheduled', { method: 'drag', type: 'replace' });
       closeConflictModal();
     }
   };

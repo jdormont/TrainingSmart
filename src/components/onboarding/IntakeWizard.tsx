@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Trophy, Heart, Zap, Scale, X } from 'lucide-react';
 import { Button } from '../common/Button';
 import { completeOnboarding, type WizardData } from '../../services/userService';
+import { analytics } from '../../lib/analytics';
 
 interface IntakeWizardProps {
   onComplete: () => void;
@@ -118,6 +119,14 @@ export const IntakeWizard: React.FC<IntakeWizardProps> = ({ onComplete }) => {
 
     try {
       await completeOnboarding(wizardData);
+
+      // Track successful onboarding
+      analytics.track('onboarding_completed', {
+        goal: wizardData.training_goal,
+        hours: wizardData.weekly_hours,
+        persona: wizardData.coach_persona
+      });
+
       onComplete();
     } catch (err) {
       setError((err as Error).message);
@@ -138,9 +147,8 @@ export const IntakeWizard: React.FC<IntakeWizardProps> = ({ onComplete }) => {
               {[1, 2, 3].map((s) => (
                 <div
                   key={s}
-                  className={`h-2 flex-1 rounded-full transition-colors ${
-                    s <= step ? 'bg-orange-600' : 'bg-gray-200'
-                  }`}
+                  className={`h-2 flex-1 rounded-full transition-colors ${s <= step ? 'bg-orange-600' : 'bg-gray-200'
+                    }`}
                 />
               ))}
             </div>
@@ -170,11 +178,10 @@ export const IntakeWizard: React.FC<IntakeWizardProps> = ({ onComplete }) => {
                     <button
                       key={goal.id}
                       onClick={() => handleGoalSelect(goal.id)}
-                      className={`p-6 rounded-lg border-2 transition-all text-left ${
-                        isSelected
-                          ? `${goal.borderColor} ${goal.bgColor} shadow-md`
-                          : 'border-gray-200 hover:border-gray-300 bg-white'
-                      }`}
+                      className={`p-6 rounded-lg border-2 transition-all text-left ${isSelected
+                        ? `${goal.borderColor} ${goal.bgColor} shadow-md`
+                        : 'border-gray-200 hover:border-gray-300 bg-white'
+                        }`}
                     >
                       <div className="flex items-start space-x-4">
                         <div className={`p-3 rounded-lg ${goal.bgColor}`}>
@@ -205,11 +212,10 @@ export const IntakeWizard: React.FC<IntakeWizardProps> = ({ onComplete }) => {
                     <button
                       key={hours}
                       onClick={() => handleHoursSelect(hours)}
-                      className={`px-8 py-4 rounded-lg border-2 font-semibold transition-all ${
-                        isSelected
-                          ? 'border-orange-600 bg-orange-50 text-orange-700 shadow-md'
-                          : 'border-gray-200 hover:border-gray-300 bg-white text-gray-700'
-                      }`}
+                      className={`px-8 py-4 rounded-lg border-2 font-semibold transition-all ${isSelected
+                        ? 'border-orange-600 bg-orange-50 text-orange-700 shadow-md'
+                        : 'border-gray-200 hover:border-gray-300 bg-white text-gray-700'
+                        }`}
                     >
                       {hours} hrs
                     </button>
@@ -217,11 +223,10 @@ export const IntakeWizard: React.FC<IntakeWizardProps> = ({ onComplete }) => {
                 })}
                 <button
                   onClick={() => handleHoursSelect(15)}
-                  className={`px-8 py-4 rounded-lg border-2 font-semibold transition-all ${
-                    wizardData.weekly_hours === 15
-                      ? 'border-orange-600 bg-orange-50 text-orange-700 shadow-md'
-                      : 'border-gray-200 hover:border-gray-300 bg-white text-gray-700'
-                  }`}
+                  className={`px-8 py-4 rounded-lg border-2 font-semibold transition-all ${wizardData.weekly_hours === 15
+                    ? 'border-orange-600 bg-orange-50 text-orange-700 shadow-md'
+                    : 'border-gray-200 hover:border-gray-300 bg-white text-gray-700'
+                    }`}
                 >
                   12+ hrs
                 </button>
@@ -245,11 +250,10 @@ export const IntakeWizard: React.FC<IntakeWizardProps> = ({ onComplete }) => {
                     <button
                       key={persona.id}
                       onClick={() => handlePersonaSelect(persona.id)}
-                      className={`w-full p-5 rounded-lg border-2 transition-all text-left ${
-                        isSelected
-                          ? 'border-orange-600 bg-orange-50 shadow-md'
-                          : 'border-gray-200 hover:border-gray-300 bg-white'
-                      }`}
+                      className={`w-full p-5 rounded-lg border-2 transition-all text-left ${isSelected
+                        ? 'border-orange-600 bg-orange-50 shadow-md'
+                        : 'border-gray-200 hover:border-gray-300 bg-white'
+                        }`}
                     >
                       <h4 className="font-semibold text-gray-900 mb-1">{persona.label}</h4>
                       <p className="text-sm text-gray-600">{persona.description}</p>

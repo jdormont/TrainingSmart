@@ -18,6 +18,7 @@ import {
   AVAILABLE_INTERESTS
 } from '../services/userProfileService';
 import type { StravaAthlete } from '../types';
+import { analytics } from '../lib/analytics';
 
 const DEFAULT_SYSTEM_PROMPT = `You are TrainingSmart AI, an elite cycling and running coach with direct access to the user's Strava training data.
 
@@ -178,6 +179,9 @@ export const SettingsPage: React.FC = () => {
         setCalendarConnected(status.connected);
         setCalendarConnectedAt(status.connectedAt || null);
 
+        // Track successful connection
+        analytics.track('provider_connected', { provider: 'google_calendar' });
+
         // Clean up URL
         navigate('/settings', { replace: true });
 
@@ -258,6 +262,7 @@ export const SettingsPage: React.FC = () => {
       const authUrl = ouraApi.generateAuthUrl();
       console.log('✅ OAuth URL generated successfully');
       console.log('🔄 Redirecting to:', authUrl);
+      analytics.track('provider_connected', { provider: 'oura' });
       window.location.href = authUrl;
     } catch (error) {
       console.error('❌ Failed to connect to Oura:', error);
@@ -712,6 +717,7 @@ export const SettingsPage: React.FC = () => {
                   href="https://www.icloud.com/shortcuts/28b55a5f799d43e49d9023a9fe1c6050"
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={() => analytics.track('shortcut_downloaded')}
                   className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   <Download className="w-4 h-4 mr-2" />
@@ -760,6 +766,7 @@ export const SettingsPage: React.FC = () => {
                       onClick={() => {
                         if (userProfile?.ingest_key) {
                           navigator.clipboard.writeText(userProfile.ingest_key);
+                          analytics.track('ingest_key_copied');
                           setCopying(true);
                           setTimeout(() => setCopying(false), 2000);
                         }

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../services/supabaseClient';
+import { analytics } from '../lib/analytics';
 
 interface UserProfile {
   id: string;
@@ -60,7 +61,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        loadUserProfile(session.user.id).then(() => setLoading(false));
+        loadUserProfile(session.user.id).then(() => {
+          setLoading(false);
+        });
       } else {
         setLoading(false);
       }
@@ -78,10 +81,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => subscription.unsubscribe();
   }, []);
 
+  // Effect to identify user in analytics when profile is loaded
+  useEffect(() => {
+    if (user && userProfile) {
+      analytics.identify(user.id, {
+        email: user.email,
+        status: userProfile.status,
+        coach_persona: userProfile.coach_persona
+      });
+    }
+  }, [user, userProfile]);
+
   const signOut = async () => {
     await supabase.auth.signOut();
     setUser(null);
     setUserProfile(null);
+    analytics.reset();
   };
 
   const value = {
