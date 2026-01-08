@@ -313,6 +313,8 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ### 🤖 **AI Chat System**
 - Full conversational interface with message history
 - AI coach with access to 30 recent activities
+- **[NEW]** Advanced Data Context: Heart Rate, Power, Elevation analysis
+- **[NEW]** Rich Formatting: Markdown tables for activity comparisons
 - Custom system prompt editor in Settings
 - Pre-built coaching personality templates
 - Suggested questions for easy interaction
@@ -333,6 +335,7 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 - **Readiness Score**: Aggregates data from multiple sources to determine "Fresh" vs "Fatigued" state.
 - **Actionable Advice**: "Permission to Rest", "The Nudge", or "Ranked Workouts".
 - **Apple Watch Health Sync**: Imports Sleep, HRV, and RHR via iOS Shortcut & Edge Function.
+- **[NEW]** Recovery Data in Chat: AI considers Oura or Manual/Synced metrics for advice.
 - **Deep Linking**: Insights link directly to Chat with context-aware prompts.
 
 ### 📋 **Interactive Training Planner**
