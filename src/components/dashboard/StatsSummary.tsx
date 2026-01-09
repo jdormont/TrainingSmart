@@ -1,14 +1,16 @@
 import React from 'react';
-import { Activity, Clock, MapPin, TrendingUp } from 'lucide-react';
+import { Activity, Clock, MapPin, TrendingUp, Flame } from 'lucide-react';
 import type { WeeklyStats } from '../../types';
+import { UserStreak } from '../../services/streakService';
 import { formatDistance, formatDuration } from '../../utils/formatters';
 
 interface StatsSummaryProps {
   weeklyStats: WeeklyStats;
+  streak?: UserStreak | null;
   loading?: boolean;
 }
 
-export const StatsSummary: React.FC<StatsSummaryProps> = ({ weeklyStats, loading = false }) => {
+export const StatsSummary: React.FC<StatsSummaryProps> = ({ weeklyStats, streak, loading = false }) => {
   if (loading) {
     return (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -56,9 +58,19 @@ export const StatsSummary: React.FC<StatsSummaryProps> = ({ weeklyStats, loading
     }
   ];
 
+  if (streak) {
+    stats.push({
+      label: 'Streak',
+      value: `${streak.current_streak} Day${streak.current_streak !== 1 ? 's' : ''}`,
+      icon: Flame,
+      color: 'text-orange-600',
+      bgColor: 'bg-orange-50'
+    });
+  }
+
   return (
     <div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className={`grid grid-cols-2 ${streak ? 'md:grid-cols-5' : 'md:grid-cols-4'} gap-4 mb-8`}>
         {stats.map((stat) => {
           const Icon = stat.icon;
           return (

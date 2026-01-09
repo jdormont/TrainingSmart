@@ -114,6 +114,21 @@ export const DashboardPage: React.FC = () => {
         setActivities(activitiesData);
         setDisplayedActivities(activitiesData.slice(0, INITIAL_ACTIVITIES_COUNT));
 
+        // Sync Streak from Activities (Backfill if 0)
+        if (activitiesData.length > 0) {
+          try {
+            // Loading this in background so it doesn't block UI render
+            streakService.syncFromActivities(user.id, activitiesData).then(syncedStreak => {
+              if (syncedStreak) {
+                console.log('Dashboard: Streaks synced from history');
+                setUserStreak(syncedStreak);
+              }
+            });
+          } catch (syncErr) {
+            console.warn('Dashboard: Failed to sync streak history:', syncErr);
+          }
+        }
+
         // Calculate weekly stats
         const stats = calculateWeeklyStats(activitiesData);
         setWeeklyStats(stats);

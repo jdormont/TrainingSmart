@@ -18,7 +18,6 @@ import PlanModificationModal from '../components/plans/PlanModificationModal';
 import { ouraApi } from '../services/ouraApi';
 import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
 import { streakService, UserStreak } from '../services/streakService';
-import { StreakHistory } from '../components/plans/StreakHistory';
 import { supabase } from '../services/supabaseClient';
 
 type AiWorkout = Partial<Workout> & { dayOfWeek?: number; week?: number };
@@ -625,14 +624,9 @@ Additional Preferences: ${preferences || 'None'}
 
         {/* Current Training Context */}
         {weeklyStats && (
-          <div className="mb-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">This Week</h2>
-              <StatsSummary weeklyStats={weeklyStats} />
-            </div>
-            <div>
-              {streak && <div className="mt-11"><StreakHistory streak={streak} /></div>}
-            </div>
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">This Week</h2>
+            <StatsSummary weeklyStats={weeklyStats} streak={streak} />
           </div>
         )}
 

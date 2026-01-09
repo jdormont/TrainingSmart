@@ -64,7 +64,7 @@ export const StreakWidget: React.FC<StreakWidgetProps> = ({ streak, isRestDay, o
                         {streak.current_streak}
                     </div>
                     <div className="text-sm text-gray-500 font-medium mt-1">
-                        Running Day{streak.current_streak !== 1 && 's'}
+                        Days
                     </div>
                 </div>
             </div>

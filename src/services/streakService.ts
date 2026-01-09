@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
-import { differenceInCalendarDays, parseISO, addDays, format } from 'date-fns';
+import { differenceInCalendarDays, parseISO, addDays, format, isSameDay, subDays } from 'date-fns';
+import { StravaActivity } from '../types';
 
 export interface UserStreak {
     user_id: string;
@@ -256,6 +257,83 @@ class StreakService {
 
     async checkInRestDay(userId: string, localDateStr: string) {
         return this.processDailyActivity(userId, localDateStr, 'rest_checkin');
+    }
+
+    /**
+     * Calculates streak based on provided activities (Strava + Plans).
+     * Used for initial backfill or re-sync.
+     */
+    async syncFromActivities(userId: string, activities: StravaActivity[]): Promise<UserStreak | null> {
+        if (!activities || activities.length === 0) return this.getStreak(userId);
+
+        const sorted = [...activities].sort((a, b) => new Date(b.start_date_local).getTime() - new Date(a.start_date_local).getTime());
+        const today = new Date();
+
+        let currentStreak = 0;
+        let lastActivityDate = null;
+        let streakHistory: StreakHistoryItem[] = [];
+
+        // Check if active today
+        const activeToday = sorted.some(a => isSameDay(parseISO(a.start_date_local), today));
+
+        // Start checking from Today or Yesterday
+        let checkDate = today;
+        if (!activeToday) {
+            // If not active today, check yesterday. If active yesterday, streak is alive (1).
+            // If not active yesterday, streak is 0? 
+            // Actually, let's just iterate back day by day.
+            checkDate = subDays(today, 1);
+        }
+
+        // Iterate backwards
+        // Safety break: 365 days
+        for (let i = 0; i < 365; i++) {
+            const dateStr = format(checkDate, 'yyyy-MM-dd');
+            const hasActivity = sorted.some(a => isSameDay(parseISO(a.start_date_local), checkDate));
+
+            if (hasActivity) {
+                currentStreak++;
+                if (!lastActivityDate) lastActivityDate = dateStr; // Newest activity in streak
+                streakHistory.unshift({
+                    date: dateStr,
+                    type: 'activity',
+                    note: 'Backfilled from Strava'
+                });
+            } else {
+                // Check if it's "Today" and we haven't done it yet? 
+                // If we are checking Today and it's missing, it doesn't break streak yet.
+                if (isSameDay(checkDate, today)) {
+                    // pass
+                } else {
+                    // Break streak
+                    break;
+                }
+            }
+            checkDate = subDays(checkDate, 1);
+        }
+
+        if (currentStreak > 0) {
+            console.log(`Backfilled streak: ${currentStreak} days`);
+
+            // Calc earned freezes (1 per 7 days)
+            const earnedFreezes = Math.floor(currentStreak / 7);
+
+            const { data } = await supabase
+                .from('user_streaks')
+                .update({
+                    current_streak: currentStreak,
+                    longest_streak: currentStreak, // Approximate
+                    streak_freezes: earnedFreezes,
+                    last_activity_date: lastActivityDate,
+                    streak_history: streakHistory
+                })
+                .eq('user_id', userId)
+                .select()
+                .single();
+            return data;
+        }
+
+        return this.getStreak(userId);
     }
 }
 
