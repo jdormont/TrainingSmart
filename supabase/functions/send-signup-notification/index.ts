@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "@supabase/supabase-js";
-import { Resend } from "resend";
+import { createClient } from "npm:@supabase/supabase-js@2.58.0";
+import { Resend } from "npm:resend@2.0.0";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",

@@ -11,7 +11,7 @@ declare
   -- IMPORTANT: You must update this URL to match your project's Edge Function URL.
   -- For local development: http://host.docker.internal:54321/functions/v1/send-signup-notification
   -- For production: https://gulsoirivktbwbozuuwp.supabase.co/functions/v1/send-signup-notification
-  edge_function_url text := 'http://host.docker.internal:54321/functions/v1/send-signup-notification';
+  edge_function_url text := 'https://gulsoirivktbwbozuuwp.supabase.co/functions/v1/send-signup-notification';
   
   -- Service Key is typically needed for authorization, or you can use a specific secret
   -- For webhooks configured via Dashboard, Supabase handles this.
