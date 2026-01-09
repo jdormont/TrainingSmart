@@ -282,6 +282,7 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 - [x] **COMPLETED** - Advanced data visualization (Bio-Aware Insights, Training Trends)
 - [x] **COMPLETED** - Training plan persistence
 - [x] **COMPLETED** - Goal setting and tracking (Intake Wizard)
+- [x] **COMPLETED** - **Training Streaks & Habit Tracking**
 
 ### Phase 3: Polish & Deploy
 - [ ] Error handling and edge cases
@@ -349,6 +350,16 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
     - **Strava Reconciliation**: Link actual activities to planned workouts for "Plan vs Actual" analysis.
     - Weekly Google Calendar export.
     - Full persistence via Supabase.
+
+### 🔥 **Training Streaks System**
+- **Streak Tracking**:
+    - **Smart Backfill**: Automatically calculates streak from past 365 days of Strava history for new users.
+    - **Active Recovery**: "Rest Days" can be checked-in to maintain streak without intense activity.
+    - **Loss Aversion**: Banked "Freezes" (earned 1 per 7 days) automatically save streaks on missed days.
+- **UI Integration**:
+    - **Dashboard**: Prominent Streak Widget with "Days" count and visual flame/freeze indicators.
+    - **Plans**: Streak card integrated into "This Week" stats row for habit context.
+    - **Chat**: AI Coach is aware of streak status and encourages consistency.
 
 ### 🚀 **Onboarding & Personalization**
 - **Intake Wizard**: 3-step flow for new users:
