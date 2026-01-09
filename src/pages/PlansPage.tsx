@@ -17,6 +17,9 @@ import WeeklyPlanView from '../components/plans/WeeklyPlanView';
 import PlanModificationModal from '../components/plans/PlanModificationModal';
 import { ouraApi } from '../services/ouraApi';
 import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
+import { streakService, UserStreak } from '../services/streakService';
+import { StreakHistory } from '../components/plans/StreakHistory';
+import { supabase } from '../services/supabaseClient';
 
 type AiWorkout = Partial<Workout> & { dayOfWeek?: number; week?: number };
 
@@ -31,6 +34,7 @@ export const PlansPage: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
+  const [streak, setStreak] = useState<UserStreak | null>(null);
   const [modificationModal, setModificationModal] = useState<{
     isOpen: boolean;
     planId: string | null;
@@ -70,6 +74,13 @@ export const PlansPage: React.FC = () => {
         // Calculate weekly stats
         const stats = calculateWeeklyStats(activitiesData);
         setWeeklyStats(stats);
+
+        // Fetch Streak
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const streakData = await streakService.getStreak(user.id);
+          setStreak(streakData);
+        }
 
         await loadPlans(); // Load plans after initial data
       } catch (err) {
@@ -614,9 +625,14 @@ Additional Preferences: ${preferences || 'None'}
 
         {/* Current Training Context */}
         {weeklyStats && (
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">This Week</h2>
-            <StatsSummary weeklyStats={weeklyStats} />
+          <div className="mb-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">This Week</h2>
+              <StatsSummary weeklyStats={weeklyStats} />
+            </div>
+            <div>
+              {streak && <div className="mt-11"><StreakHistory streak={streak} /></div>}
+            </div>
           </div>
         )}
 

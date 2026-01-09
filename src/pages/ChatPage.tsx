@@ -19,6 +19,8 @@ import { calculateWeeklyStats } from '../utils/dataProcessing';
 import { calculateSleepScore } from '../utils/sleepScoreCalculator';
 import { format } from 'date-fns';
 import { analytics } from '../lib/analytics';
+import { streakService, UserStreak } from '../services/streakService';
+import { supabase } from '../services/supabaseClient';
 
 export const ChatPage: React.FC = () => {
   const location = useLocation();
@@ -46,6 +48,9 @@ export const ChatPage: React.FC = () => {
 
   // Daily Metric data (HealthKit/Manual)
   const [dailyMetric, setDailyMetric] = useState<DailyMetric | null>(null);
+
+  // Streak data
+  const [streak, setStreak] = useState<UserStreak | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -113,6 +118,17 @@ export const ChatPage: React.FC = () => {
           }
         } catch (metricError) {
           console.warn('Could not load daily metrics:', metricError);
+        }
+
+        // Load Streak Data
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const streakData = await streakService.getStreak(user.id);
+            setStreak(streakData);
+          }
+        } catch (streakError) {
+          console.warn('Could not load streak data:', streakError);
         }
 
         // Load chat sessions
@@ -308,6 +324,7 @@ What would you like to know about your training?`;
           dailyMetric,
           sleepScore
         },
+        streak: streak,
         userProfile: userProfile ? {
           training_goal: userProfile.training_goal,
           coach_persona: userProfile.coach_persona,

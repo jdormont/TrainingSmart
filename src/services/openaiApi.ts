@@ -1,6 +1,7 @@
 // OpenAI API service for training advice
 import axios from 'axios';
 import type { StravaActivity, StravaAthlete, StravaStats, ChatMessage, OuraSleepData, OuraReadinessData, Workout, DailyMetric } from '../types';
+import { UserStreak } from './streakService';
 import { STORAGE_KEYS } from '../utils/constants';
 
 
@@ -15,6 +16,7 @@ interface TrainingContext {
   athlete: StravaAthlete;
   recentActivities: StravaActivity[];
   stats?: StravaStats;
+  streak?: UserStreak | null;
   weeklyVolume: {
     distance: number;
     time: number;
@@ -160,6 +162,18 @@ RESPONSE GUIDELINES:
       recoveryContext += '\n\nIMPORTANT: Use this recovery data to inform your training recommendations. Poor sleep or low readiness should lead to easier training suggestions.';
     }
 
+    // Build Streak Context
+    let streakContext = '';
+    if (context.streak) {
+      streakContext = `
+STREAK CONTEXT:
+- Current Streak: ${context.streak.current_streak} days
+- Longest Streak: ${context.streak.longest_streak} days
+- Freeze Bank: ${context.streak.streak_freezes} freezes available
+- Last Activity: ${context.streak.last_activity_date || 'None'}
+`;
+    }
+
     return `${basePrompt}
 
 ATHLETE PROFILE:
@@ -170,6 +184,7 @@ ATHLETE PROFILE:
 RECENT TRAINING DATA:
 - This week: ${(context.weeklyVolume.distance * 0.000621371).toFixed(1)}mi over ${context.weeklyVolume.activities} activities
 - Total time: ${Math.round(context.weeklyVolume.time / 3600)}h ${Math.round((context.weeklyVolume.time % 3600) / 60)}m
+${streakContext}
 - Recent activities: ${context.recentActivities.slice(0, 5).map(a => {
       const parts = [`${a.type}: ${(a.distance * 0.000621371).toFixed(1)}mi in ${Math.round(a.moving_time / 60)}min`];
       if (a.total_elevation_gain > 0) parts.push(`${Math.round(a.total_elevation_gain * 3.28084)}ft elev`);

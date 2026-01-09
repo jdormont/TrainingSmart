@@ -14,6 +14,9 @@ import { weeklyInsightService } from '../services/weeklyInsightService';
 import { healthMetricsService } from '../services/healthMetricsService';
 import { dailyMetricsService } from '../services/dailyMetricsService';
 import { trainingPlansService } from '../services/trainingPlansService';
+import { streakService, UserStreak } from '../services/streakService';
+import { StreakWidget } from '../components/dashboard/StreakWidget';
+import { StreakCelebration, CelebrationType } from '../components/common/StreakCelebration';
 import { getUserOnboardingStatus } from '../services/userService';
 import type { StravaActivity, StravaAthlete, WeeklyStats, OuraSleepData, OuraReadinessData, DailyMetric, Workout } from '../types';
 import type { WeeklyInsight, HealthMetrics } from '../services/weeklyInsightService';
@@ -24,6 +27,8 @@ import { ROUTES } from '../utils/constants';
 import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
 import { analytics } from '../lib/analytics';
 
+import { supabase } from '../services/supabaseClient';
+
 interface AuthError {
   message?: string;
   response?: {
@@ -33,6 +38,7 @@ interface AuthError {
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
+  const [currentUserId, setCurrentUserId] = useState<string>('');
   const [athlete, setAthlete] = useState<StravaAthlete | null>(null);
   const [activities, setActivities] = useState<StravaActivity[]>([]);
   const [displayedActivities, setDisplayedActivities] = useState<StravaActivity[]>([]);
@@ -44,6 +50,8 @@ export const DashboardPage: React.FC = () => {
   const [weeklyInsight, setWeeklyInsight] = useState<WeeklyInsight | null>(null);
   const [healthMetrics, setHealthMetrics] = useState<HealthMetrics | null>(null);
   const [nextWorkout, setNextWorkout] = useState<Workout | null>(null);
+  const [userStreak, setUserStreak] = useState<UserStreak | null>(null);
+  const [celebration, setCelebration] = useState<CelebrationType>(null);
   const [insightLoading, setInsightLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +74,18 @@ export const DashboardPage: React.FC = () => {
         // Try to fetch athlete data and recent activities from cache
         let athleteData: StravaAthlete;
         let activitiesData: StravaActivity[];
+
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Not authenticated');
+        setCurrentUserId(user.id);
+
+        try {
+          const streakData = await streakService.getStreak(user.id);
+          console.log('Dashboard loaded streak:', streakData);
+          setUserStreak(streakData);
+        } catch (err) {
+          console.warn('Failed to load streak:', err);
+        }
 
         try {
           [athleteData, activitiesData] = await Promise.all([
@@ -189,6 +209,9 @@ export const DashboardPage: React.FC = () => {
           console.error('Failed to fetch next workout:', err);
         }
 
+        // Fetch streak data
+        await fetchStreakData(user.id);
+
       } catch (err) {
         console.error('Failed to fetch dashboard data:', err);
         const errorMessage = (err as Error).message;
@@ -204,7 +227,43 @@ export const DashboardPage: React.FC = () => {
     };
 
     fetchData();
+
+    // Midnight / Focus check
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        supabase.auth.getUser().then(({ data }) => {
+          if (data.user) fetchStreakData(data.user.id);
+        });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
+
+  const fetchStreakData = async (userId: string) => {
+    try {
+      // Use local date for client-side truth
+      const localDate = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+      const streak = await streakService.validateAndSyncLikely(userId, localDate);
+      setUserStreak(streak);
+    } catch (err) {
+      console.error('Failed to fetch streak:', err);
+    }
+  };
+
+  const handleStreakUpdate = (newStreak: UserStreak) => {
+    // Check for celebration
+    if (userStreak) {
+      if (newStreak.streak_freezes > userStreak.streak_freezes) {
+        setCelebration('freeze_earned');
+      } else if (newStreak.current_streak > userStreak.current_streak) {
+        setCelebration('increment');
+      }
+    }
+    setUserStreak(newStreak);
+  };
+
 
   useEffect(() => {
     if (showAllActivities) {
@@ -498,6 +557,11 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <NetworkErrorBanner />
+      <StreakCelebration
+        type={celebration}
+        details={{ streak: userStreak?.current_streak, freezes: userStreak?.streak_freezes }}
+        onClose={() => setCelebration(null)}
+      />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -524,7 +588,21 @@ export const DashboardPage: React.FC = () => {
 
 
           {/* Right Rail (Recent Activities) */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 space-y-4">
+            <StreakWidget
+              streak={userStreak}
+              isRestDay={(() => {
+                if (!nextWorkout) return true; // No upcoming workout at all -> Rest/Free
+                const todayStr = new Date().toLocaleDateString('en-CA');
+                const workoutDateStr = nextWorkout.scheduledDate.toISOString().split('T')[0];
+                const isToday = workoutDateStr === todayStr;
+
+                if (!isToday) return true; // Next workout is in future -> Today is Rest
+                return nextWorkout.intensity === 'recovery' || nextWorkout.type === 'rest';
+              })()}
+              onStreakUpdate={handleStreakUpdate}
+              userId={currentUserId}
+            />
             <SmartWorkoutPreview
               nextWorkout={nextWorkout}
               recoveryScore={
