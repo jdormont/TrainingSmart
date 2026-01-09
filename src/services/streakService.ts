@@ -263,10 +263,15 @@ class StreakService {
      * Calculates streak based on provided activities (Strava + Plans).
      * Used for initial backfill or re-sync.
      */
-    async syncFromActivities(userId: string, activities: StravaActivity[]): Promise<UserStreak | null> {
-        if (!activities || activities.length === 0) return this.getStreak(userId);
+    /**
+     * Calculates streak based on provided history (Strava + Manual Workouts).
+     * Used for initial backfill or re-sync.
+     */
+    async syncFromHistory(userId: string, historyItems: { date: string; type: 'activity' | 'rest_checkin'; source: 'strava' | 'manual' }[]): Promise<UserStreak | null> {
+        if (!historyItems || historyItems.length === 0) return this.getStreak(userId);
 
-        const sorted = [...activities].sort((a, b) => new Date(b.start_date_local).getTime() - new Date(a.start_date_local).getTime());
+        // Sort by date descending
+        const sorted = [...historyItems].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         const today = new Date();
 
         let currentStreak = 0;
@@ -274,14 +279,11 @@ class StreakService {
         let streakHistory: StreakHistoryItem[] = [];
 
         // Check if active today
-        const activeToday = sorted.some(a => isSameDay(parseISO(a.start_date_local), today));
+        const activeToday = sorted.some(a => isSameDay(parseISO(a.date), today));
 
         // Start checking from Today or Yesterday
         let checkDate = today;
         if (!activeToday) {
-            // If not active today, check yesterday. If active yesterday, streak is alive (1).
-            // If not active yesterday, streak is 0? 
-            // Actually, let's just iterate back day by day.
             checkDate = subDays(today, 1);
         }
 
@@ -289,23 +291,21 @@ class StreakService {
         // Safety break: 365 days
         for (let i = 0; i < 365; i++) {
             const dateStr = format(checkDate, 'yyyy-MM-dd');
-            const hasActivity = sorted.some(a => isSameDay(parseISO(a.start_date_local), checkDate));
+            const hasActivity = sorted.some(a => isSameDay(parseISO(a.date), checkDate));
 
             if (hasActivity) {
                 currentStreak++;
                 if (!lastActivityDate) lastActivityDate = dateStr; // Newest activity in streak
                 streakHistory.unshift({
                     date: dateStr,
-                    type: 'activity',
-                    note: 'Backfilled from Strava'
+                    type: 'activity', 
+                    // Note: merging types if multiple exist slightly complex, simplified to 'activity'
+                    note: 'Synced from history'
                 });
             } else {
-                // Check if it's "Today" and we haven't done it yet? 
-                // If we are checking Today and it's missing, it doesn't break streak yet.
                 if (isSameDay(checkDate, today)) {
                     // pass
                 } else {
-                    // Break streak
                     break;
                 }
             }
@@ -334,6 +334,18 @@ class StreakService {
         }
 
         return this.getStreak(userId);
+    }
+
+    /**
+     * Legacy wrapper for backward compatibility if needed, using generic syncFromHistory
+     */
+    async syncFromActivities(userId: string, activities: StravaActivity[]): Promise<UserStreak | null> {
+        const history = activities.map(a => ({
+            date: a.start_date_local,
+            type: 'activity' as const,
+            source: 'strava' as const
+        }));
+        return this.syncFromHistory(userId, history);
     }
 }
 

@@ -114,19 +114,30 @@ export const DashboardPage: React.FC = () => {
         setActivities(activitiesData);
         setDisplayedActivities(activitiesData.slice(0, INITIAL_ACTIVITIES_COUNT));
 
-        // Sync Streak from Activities (Backfill if 0)
-        if (activitiesData.length > 0) {
-          try {
-            // Loading this in background so it doesn't block UI render
-            streakService.syncFromActivities(user.id, activitiesData).then(syncedStreak => {
+        // Sync Streak from Activities + Manual Workouts (Backfill if 0)
+        try {
+          // Fetch manual completed workouts
+          const { data: manualWorkouts } = await supabase
+            .from('workouts')
+            .select('scheduled_date')
+            .eq('user_id', user.id)
+            .eq('completed', true);
+
+          const historyItems = [
+            ...activitiesData.map(a => ({ date: a.start_date_local, type: 'activity' as const, source: 'strava' as const })),
+            ...(manualWorkouts || []).map(w => ({ date: w.scheduled_date, type: 'activity' as const, source: 'manual' as const }))
+          ];
+
+          if (historyItems.length > 0) {
+            streakService.syncFromHistory(user.id, historyItems).then(syncedStreak => {
               if (syncedStreak) {
-                console.log('Dashboard: Streaks synced from history');
+                console.log('Dashboard: Streaks synced from history (Strava + Manual)');
                 setUserStreak(syncedStreak);
               }
             });
-          } catch (syncErr) {
-            console.warn('Dashboard: Failed to sync streak history:', syncErr);
           }
+        } catch (syncErr) {
+          console.warn('Dashboard: Failed to sync streak history:', syncErr);
         }
 
         // Calculate weekly stats

@@ -49,6 +49,36 @@ export const PlansPage: React.FC = () => {
   const [preferences, setPreferences] = useState('');
   const [focusAreas, setFocusAreas] = useState<string[]>([]);
 
+  const refreshStreak = async (currentActivities?: StravaActivity[]) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const activitiesToUse = currentActivities || activities;
+
+      // Fetch manual completed workouts
+      const { data: manualWorkouts } = await supabase
+        .from('workouts')
+        .select('scheduled_date')
+        .eq('user_id', user.id)
+        .eq('completed', true);
+
+      const historyItems = [
+        ...activitiesToUse.map(a => ({ date: a.start_date_local, type: 'activity' as const, source: 'strava' as const })),
+        ...(manualWorkouts || []).map(w => ({ date: w.scheduled_date, type: 'activity' as const, source: 'manual' as const }))
+      ];
+
+      if (historyItems.length > 0) {
+        await streakService.syncFromHistory(user.id, historyItems);
+      }
+
+      const streakData = await streakService.getStreak(user.id);
+      setStreak(streakData);
+    } catch (err) {
+      console.error('Failed to sync/fetch streak:', err);
+    }
+  };
+
   const loadPlans = async () => {
     try {
       const plans = await trainingPlansService.getPlans();
@@ -74,12 +104,8 @@ export const PlansPage: React.FC = () => {
         const stats = calculateWeeklyStats(activitiesData);
         setWeeklyStats(stats);
 
-        // Fetch Streak
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const streakData = await streakService.getStreak(user.id);
-          setStreak(streakData);
-        }
+        // Fetch and Sync Streak
+        await refreshStreak(activitiesData);
 
         await loadPlans(); // Load plans after initial data
       } catch (err) {
@@ -239,6 +265,8 @@ Additional Preferences: ${preferences || 'None'}
 
     try {
       await trainingPlansService.updateWorkoutStatus(workoutId, newStatus);
+      // Refresh streak after status update
+      await refreshStreak();
     } catch (err) {
       console.error('Failed to update workout status:', err);
       // Revert on failure
