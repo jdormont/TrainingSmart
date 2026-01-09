@@ -637,6 +637,66 @@ class TrainingPlansService {
       console.error('Error during migration:', error);
     }
   }
+
+  async getNextUpcomingWorkout(): Promise<Workout | null> {
+    try {
+      const userId = await this.getCurrentUserId();
+      if (!userId) {
+        // Local storage fallback
+        const plans = this.getLocalStoragePlans();
+        const allWorkouts = plans.flatMap(p => p.workouts);
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+
+        const upcoming = allWorkouts
+          .filter(w => !w.completed && w.status !== 'completed' && w.status !== 'skipped' && new Date(w.scheduledDate) >= now)
+          .sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime());
+
+        return upcoming.length > 0 ? upcoming[0] : null;
+      }
+
+      // Get today's date in YYYY-MM-DD format for comparison
+      const today = new Date().toISOString().split('T')[0];
+
+      const { data, error } = await supabase
+        .from('workouts')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('scheduled_date', today)
+        .eq('completed', false)
+        // .neq('status', 'skipped') // status column doesn't exist in DB yet based on previous file analysis
+        .order('scheduled_date', { ascending: true })
+        .limit(1)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') { // No rows found
+          return null;
+        }
+        console.error('Error fetching next workout:', error);
+        return null;
+      }
+
+      if (!data) return null;
+
+      return {
+        id: data.id,
+        name: data.name,
+        type: data.type as Workout['type'],
+        description: data.description,
+        duration: data.duration,
+        distance: data.distance,
+        intensity: data.intensity as Workout['intensity'],
+        scheduledDate: new Date(data.scheduled_date + 'T00:00:00'),
+        completed: data.completed,
+        status: data.completed ? 'completed' : (data.status || 'planned'),
+        google_calendar_event_id: data.google_calendar_event_id
+      };
+    } catch (error) {
+      console.error('Error in getNextUpcomingWorkout:', error);
+      return null;
+    }
+  }
 }
 
 export const trainingPlansService = new TrainingPlansService();

@@ -8,12 +8,14 @@ import { ActivityCard } from '../components/dashboard/ActivityCard';
 import { ActivityDetailModal } from '../components/dashboard/ActivityDetailModal';
 import { DashboardHero } from '../components/dashboard/DashboardHero';
 import { AnalyticsContainer } from '../components/dashboard/AnalyticsContainer';
+import { SmartWorkoutPreview } from '../components/dashboard/SmartWorkoutPreview';
 import { IntakeWizard } from '../components/onboarding/IntakeWizard';
 import { weeklyInsightService } from '../services/weeklyInsightService';
 import { healthMetricsService } from '../services/healthMetricsService';
 import { dailyMetricsService } from '../services/dailyMetricsService';
+import { trainingPlansService } from '../services/trainingPlansService';
 import { getUserOnboardingStatus } from '../services/userService';
-import type { StravaActivity, StravaAthlete, WeeklyStats, OuraSleepData, OuraReadinessData, DailyMetric } from '../types';
+import type { StravaActivity, StravaAthlete, WeeklyStats, OuraSleepData, OuraReadinessData, DailyMetric, Workout } from '../types';
 import type { WeeklyInsight, HealthMetrics } from '../services/weeklyInsightService';
 import { calculateWeeklyStats } from '../utils/dataProcessing';
 import { MessageCircle, ChevronDown, ChevronUp, Calendar, Link2Off, Activity } from 'lucide-react';
@@ -41,6 +43,7 @@ export const DashboardPage: React.FC = () => {
   const [dailyMetrics, setDailyMetrics] = useState<DailyMetric[]>([]);
   const [weeklyInsight, setWeeklyInsight] = useState<WeeklyInsight | null>(null);
   const [healthMetrics, setHealthMetrics] = useState<HealthMetrics | null>(null);
+  const [nextWorkout, setNextWorkout] = useState<Workout | null>(null);
   const [insightLoading, setInsightLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -177,6 +180,14 @@ export const DashboardPage: React.FC = () => {
 
         // Generate health metrics
         await generateHealthMetrics(athleteData, activitiesData);
+
+        // Fetch next workout
+        try {
+          const next = await trainingPlansService.getNextUpcomingWorkout();
+          setNextWorkout(next);
+        } catch (err) {
+          console.error('Failed to fetch next workout:', err);
+        }
 
       } catch (err) {
         console.error('Failed to fetch dashboard data:', err);
@@ -511,8 +522,18 @@ export const DashboardPage: React.FC = () => {
             />
           </div>
 
+
           {/* Right Rail (Recent Activities) */}
           <div className="lg:col-span-1">
+            <SmartWorkoutPreview
+              nextWorkout={nextWorkout}
+              recoveryScore={
+                readinessData?.score ??
+                dailyMetric?.recovery_score ??
+                null
+              }
+            />
+
             <div className="sticky top-4 space-y-4">
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-xl font-semibold text-gray-900">Recent Activities</h2>
