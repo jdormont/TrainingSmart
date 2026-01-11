@@ -15,6 +15,7 @@ import { StatsSummary } from '../components/dashboard/StatsSummary';
 import WorkoutCard from '../components/plans/WorkoutCard';
 import WeeklyPlanView from '../components/plans/WeeklyPlanView';
 import PlanModificationModal from '../components/plans/PlanModificationModal';
+import { WorkoutDetailModal } from '../components/dashboard/WorkoutDetailModal';
 import { ouraApi } from '../services/ouraApi';
 import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
 import { streakService, UserStreak } from '../services/streakService';
@@ -34,6 +35,8 @@ export const PlansPage: React.FC = () => {
   const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
   const [streak, setStreak] = useState<UserStreak | null>(null);
+  const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
+  const [isOverviewExpanded, setIsOverviewExpanded] = useState(false);
   const [modificationModal, setModificationModal] = useState<{
     isOpen: boolean;
     planId: string | null;
@@ -614,23 +617,19 @@ Additional Preferences: ${preferences || 'None'}
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="text-center">
-          <LoadingSpinner size="lg" className="text-orange-500 mb-4" />
-          <h2 className="text-xl font-semibold text-slate-50 mb-2">
-            Loading Your Training Data
-          </h2>
-          <p className="text-slate-400">
-            Analyzing your cycling activities...
-          </p>
-        </div>
+        <LoadingSpinner size="lg" className="text-orange-500" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen bg-slate-950 relative overflow-hidden">
+      {/* Ambient Background Orbs */}
+      <div className="fixed top-20 right-0 w-[500px] h-[500px] bg-orange-600/20 rounded-full blur-[120px] -z-10 pointer-events-none" />
+      <div className="fixed bottom-0 left-0 w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[120px] -z-10 pointer-events-none" />
+
       <NetworkErrorBanner />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
           <div>
@@ -875,9 +874,9 @@ Additional Preferences: ${preferences || 'None'}
                                 <span className="text-slate-300 font-medium">Progress</span>
                                 <span className="text-slate-400">{completedWorkouts} / {totalWorkouts} workouts completed</span>
                               </div>
-                              <div className="w-full bg-slate-800 rounded-full h-2.5">
+                              <div className="w-full bg-slate-800 rounded-full h-2">
                                 <div
-                                  className="bg-orange-500 h-2.5 rounded-full transition-all"
+                                  className="bg-orange-500 h-2 rounded-full transition-all"
                                   style={{ width: `${completionPercentage}%` }}
                                 />
                               </div>
@@ -911,15 +910,20 @@ Additional Preferences: ${preferences || 'None'}
                       {expandedPlan === plan.id && (
                         <div className="mt-6 space-y-6">
                           {plan.description && (
-                            <div className="bg-slate-900 rounded-lg p-6 border border-slate-800">
+                            <div className="bg-slate-900/60 backdrop-blur-md rounded-lg p-6 border border-white/5">
                               <h4 className="font-semibold text-slate-100 mb-3">Plan Overview</h4>
-                              <div
-                                className="prose prose-sm prose-invert max-w-none text-slate-300 [&>p]:text-slate-300 [&>ul>li]:text-slate-300 [&>strong]:text-white"
+                              <div className={`prose prose-sm prose-invert max-w-none text-slate-300 [&>p]:text-slate-300 [&>ul>li]:text-slate-300 [&>strong]:text-white transition-all duration-300 ${isOverviewExpanded ? '' : 'line-clamp-3'}`}
                                 style={{ color: '#cbd5e1' }}
                                 dangerouslySetInnerHTML={{
                                   __html: convertMarkdownToHtml(plan.description)
                                 }}
                               />
+                                <button
+                                  onClick={() => setIsOverviewExpanded(!isOverviewExpanded)}
+                                  className="text-orange-400 hover:text-orange-300 text-sm font-medium mt-2 inline-flex items-center"
+                                >
+                                  {isOverviewExpanded ? 'Show Less' : 'Read More'}
+                                </button>
                             </div>
                           )}
 
@@ -962,6 +966,7 @@ Additional Preferences: ${preferences || 'None'}
                                   onModifyWeek={(weekNumber, weekWorkouts) => handleOpenModifyWeek(plan.id, weekNumber, weekWorkouts)}
                                   onWorkoutsExported={handleWorkoutsExported}
                                   onMoveWorkout={handleMoveWorkout}
+                                  onWorkoutClick={setSelectedWorkout}
                                 />
                               ) : (
                                 <div className="space-y-3">
@@ -973,6 +978,7 @@ Additional Preferences: ${preferences || 'None'}
                                         workout={workout}
                                         onStatusChange={handleUpdateStatus}
                                         onWorkoutExported={handleWorkoutsExported}
+                                        onClick={() => setSelectedWorkout(workout)}
                                       />
                                     ))}
                                 </div>
@@ -1003,6 +1009,25 @@ Additional Preferences: ${preferences || 'None'}
           Insights derived in part from Garmin device-sourced data.
         </p>
       </div>
+
+      {/* Modals */}
+      {selectedWorkout && (
+        <WorkoutDetailModal
+          workout={selectedWorkout}
+          onClose={() => setSelectedWorkout(null)}
+        />
+      )}
+      
+      {modificationModal.isOpen && (
+        <PlanModificationModal
+          isOpen={modificationModal.isOpen}
+          onClose={() => setModificationModal(prev => ({ ...prev, isOpen: false }))}
+          planId={modificationModal.planId!}
+          weekNumber={modificationModal.weekNumber}
+          workouts={modificationModal.workouts}
+          onApply={handleApplyModification}
+        />
+      )}
     </div>
   );
 };

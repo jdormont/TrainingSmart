@@ -31,6 +31,7 @@ interface WeeklyPlanViewProps {
   onModifyWeek?: (weekIndex: number, weekWorkouts: Workout[]) => void;
   onWorkoutsExported?: () => void;
   onMoveWorkout?: (workoutId: string, newDate: Date, strategy: 'move' | 'swap' | 'replace') => void;
+  onWorkoutClick?: (workout: Workout) => void;
 }
 
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -44,7 +45,8 @@ export default function WeeklyPlanView({
   onAddWorkout,
   onModifyWeek,
   onWorkoutsExported,
-  onMoveWorkout
+  onMoveWorkout,
+  onWorkoutClick
 }: WeeklyPlanViewProps) {
   const [exportingWeek, setExportingWeek] = useState<number | null>(null);
   const [activeDragItem, setActiveDragItem] = useState<Workout | null>(null);
@@ -245,7 +247,7 @@ export default function WeeklyPlanView({
           const isExporting = exportingWeek === weekIndex;
 
           return (
-            <div key={weekIndex} className="bg-slate-900 rounded-lg border border-slate-800 p-6">
+            <div key={weekIndex} className="bg-slate-900/60 backdrop-blur-md rounded-lg border border-white/5 p-6">
               {/* Header */}
               <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
                 <div>
@@ -307,11 +309,12 @@ export default function WeeklyPlanView({
                               onToggleComplete={onToggleComplete}
                               onStatusChange={onStatusChange}
                               onDelete={onDelete}
+                              onClick={() => onWorkoutClick?.(workout)}
                             />
                           </div>
                         ))
                       ) : (
-                        <div className="h-full min-h-[60px] md:min-h-[80px] bg-slate-800/20 rounded-lg border-2 border-dashed border-slate-800 flex flex-col items-center justify-center space-y-2 p-2 group hover:border-blue-500/50 hover:bg-blue-500/5 transition-colors">
+                        <div className="h-full min-h-[60px] md:min-h-[80px] bg-transparent rounded-lg border-2 border-dashed border-white/5 flex flex-col items-center justify-center space-y-2 p-2 group hover:border-blue-500/50 hover:bg-blue-500/5 transition-colors">
                           <span className="text-xs text-slate-500 group-hover:text-blue-400 pointer-events-none">Rest Day</span>
                           {onAddWorkout && (
                             <button

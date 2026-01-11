@@ -14,14 +14,10 @@ interface WorkoutCardProps {
   className?: string; // Support for DragOverlay styling
   onWorkoutExported?: () => void;
   onToggleComplete?: (workoutId: string) => void;
+  onClick?: () => void;
 }
 
-const INTENSITY_COLORS = {
-  easy: 'bg-green-500/10 border-green-500/20 text-green-400',
-  recovery: 'bg-blue-500/10 border-blue-500/20 text-blue-400',
-  moderate: 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400',
-  hard: 'bg-red-500/10 border-red-500/20 text-red-400',
-};
+
 
 const TYPE_ICONS = {
   bike: Bike,
@@ -38,7 +34,8 @@ export default function WorkoutCard({
   onWorkoutExported,
   showDate = true,
   compact = false,
-  className = ''
+  className = '',
+  onClick
 }: WorkoutCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -130,10 +127,62 @@ export default function WorkoutCard({
 
   const status = workout.status || (workout.completed ? 'completed' : 'planned');
 
+  // Dynamic Theme Logic
+  const getTheme = (intensity: string) => {
+    const i = intensity.toLowerCase();
+    
+    // Hard / Very Hard / Race Pace / Anaerobic / VO2 Max
+    if (['hard', 'very hard', 'race pace', 'vo2 max', 'anaerobic'].some(t => i.includes(t))) {
+      return {
+        bg: 'bg-purple-500/10',
+        border: 'border-purple-500/20',
+        hover: 'hover:bg-purple-500/20 hover:border-purple-500/50',
+        icon: 'text-purple-400',
+        text: 'text-purple-200'
+      };
+    }
+    
+    // Moderate / Threshold / Tempo / Sweet Spot
+    if (['moderate', 'threshold', 'tempo', 'sweet spot'].some(t => i.includes(t))) {
+      return {
+        bg: 'bg-orange-500/10',
+        border: 'border-orange-500/20',
+        hover: 'hover:bg-orange-500/20 hover:border-orange-500/50',
+        icon: 'text-orange-400',
+        text: 'text-orange-200'
+      };
+    }
+    
+    // Easy / Recovery / Endurance / Foundation
+    if (['easy', 'recovery', 'endurance', 'foundation'].some(t => i.includes(t))) {
+      return {
+        bg: 'bg-teal-500/10',
+        border: 'border-teal-500/20',
+        hover: 'hover:bg-teal-500/20 hover:border-teal-500/50',
+        icon: 'text-teal-400',
+        text: 'text-teal-200'
+      };
+    }
+
+    // Default Fallback
+    return {
+      bg: 'bg-slate-800/40',
+      border: 'border-white/5',
+      hover: 'hover:bg-slate-800/60 hover:border-white/20',
+      icon: 'text-slate-400',
+      text: 'text-slate-200'
+    };
+  };
+
+  const theme = getTheme(workout.intensity);
+
+  // Status Overrides
   const getCardStyle = () => {
-    if (status === 'completed') return 'border-green-500/30 bg-green-500/5';
-    if (status === 'skipped') return 'border-slate-800 bg-slate-900/50 opacity-50';
-    return 'border-slate-700/50 bg-slate-800/50 hover:border-orange-500/50 hover:shadow-md hover:shadow-black/20';
+    if (status === 'completed') return 'border-green-500/30 bg-green-900/10 opacity-75 hover:opacity-100 backdrop-blur-sm';
+    if (status === 'skipped') return 'border-red-500/20 bg-slate-900/40 opacity-50 backdrop-blur-sm';
+    
+    // Default Active Style (Glass Heatmap)
+    return `${theme.bg} ${theme.border} backdrop-blur-md ${theme.hover} transition-all duration-300`;
   };
 
   const getTitleStyle = () => {
@@ -157,7 +206,7 @@ export default function WorkoutCard({
 
     if (menuTriggerRef.current) {
       const rect = menuTriggerRef.current.getBoundingClientRect();
-      const menuWidth = 192; // approximate width of w-48 (12rem * 16px)
+      const menuWidth = 192;
 
       setMenuPosition({
         top: rect.bottom + window.scrollY,
@@ -212,26 +261,29 @@ export default function WorkoutCard({
     );
   };
 
+  // Compact Card - This is the primary tile view
   if (compact) {
     return (
       <div
-        className={`bg-slate-800/50 rounded-lg shadow-sm border border-slate-700/50 overflow-hidden hover:shadow-md transition-shadow h-full flex flex-col ${getCardStyle()} ${className} ${expanded ? 'shadow-lg' : ''}`}
-        onClick={() => setExpanded(!expanded)}
+        className={`rounded-lg overflow-hidden h-full flex flex-col justify-between ${getCardStyle()} ${className} ${expanded ? 'shadow-lg shadow-black/20' : ''} cursor-pointer hover:scale-[1.02] relative`}
+        onClick={onClick ? onClick : () => setExpanded(!expanded)}
       >
-        <div className="p-3 relative">
+        <div className="p-3 relative flex-grow flex flex-col">
           <div className="flex items-start justify-between mb-2">
-            <div
-              className={`p-1.5 rounded-md ${status === 'skipped' ? 'bg-gray-100 text-gray-400' : INTENSITY_COLORS[workout.intensity]} flex-shrink-0`}
-            >
-              <Icon className="w-4 h-4" />
-            </div>
+            {/* Minimal Icon sans pill container for cleaner look */}
+            <Icon className={`w-5 h-5 ${status === 'skipped' ? 'text-slate-600' : theme.icon} opacity-90`} />
 
-            <div className="flex items-center space-x-1" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center space-x-2" onClick={e => e.stopPropagation()}>
+              {status === 'completed' && (
+                <div className="text-green-400 drop-shadow-[0_0_8px_rgba(74,222,128,0.5)]" title="Completed">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+              )}
               <div className="relative">
                 <button
                   ref={menuTriggerRef}
                   onClick={handleToggleMenu}
-                  className="p-1 hover:bg-slate-700 rounded-md text-slate-400 hover:text-slate-200"
+                  className="p-1 hover:bg-white/10 rounded-md text-slate-400 hover:text-white transition-colors"
                 >
                   <MoreVertical className="w-4 h-4" />
                 </button>
@@ -239,51 +291,35 @@ export default function WorkoutCard({
               </div>
             </div>
           </div>
-          <h3 className={`font-medium text-sm mb-2 line-clamp-2 leading-tight ${getTitleStyle()}`}>
+          
+          <h3 className={`font-semibold text-sm mb-3 line-clamp-2 leading-snug ${getTitleStyle()}`}>
             {workout.name}
           </h3>
-          <div className="space-y-1 text-xs text-slate-200">
-            {workout.duration > 0 && (
-              <div className="flex items-center">
-                <Clock className="w-3 h-3 mr-1 flex-shrink-0" />
-                <span className="truncate">{handleFormatDuration(workout.duration)}</span>
+          
+          {/* Metadata Footer */}
+          <div className="mt-auto flex items-center gap-3 text-xs opacity-90">
+             {workout.duration > 0 && (
+              <div className={`flex items-center font-medium ${status === 'skipped' ? 'text-slate-500' : theme.icon}`}>
+                <Clock className="w-3 h-3 mr-1" />
+                <span>{handleFormatDuration(workout.duration)}</span>
               </div>
             )}
-            {workout.distance && (
-              <div className="flex items-center">
-                <MapPin className="w-3 h-3 mr-1 flex-shrink-0" />
-                <span className="truncate">{handleFormatDistance(workout.distance)} mi</span>
+             {workout.distance && (
+              <div className={`flex items-center font-medium ${status === 'skipped' ? 'text-slate-500' : theme.icon}`}>
+                <MapPin className="w-3 h-3 mr-1" />
+                <span>{handleFormatDistance(workout.distance)}</span>
               </div>
             )}
-            <div className="flex items-center justify-between">
-              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${status === 'skipped' ? 'bg-gray-100 text-gray-500' : INTENSITY_COLORS[workout.intensity]}`}>
-                {workout.intensity}
-              </span>
-            </div>
           </div>
-          {!expanded && workout.description && (
-            <div className="mt-2 text-xs text-orange-400/80 italic">
-              Click to see details...
-            </div>
-          )}
         </div>
-        {expanded && workout.description && (
-          <div className="px-3 pb-3 pt-0 border-t border-slate-700 mt-2">
-            <div
-              className="prose prose-xs prose-invert max-w-none text-slate-200 text-xs prose-p:text-slate-200 prose-li:text-slate-200"
-              dangerouslySetInnerHTML={{
-                __html: convertMarkdownToHtml(workout.description),
-              }}
-            />
-          </div>
-        )}
       </div>
     );
   }
 
+  // Expanded / List View (kept similar logic but updated themes)
   return (
     <div
-      className={`bg-slate-800/50 rounded-lg border border-slate-700/50 transition-all ${getCardStyle()} ${expanded ? 'shadow-lg' : ''}`}
+      className={`rounded-lg transition-all duration-300 ${getCardStyle()} ${expanded ? 'shadow-lg shadow-black/20' : ''}`}
     >
       <div
         className="p-4 cursor-pointer"
@@ -292,7 +328,7 @@ export default function WorkoutCard({
         <div className="flex items-start justify-between mb-2">
           <div className="flex items-start space-x-3 flex-1">
             <div
-              className={`p-2 rounded-lg ${status === 'skipped' ? 'bg-slate-800 text-slate-500' : INTENSITY_COLORS[workout.intensity]} flex-shrink-0`}
+              className={`p-2 rounded-lg ${status === 'skipped' ? 'bg-slate-800 text-slate-500' : theme.bg + ' ' + theme.icon} flex-shrink-0`}
             >
               <Icon className="w-5 h-5" />
             </div>
@@ -331,8 +367,7 @@ export default function WorkoutCard({
                 )}
                 <div className="flex items-center">
                   <span
-                    className={`px-2 py-0.5 rounded-full text-xs font-medium ${status === 'skipped' ? 'bg-gray-100 text-gray-500' : INTENSITY_COLORS[workout.intensity]
-                      }`}
+                    className={`px-2 py-0.5 rounded-full text-xs font-medium ${status === 'skipped' ? 'bg-gray-100 text-gray-500' : theme.bg + ' ' + theme.icon}`}
                   >
                     {workout.intensity}
                   </span>
@@ -381,8 +416,8 @@ export default function WorkoutCard({
         )}
 
         {!expanded && workout.description && (
-          <div className="mt-2 text-sm text-orange-400/80">
-            Click to see details...
+          <div className="mt-2 text-sm text-slate-500/80 italic">
+            Click to expand...
           </div>
         )}
       </div>

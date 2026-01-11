@@ -8,13 +8,15 @@ interface DraggableWorkoutCardProps {
     onToggleComplete?: (workoutId: string) => void;
     onStatusChange?: (workoutId: string, status: 'planned' | 'completed' | 'skipped') => void;
     onDelete?: (workoutId: string) => void;
+    onClick?: () => void;
 }
 
 export const DraggableWorkoutCard: React.FC<DraggableWorkoutCardProps> = ({
     workout,
     onToggleComplete,
     onStatusChange,
-    onDelete
+    onDelete,
+    onClick
 }) => {
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
         id: workout.id,
@@ -38,6 +40,7 @@ export const DraggableWorkoutCard: React.FC<DraggableWorkoutCardProps> = ({
                 onToggleComplete={onToggleComplete}
                 onStatusChange={onStatusChange}
                 onDelete={onDelete}
+                onClick={onClick}
                 showDate={false}
                 compact={true}
             />
