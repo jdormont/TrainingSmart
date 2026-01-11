@@ -93,7 +93,15 @@ export const WorkoutDetailModal: React.FC<WorkoutDetailModalProps> = ({ workout,
             <div>
               <h4 className="text-sm font-medium text-slate-300 mb-2">Session Brief</h4>
               <div 
-                className="prose prose-sm prose-invert max-w-none text-slate-400 bg-slate-800/50 rounded-lg p-4 max-h-60 overflow-y-auto border border-slate-700"
+                className="prose prose-sm max-w-none 
+                  text-slate-200 
+                  prose-headings:text-slate-100 
+                  prose-p:text-slate-200 
+                  prose-strong:text-white 
+                  prose-li:text-slate-200
+                  [&_*]:text-slate-200
+                  [&_strong]:text-white
+                  bg-slate-800/50 rounded-lg p-4 max-h-60 overflow-y-auto border border-slate-700"
                 dangerouslySetInnerHTML={{ __html: convertMarkdownToHtml(workout.description) }}
               />
             </div>
