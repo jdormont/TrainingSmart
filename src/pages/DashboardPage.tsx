@@ -22,11 +22,22 @@ import { getUserOnboardingStatus } from '../services/userService';
 import type { StravaActivity, StravaAthlete, WeeklyStats, OuraSleepData, OuraReadinessData, DailyMetric, Workout } from '../types';
 import type { WeeklyInsight, HealthMetrics } from '../services/weeklyInsightService';
 import { calculateWeeklyStats } from '../utils/dataProcessing';
-import { MessageCircle, ChevronDown, ChevronUp, Calendar, Link2Off, Activity } from 'lucide-react';
+import { MessageCircle, ChevronDown, ChevronUp, Calendar, Activity, Eye, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../utils/constants';
 import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
 import { analytics } from '../lib/analytics';
+import {
+  MOCK_ATHLETE,
+  MOCK_ACTIVITIES,
+  MOCK_WEEKLY_STATS,
+  MOCK_SLEEP_DATA,
+  MOCK_READINESS_DATA,
+  MOCK_DAILY_METRIC,
+  MOCK_WEEKLY_INSIGHT,
+  MOCK_HEALTH_METRICS,
+  MOCK_NEXT_WORKOUT
+} from '../data/mockDashboardData';
 
 import { supabase } from '../services/supabaseClient';
 
@@ -60,6 +71,7 @@ export const DashboardPage: React.FC = () => {
   const [selectedActivity, setSelectedActivity] = useState<StravaActivity | null>(null);
   const [showAllActivities, setShowAllActivities] = useState(false);
   const [isStravaConnected, setIsStravaConnected] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
   // Onboarding wizard state
   const [showWizard, setShowWizard] = useState(false);
@@ -269,7 +281,7 @@ export const DashboardPage: React.FC = () => {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
-  const fetchStreakData = async (userId: string) => {
+  async function fetchStreakData(userId: string) {
     try {
       // Use local date for client-side truth
       const localDate = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
@@ -278,9 +290,9 @@ export const DashboardPage: React.FC = () => {
     } catch (err) {
       console.error('Failed to fetch streak:', err);
     }
-  };
+  }
 
-  const handleStreakUpdate = (newStreak: UserStreak) => {
+  function handleStreakUpdate(newStreak: UserStreak) {
     // Check for celebration
     if (userStreak) {
       if (newStreak.streak_freezes > userStreak.streak_freezes) {
@@ -290,7 +302,7 @@ export const DashboardPage: React.FC = () => {
       }
     }
     setUserStreak(newStreak);
-  };
+  }
 
 
   useEffect(() => {
@@ -316,12 +328,37 @@ export const DashboardPage: React.FC = () => {
     checkOnboarding();
   }, []);
 
-  const handleWizardComplete = () => {
+  function handleWizardComplete() {
     setShowWizard(false);
     window.location.reload();
-  };
+  }
 
-  const generateWeeklyInsight = async (athleteData: StravaAthlete, activitiesData: StravaActivity[], metrics: DailyMetric[] = []) => {
+  function handleEnterDemoMode() {
+    setIsDemoMode(true);
+    setAthlete(MOCK_ATHLETE);
+    setActivities(MOCK_ACTIVITIES);
+    setDisplayedActivities(MOCK_ACTIVITIES);
+    setWeeklyStats(MOCK_WEEKLY_STATS);
+    setSleepData(MOCK_SLEEP_DATA);
+    setReadinessData(MOCK_READINESS_DATA);
+    setDailyMetric(MOCK_DAILY_METRIC);
+    setDailyMetrics([MOCK_DAILY_METRIC]); // Provide an array
+    setWeeklyInsight(MOCK_WEEKLY_INSIGHT);
+    setHealthMetrics(MOCK_HEALTH_METRICS);
+    setNextWorkout(MOCK_NEXT_WORKOUT);
+    // Mock streak for demo
+    setUserStreak({
+      user_id: 'demo', // Mock user ID required by interface ? UserStreak has user_id, current_streak, etc.
+      // Checking interface: user_id, current_streak, longest_streak, streak_freezes, last_activity_date, streak_history
+      current_streak: 5,
+      longest_streak: 12,
+      streak_freezes: 2,
+      last_activity_date: new Date().toISOString(),
+      streak_history: []
+    });
+  }
+
+  async function generateWeeklyInsight(athleteData: StravaAthlete, activitiesData: StravaActivity[], metrics: DailyMetric[] = []) {
     try {
       setInsightLoading(true);
       console.log('Generating weekly insight...');
@@ -358,9 +395,9 @@ export const DashboardPage: React.FC = () => {
     } finally {
       setInsightLoading(false);
     }
-  };
+  }
 
-  const generateHealthMetrics = async (athleteData: StravaAthlete, activitiesData: StravaActivity[]) => {
+  async function generateHealthMetrics(athleteData: StravaAthlete, activitiesData: StravaActivity[]) {
     try {
       console.log('Generating health metrics...');
 
@@ -393,9 +430,9 @@ export const DashboardPage: React.FC = () => {
     } catch (error) {
       console.error('Failed to generate health metrics:', error);
     }
-  };
+  }
 
-  const handleRefreshInsight = async () => {
+  async function handleRefreshInsight() {
     if (!athlete || !activities.length) return;
 
     // Clear cache and regenerate
@@ -459,7 +496,7 @@ export const DashboardPage: React.FC = () => {
     );
   }
 
-  if (!loading && !isStravaConnected) {
+  if (!loading && !isStravaConnected && !isDemoMode) {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -523,25 +560,35 @@ export const DashboardPage: React.FC = () => {
               <div className="bg-white rounded-xl shadow-xl border-2 border-gray-300 p-8 max-w-md mx-4 text-center">
                 <div className="mb-4 flex justify-center">
                   <div className="p-4 bg-orange-50 rounded-full">
-                    <Link2Off className="w-12 h-12 text-orange-500" />
+                    <Sparkles className="w-12 h-12 text-orange-500" />
                   </div>
                 </div>
                 <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                  Training Data Offline
+                  Initialize Your AI Coach
                 </h3>
                 <p className="text-gray-600 mb-6">
-                  Connect your Strava account to unlock AI analysis and performance trends.
+                  Connect your Strava account to unlock AI analysis, training plans, and performance trends.
                 </p>
-                <Button
-                  variant="primary"
-                  size="lg"
-                  onClick={() => navigate(ROUTES.SETTINGS)}
-                  className="w-full"
-                >
-                  <Activity className="w-5 h-5 mr-2" />
-                  Connect Strava
-                </Button>
-                <p className="text-sm text-gray-500 mt-4">
+                <div className="space-y-3">
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    onClick={() => navigate(ROUTES.SETTINGS)}
+                    className="w-full"
+                  >
+                    <Activity className="w-5 h-5 mr-2" />
+                    Connect Strava
+                  </Button>
+                  
+                  <button
+                    onClick={handleEnterDemoMode}
+                    className="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
+                  >
+                    <Eye className="w-4 h-4 mr-2" />
+                    View Demo Dashboard
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400 mt-4">
                   Your data stays private and secure
                 </p>
               </div>
@@ -584,6 +631,22 @@ export const DashboardPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {isDemoMode && (
+        <div className="sticky top-0 z-50 bg-blue-600 text-white py-3 px-4 shadow-md">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center">
+              <Sparkles className="w-5 h-5 mr-2 text-yellow-300" />
+              <span className="font-medium">You are viewing sample data. Connect Strava for real insights.</span>
+            </div>
+            <button
+              onClick={() => navigate(ROUTES.SETTINGS)}
+              className="px-4 py-1.5 bg-white text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-50 transition-colors"
+            >
+              Connect Strava
+            </button>
+          </div>
+        </div>
+      )}
       <NetworkErrorBanner />
       <StreakCelebration
         type={celebration}
