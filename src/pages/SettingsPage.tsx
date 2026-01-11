@@ -362,12 +362,12 @@ export const SettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-950">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Settings</h1>
-          <p className="text-gray-600">
+          <h1 className="text-3xl font-bold text-slate-50 mb-2">Settings</h1>
+          <p className="text-slate-400">
             Customize your AI coach and manage your account
           </p>
         </div>
@@ -375,13 +375,13 @@ export const SettingsPage: React.FC = () => {
         <div className="space-y-8">
           {/* Admin Dashboard */}
           {userProfile?.is_admin && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 p-6">
               <AdminDashboard />
             </div>
           )}
           {/* Strava Connection */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+          <div className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 p-6">
+            <h2 className="text-xl font-semibold text-slate-100 mb-4 flex items-center">
               <Activity className="w-5 h-5 mr-2" />
               Strava Connection
             </h2>
@@ -389,12 +389,12 @@ export const SettingsPage: React.FC = () => {
             {athlete ? (
               <div>
                 <div className="space-y-2 mb-6">
-                  <div className="flex items-center space-x-2 text-green-600">
+                  <div className="flex items-center space-x-2 text-green-400">
                     <Activity className="w-5 h-5" />
                     <span className="font-medium">Strava Connected</span>
                   </div>
                   {stravaConnectedAt && (
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-slate-500">
                       Connected on {stravaConnectedAt.toLocaleDateString()} at {stravaConnectedAt.toLocaleTimeString()}
                     </p>
                   )}
@@ -402,57 +402,57 @@ export const SettingsPage: React.FC = () => {
 
                 <div className="grid md:grid-cols-2 gap-4 mb-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Name</label>
-                    <p className="text-gray-900">{athlete.firstname} {athlete.lastname}</p>
+                    <label className="block text-sm font-medium text-slate-400">Name</label>
+                    <p className="text-slate-200">{athlete.firstname} {athlete.lastname}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Location</label>
-                    <p className="text-gray-900">{athlete.city}, {athlete.state}</p>
+                    <label className="block text-sm font-medium text-slate-400">Location</label>
+                    <p className="text-slate-200">{athlete.city}, {athlete.state}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Strava ID</label>
-                    <p className="text-gray-900">{athlete.id}</p>
+                    <label className="block text-sm font-medium text-slate-400">Strava ID</label>
+                    <p className="text-slate-200">{athlete.id}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Username</label>
-                    <p className="text-gray-900">@{athlete.username}</p>
+                    <label className="block text-sm font-medium text-slate-400">Username</label>
+                    <p className="text-slate-200">@{athlete.username}</p>
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-gray-200 space-y-3">
+                <div className="pt-4 border-t border-slate-800 space-y-3">
                   <div className="flex gap-3">
                     <Button
                       onClick={handleRefreshCache}
                       loading={refreshingCache}
                       variant="outline"
-                      className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                      className="text-orange-400 border-orange-500/30 hover:bg-orange-500/10"
                     >
                       {refreshingCache ? 'Refreshing...' : 'Refresh Data'}
                     </Button>
                     <Button
                       onClick={handleDisconnect}
                       variant="outline"
-                      className="text-red-600 border-red-300 hover:bg-red-50"
+                      className="text-red-400 border-red-500/30 hover:bg-red-500/10"
                     >
                       Disconnect Account
                     </Button>
                   </div>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-slate-500">
                     Data is cached for 15 minutes to respect Strava's rate limits. Use "Refresh Data" to sync your latest activities.
                   </p>
                 </div>
               </div>
             ) : (
               <div className="space-y-4">
-                <p className="text-gray-600">
+                <p className="text-slate-400">
                   Connect your Strava account to access your activities and training data.
                 </p>
 
-                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                  <h3 className="font-medium text-orange-900 mb-2">
+                <div className="bg-orange-950/20 border border-orange-500/20 rounded-lg p-4">
+                  <h3 className="font-medium text-orange-200 mb-2">
                     Why Connect Strava?
                   </h3>
-                  <ul className="text-sm text-orange-800 space-y-1">
+                  <ul className="text-sm text-orange-200/80 space-y-1">
                     <li>• Get personalized coaching based on your real activities</li>
                     <li>• Track your training progress and trends</li>
                     <li>• Receive AI-powered training recommendations</li>
@@ -462,20 +462,20 @@ export const SettingsPage: React.FC = () => {
 
                 <Button
                   onClick={handleConnectStrava}
-                  className="bg-orange-600 hover:bg-orange-700 flex items-center space-x-2"
+                  className="bg-orange-600 hover:bg-orange-700 flex items-center space-x-2 text-white"
                 >
                   <Activity className="w-4 h-4" />
                   <span>Connect Strava</span>
                 </Button>
 
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-slate-500">
                   You'll be redirected to Strava to authorize access to your activities.
                 </p>
 
                 <div className="mt-2">
                   <Link
                     to="/auth/strava/direct"
-                    className="text-sm text-orange-600 hover:text-orange-700 underline"
+                    className="text-sm text-orange-400 hover:text-orange-300 underline"
                   >
                     Having trouble? Try direct authentication
                   </Link>
@@ -485,52 +485,52 @@ export const SettingsPage: React.FC = () => {
           </div>
 
           {/* Google Calendar Integration */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+          <div className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 p-6">
+            <h2 className="text-xl font-semibold text-slate-100 mb-4 flex items-center">
               <CalendarIcon className="w-5 h-5 mr-2" />
               Google Calendar Integration
             </h2>
 
-            <p className="text-gray-600 mb-4">
+            <p className="text-slate-400 mb-4">
               Connect your Google Calendar to export your workout plans. This is a one-way export -
               workouts will be added to your calendar but won't sync back.
             </p>
 
             {connectingCalendar ? (
-              <div className="flex items-center space-x-2 text-gray-600">
+              <div className="flex items-center space-x-2 text-slate-400">
                 <Activity className="w-5 h-5 animate-spin" />
                 <span>Connecting to Google Calendar...</span>
               </div>
             ) : calendarConnected ? (
               <div className="space-y-4">
-                <div className="flex items-center space-x-2 text-green-600">
+                <div className="flex items-center space-x-2 text-green-400">
                   <CalendarIcon className="w-5 h-5" />
                   <span className="font-medium">Google Calendar Connected</span>
                 </div>
                 {calendarConnectedAt && (
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-slate-400">
                     Connected on {calendarConnectedAt.toLocaleDateString()} at {calendarConnectedAt.toLocaleTimeString()}
                   </p>
                 )}
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-slate-400">
                   You can now export workouts from the Plans page. Each workout will include detailed
                   information and a link back to this app.
                 </p>
                 <Button
                   onClick={handleDisconnectCalendar}
                   variant="outline"
-                  className="text-red-600 border-red-300 hover:bg-red-50"
+                  className="text-red-400 border-red-500/30 hover:bg-red-500/10"
                 >
                   Disconnect Google Calendar
                 </Button>
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <h3 className="font-medium text-blue-900 mb-2">
+                <div className="bg-blue-950/20 border border-blue-500/20 rounded-lg p-4">
+                  <h3 className="font-medium text-blue-200 mb-2">
                     Why Connect Google Calendar?
                   </h3>
-                  <ul className="text-sm text-blue-800 space-y-1">
+                  <ul className="text-sm text-blue-200/80 space-y-1">
                     <li>• Export entire training weeks with one click</li>
                     <li>• Add individual workouts to your calendar</li>
                     <li>• Get reminders for scheduled workouts</li>
@@ -540,12 +540,12 @@ export const SettingsPage: React.FC = () => {
                 </div>
                 <Button
                   onClick={handleConnectCalendar}
-                  className="bg-blue-600 hover:bg-blue-700 flex items-center space-x-2"
+                  className="bg-blue-600 hover:bg-blue-700 flex items-center space-x-2 text-white"
                 >
                   <CalendarIcon className="w-4 h-4" />
                   <span>Connect Google Calendar</span>
                 </Button>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-slate-500">
                   You'll be redirected to Google to authorize access to your calendar.
                 </p>
               </div>
@@ -553,41 +553,41 @@ export const SettingsPage: React.FC = () => {
           </div>
 
           {/* Oura Integration */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+          <div className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 p-6">
+            <h2 className="text-xl font-semibold text-slate-100 mb-4 flex items-center">
               <Moon className="w-5 h-5 mr-2" />
               Oura Ring Integration
             </h2>
 
-            <p className="text-gray-600 mb-4">
+            <p className="text-slate-400 mb-4">
               Connect your Oura Ring to get sleep quality, recovery scores, and readiness data
               integrated with your training insights.
             </p>
 
             {ouraConnected ? (
               <div className="space-y-4">
-                <div className="flex items-center space-x-2 text-green-600">
+                <div className="flex items-center space-x-2 text-green-400">
                   <Activity className="w-5 h-5" />
                   <span className="font-medium">Oura Ring Connected</span>
                 </div>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-slate-400">
                   Your sleep and recovery data is being synced automatically.
                 </p>
                 <Button
                   onClick={handleDisconnectOura}
                   variant="outline"
-                  className="text-red-600 border-red-300 hover:bg-red-50"
+                  className="text-red-400 border-red-500/30 hover:bg-red-500/10"
                 >
                   Disconnect Oura Ring
                 </Button>
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                  <h3 className="font-medium text-purple-900 mb-2">
+                <div className="bg-purple-950/20 border border-purple-500/20 rounded-lg p-4">
+                  <h3 className="font-medium text-purple-200 mb-2">
                     Why Connect Your Oura Ring?
                   </h3>
-                  <ul className="text-sm text-purple-800 space-y-1">
+                  <ul className="text-sm text-purple-200/80 space-y-1">
                     <li>• Get recovery-based training recommendations</li>
                     <li>• Track sleep quality and its impact on performance</li>
                     <li>• Monitor HRV and readiness for optimal training</li>
@@ -596,18 +596,18 @@ export const SettingsPage: React.FC = () => {
                 </div>
                 <Button
                   onClick={handleConnectOura}
-                  className="bg-purple-600 hover:bg-purple-700 flex items-center space-x-2"
+                  className="bg-purple-600 hover:bg-purple-700 flex items-center space-x-2 text-white"
                 >
                   <Moon className="w-4 h-4" />
                   <span>Connect Oura Ring</span>
                 </Button>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-slate-500">
                   You'll be redirected to Oura to authorize access to your health data.
                 </p>
                 <div className="mt-2">
                   <Link
                     to="/auth/oura/direct"
-                    className="text-sm text-purple-600 hover:text-purple-700 underline"
+                    className="text-sm text-purple-400 hover:text-purple-300 underline"
                   >
                     Having trouble? Try direct authentication
                   </Link>
@@ -616,27 +616,27 @@ export const SettingsPage: React.FC = () => {
             )}
           </div>
           {/* Demographics */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+          <div className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 p-6">
+            <h2 className="text-xl font-semibold text-slate-100 mb-4 flex items-center">
               <TrendingUp className="w-5 h-5 mr-2" />
               Health Profile
             </h2>
 
-            <p className="text-gray-600 mb-4">
+            <p className="text-slate-400 mb-4">
               This data helps calibrate recommendations and health/recovery scores more accurately based on your age and gender.
             </p>
 
             <div className="space-y-4">
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="gender" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="gender" className="block text-sm font-medium text-slate-400 mb-2">
                     Gender
                   </label>
                   <select
                     id="gender"
                     value={gender}
                     onChange={(e) => setGender(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 text-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                   >
                     <option value="">Prefer not to say</option>
                     <option value="male">Male</option>
@@ -646,14 +646,14 @@ export const SettingsPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label htmlFor="ageBucket" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="ageBucket" className="block text-sm font-medium text-slate-400 mb-2">
                     Age Range
                   </label>
                   <select
                     id="ageBucket"
                     value={ageBucket}
                     onChange={(e) => setAgeBucket(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 text-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                   >
                     <option value="">Select age range</option>
                     <option value="18-24">18-24</option>
@@ -666,11 +666,11 @@ export const SettingsPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h3 className="font-medium text-blue-900 mb-2 text-sm">
+              <div className="bg-blue-950/20 border border-blue-500/20 rounded-lg p-4">
+                <h3 className="font-medium text-blue-200 mb-2 text-sm">
                   Why we ask for this information
                 </h3>
-                <ul className="text-xs text-blue-800 space-y-1">
+                <ul className="text-xs text-blue-200/80 space-y-1">
                   <li>• <strong>HRV scoring</strong>: Normal HRV ranges vary significantly by age and gender</li>
                   <li>• <strong>Resting heart rate</strong>: Target ranges differ based on age and gender</li>
                   <li>• <strong>Recovery calibration</strong>: More accurate recommendations based on your demographic</li>
@@ -682,7 +682,7 @@ export const SettingsPage: React.FC = () => {
                 <Button
                   onClick={handleSaveDemographics}
                   loading={savingDemographics}
-                  className="flex items-center"
+                  className="flex items-center text-white bg-orange-600 hover:bg-orange-700"
                 >
                   <Save className="w-4 h-4 mr-2" />
                   {demographicsSaved ? 'Saved!' : 'Save Profile'}
@@ -690,8 +690,8 @@ export const SettingsPage: React.FC = () => {
               </div>
 
               {demographicsSaved && (
-                <div className="bg-green-50 border border-green-200 rounded-md p-3">
-                  <p className="text-green-600 text-sm">
+                <div className="bg-green-950/20 border border-green-500/20 rounded-md p-3">
+                  <p className="text-green-400 text-sm">
                     ✅ Health profile saved! Your health metrics will now be calibrated based on your demographics.
                   </p>
                 </div>
@@ -700,8 +700,8 @@ export const SettingsPage: React.FC = () => {
           </div>
 
           {/* Apple Watch Health Sync */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
+          <div className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 p-6">
+            <h2 className="text-xl font-semibold text-slate-100 mb-6 flex items-center">
               <Watch className="w-5 h-5 mr-2 text-red-500" />
               Apple Watch Health Sync
             </h2>
@@ -709,8 +709,8 @@ export const SettingsPage: React.FC = () => {
             <div className="space-y-6">
               {/* Step 1 */}
               <div>
-                <p className="text-gray-700 mb-3 font-medium">1. Download the Shortcut</p>
-                <p className="text-sm text-gray-600 mb-3">
+                <p className="text-slate-300 mb-3 font-medium">1. Download the Shortcut</p>
+                <p className="text-sm text-slate-400 mb-3">
                   First, download the official TrainingSmart iOS Shortcut. This allows you to sync your health data from Apple Health to the app.
                 </p>
                 <a
@@ -725,17 +725,17 @@ export const SettingsPage: React.FC = () => {
                 </a>
               </div>
 
-              <div className="border-t border-gray-200"></div>
+              <div className="border-t border-slate-800"></div>
 
               {/* Step 2 */}
               <div>
-                <p className="text-gray-700 mb-3 font-medium">2. Configure with your API Key</p>
-                <p className="text-sm text-gray-600 mb-3">
+                <p className="text-slate-300 mb-3 font-medium">2. Configure with your API Key</p>
+                <p className="text-sm text-slate-400 mb-3">
                   Next, copy your personal API Key. Add it to the first "Text" field in the Shortcut setup or settings.
                 </p>
 
                 <div className="relative">
-                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">
                     Your Ingest Key
                   </label>
                   <div className="flex items-center space-x-2">
@@ -744,19 +744,19 @@ export const SettingsPage: React.FC = () => {
                         type="text"
                         readOnly
                         value={userProfile?.ingest_key || 'Loading...'}
-                        className="block w-full pl-3 pr-10 py-2 text-sm font-mono bg-gray-50 border border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500"
+                        className="block w-full pl-3 pr-10 py-2 text-sm font-mono bg-slate-800 border border-slate-700 text-slate-200 rounded-md focus:ring-orange-500 focus:border-orange-500"
                       />
                       {/* Mask overlay */}
                       {!showKeys && (
-                        <div className="absolute inset-0 bg-gray-50 border border-gray-300 rounded-md flex items-center px-3">
-                          <span className="text-gray-400">••••••••-••••-••••-••••-••••••••••••</span>
+                        <div className="absolute inset-0 bg-slate-800 border border-slate-700 rounded-md flex items-center px-3">
+                          <span className="text-slate-500">••••••••-••••-••••-••••-••••••••••••</span>
                         </div>
                       )}
                     </div>
 
                     <button
                       onClick={() => setShowKeys(!showKeys)}
-                      className="p-2 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 border border-gray-200"
+                      className="p-2 text-slate-400 hover:text-slate-200 rounded-md hover:bg-slate-800 border border-slate-700"
                       title={showKeys ? "Hide Key" : "Show Key"}
                     >
                       {showKeys ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -772,10 +772,10 @@ export const SettingsPage: React.FC = () => {
                         }
                       }}
                       variant="outline"
-                      className="flex-shrink-0"
+                      className="flex-shrink-0 text-slate-300 border-slate-700 hover:bg-slate-800"
                     >
                       {copying ? (
-                        <span className="text-green-600 flex items-center">
+                        <span className="text-green-400 flex items-center">
                           Copied!
                         </span>
                       ) : (
@@ -786,7 +786,7 @@ export const SettingsPage: React.FC = () => {
                       )}
                     </Button>
                   </div>
-                  <p className="mt-2 text-xs text-gray-500">
+                  <p className="mt-2 text-xs text-slate-500">
                     Keep this key private. It grants write access to your health metrics.
                   </p>
                 </div>
@@ -795,20 +795,20 @@ export const SettingsPage: React.FC = () => {
           </div>
 
           {/* Training Profile */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+          <div className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 p-6">
+            <h2 className="text-xl font-semibold text-slate-100 mb-4 flex items-center">
               <Target className="w-5 h-5 mr-2" />
               Training Profile
             </h2>
 
-            <p className="text-gray-600 mb-6">
+            <p className="text-slate-400 mb-6">
               Manage your coaching preferences and content personalization to get the most relevant recommendations and learning materials.
             </p>
 
             <div className="space-y-8">
               {/* Section A: Coaching Preferences */}
               <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                <h3 className="text-lg font-medium text-slate-200 mb-4 flex items-center">
                   <User className="w-5 h-5 mr-2 text-orange-500" />
                   Coaching Preferences
                 </h3>
@@ -816,7 +816,7 @@ export const SettingsPage: React.FC = () => {
                 <div className="space-y-4">
                   {/* Weekly Hours */}
                   <div>
-                    <label htmlFor="weeklyHours" className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="weeklyHours" className="block text-sm font-medium text-slate-400 mb-2">
                       Weekly Training Hours
                     </label>
                     <div className="flex items-center space-x-4">
@@ -828,7 +828,7 @@ export const SettingsPage: React.FC = () => {
                         step="1"
                         value={weeklyHours}
                         onChange={(e) => setWeeklyHours(Number(e.target.value))}
-                        className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                        className="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
                       />
                       <div className="w-20 text-center">
                         <input
@@ -837,19 +837,19 @@ export const SettingsPage: React.FC = () => {
                           max="20"
                           value={weeklyHours}
                           onChange={(e) => setWeeklyHours(Number(e.target.value))}
-                          className="w-full px-2 py-1 border border-gray-300 rounded-md text-center focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          className="w-full px-2 py-1 bg-slate-800 border border-slate-700 text-slate-200 rounded-md text-center focus:outline-none focus:ring-2 focus:ring-orange-500"
                         />
                       </div>
-                      <span className="text-sm text-gray-600 w-12">hours</span>
+                      <span className="text-sm text-slate-400 w-12">hours</span>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-slate-500 mt-1">
                       How many hours per week can you dedicate to training?
                     </p>
                   </div>
 
                   {/* Coach Persona */}
                   <div>
-                    <label htmlFor="coachPersona" className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="coachPersona" className="block text-sm font-medium text-slate-400 mb-2">
                       Coach Persona
                     </label>
                     <div className="grid md:grid-cols-3 gap-3">
@@ -859,12 +859,14 @@ export const SettingsPage: React.FC = () => {
                           type="button"
                           onClick={() => setCoachPersona(persona.value)}
                           className={`p-4 text-left rounded-lg border transition-colors ${coachPersona === persona.value
-                            ? 'border-orange-500 bg-orange-50'
-                            : 'border-gray-200 hover:border-gray-300'
+                            ? 'border-orange-500 bg-orange-950/20'
+                            : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
                             }`}
                         >
-                          <div className="font-medium text-gray-900 mb-1">{persona.label}</div>
-                          <div className="text-xs text-gray-600">{persona.description}</div>
+                          <div className={`font-medium mb-1 ${coachPersona === persona.value ? 'text-orange-400' : 'text-slate-200'}`}>
+                            {persona.label}
+                          </div>
+                          <div className="text-xs text-slate-400">{persona.description}</div>
                         </button>
                       ))}
                     </div>
@@ -872,7 +874,7 @@ export const SettingsPage: React.FC = () => {
 
                   {/* Main Goal */}
                   <div>
-                    <label htmlFor="trainingGoal" className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="trainingGoal" className="block text-sm font-medium text-slate-400 mb-2">
                       Main Training Goal
                     </label>
                     <div className="grid md:grid-cols-2 gap-3">
@@ -882,12 +884,14 @@ export const SettingsPage: React.FC = () => {
                           type="button"
                           onClick={() => setTrainingGoal(goal.value)}
                           className={`p-4 text-left rounded-lg border transition-colors ${trainingGoal === goal.value
-                            ? 'border-orange-500 bg-orange-50'
-                            : 'border-gray-200 hover:border-gray-300'
+                            ? 'border-orange-500 bg-orange-950/20'
+                            : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
                             }`}
                         >
-                          <div className="font-medium text-gray-900 mb-1">{goal.label}</div>
-                          <div className="text-xs text-gray-600">{goal.description}</div>
+                          <div className={`font-medium mb-1 ${trainingGoal === goal.value ? 'text-orange-400' : 'text-slate-200'}`}>
+                            {goal.label}
+                          </div>
+                          <div className="text-xs text-slate-400">{goal.description}</div>
                         </button>
                       ))}
                     </div>
@@ -896,10 +900,8 @@ export const SettingsPage: React.FC = () => {
               </div>
 
               {/* Section B: Content Personalization */}
-
-
-              <div className="pt-6 border-t border-gray-200">
-                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+              <div className="pt-6 border-t border-slate-800">
+                <h3 className="text-lg font-medium text-slate-200 mb-4 flex items-center">
                   <Settings className="w-5 h-5 mr-2 text-orange-500" />
                   Content Personalization
                 </h3>
@@ -907,7 +909,7 @@ export const SettingsPage: React.FC = () => {
                 <div className="space-y-4">
                   {/* Skill Level */}
                   <div>
-                    <label htmlFor="skillLevel" className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="skillLevel" className="block text-sm font-medium text-slate-400 mb-2">
                       Skill Level
                     </label>
                     <div className="grid grid-cols-4 gap-3">
@@ -917,8 +919,8 @@ export const SettingsPage: React.FC = () => {
                           type="button"
                           onClick={() => setSkillLevel(level.value as 'beginner' | 'intermediate' | 'advanced' | 'pro')}
                           className={`p-3 text-center rounded-lg border transition-colors ${skillLevel === level.value
-                            ? 'border-orange-500 bg-orange-50 text-orange-700'
-                            : 'border-gray-200 hover:border-gray-300'
+                            ? 'border-orange-500 bg-orange-950/20 text-orange-400'
+                            : 'border-slate-700 bg-slate-800/50 text-slate-300 hover:border-slate-600'
                             }`}
                         >
                           <div className="font-medium text-sm">{level.label}</div>
@@ -929,9 +931,9 @@ export const SettingsPage: React.FC = () => {
 
                   {/* Interests */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-slate-400 mb-2">
                       Interests
-                      <span className="ml-2 text-xs text-gray-500 font-normal">
+                      <span className="ml-2 text-xs text-slate-500 font-normal">
                         ({interests.length} selected)
                       </span>
                     </label>
@@ -942,15 +944,15 @@ export const SettingsPage: React.FC = () => {
                           type="button"
                           onClick={() => toggleInterest(interest)}
                           className={`px-3 py-2 rounded-full text-sm transition-colors ${interests.includes(interest)
-                            ? 'bg-orange-500 text-white hover:bg-orange-600'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            ? 'bg-orange-600 text-white hover:bg-orange-700'
+                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
                             }`}
                         >
                           {interest}
                         </button>
                       ))}
                     </div>
-                    <p className="text-xs text-gray-500 mt-2">
+                    <p className="text-xs text-slate-500 mt-2">
                       Select topics you're interested in to personalize your content feed
                     </p>
                   </div>
@@ -958,11 +960,11 @@ export const SettingsPage: React.FC = () => {
               </div>
 
               {/* Save Button */}
-              <div className="flex space-x-3 pt-6 border-t border-gray-200">
+              <div className="flex space-x-3 pt-6 border-t border-slate-800">
                 <Button
                   onClick={handleSaveTrainingProfile}
                   loading={savingProfile}
-                  className="flex items-center"
+                  className="flex items-center text-white bg-orange-600 hover:bg-orange-700"
                 >
                   <Save className="w-4 h-4 mr-2" />
                   {profileSaved ? 'Saved!' : 'Save Changes'}
@@ -970,8 +972,8 @@ export const SettingsPage: React.FC = () => {
               </div>
 
               {profileSaved && (
-                <div className="bg-green-50 border border-green-200 rounded-md p-3">
-                  <p className="text-green-600 text-sm">
+                <div className="bg-green-950/20 border border-green-500/20 rounded-md p-3">
+                  <p className="text-green-400 text-sm">
                     ✅ Training profile saved! Your coaching and content preferences have been updated.
                   </p>
                 </div>
@@ -980,20 +982,20 @@ export const SettingsPage: React.FC = () => {
           </div>
 
           {/* AI Coach Settings */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+          <div className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 p-6">
+            <h2 className="text-xl font-semibold text-slate-100 mb-4 flex items-center">
               <Bot className="w-5 h-5 mr-2" />
               AI Coach Personality
             </h2>
 
-            <p className="text-gray-600 mb-4">
+            <p className="text-slate-400 mb-4">
               Customize how your AI coach communicates with you. This system prompt defines
               the coach's personality, expertise, and approach to giving you training advice.
             </p>
 
             <div className="space-y-4">
               <div>
-                <label htmlFor="systemPrompt" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="systemPrompt" className="block text-sm font-medium text-slate-400 mb-2">
                   System Prompt
                 </label>
                 <textarea
@@ -1001,10 +1003,10 @@ export const SettingsPage: React.FC = () => {
                   value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
                   rows={12}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent font-mono text-sm"
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 text-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent font-mono text-sm"
                   placeholder="Enter your custom system prompt..."
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-slate-500 mt-1">
                   The AI coach will use this prompt to understand how to interact with you and analyze your training data.
                 </p>
               </div>
@@ -1013,7 +1015,7 @@ export const SettingsPage: React.FC = () => {
                 <Button
                   onClick={handleSave}
                   loading={saving}
-                  className="flex items-center"
+                  className="flex items-center text-white bg-orange-600 hover:bg-orange-700"
                 >
                   <Save className="w-4 h-4 mr-2" />
                   {saved ? 'Saved!' : 'Save Changes'}
@@ -1022,7 +1024,7 @@ export const SettingsPage: React.FC = () => {
                 <Button
                   onClick={handleReset}
                   variant="outline"
-                  className="flex items-center"
+                  className="flex items-center text-slate-300 border-slate-700 hover:bg-slate-800"
                 >
                   <RotateCcw className="w-4 h-4 mr-2" />
                   Reset to Default
@@ -1030,8 +1032,8 @@ export const SettingsPage: React.FC = () => {
               </div>
 
               {saved && (
-                <div className="bg-green-50 border border-green-200 rounded-md p-3">
-                  <p className="text-green-600 text-sm">
+                <div className="bg-green-950/20 border border-green-500/20 rounded-md p-3">
+                  <p className="text-green-400 text-sm">
                     ✅ System prompt saved! Your AI coach will use this personality in future conversations.
                   </p>
                 </div>
@@ -1040,13 +1042,13 @@ export const SettingsPage: React.FC = () => {
           </div>
 
           {/* Prompt Examples */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Example Coaching Styles</h3>
+          <div className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 p-6">
+            <h3 className="text-lg font-semibold text-slate-200 mb-4">Example Coaching Styles</h3>
 
             <div className="space-y-4">
-              <div className="border border-gray-200 rounded-md p-4">
-                <h4 className="font-medium text-gray-900 mb-2">🏃 Motivational Coach</h4>
-                <p className="text-sm text-gray-600 mb-2">
+              <div className="border border-slate-800 bg-slate-800/20 rounded-md p-4">
+                <h4 className="font-medium text-slate-200 mb-2">🏃 Motivational Coach</h4>
+                <p className="text-sm text-slate-400 mb-2">
                   Encouraging, positive, focuses on progress and achievements
                 </p>
                 <button
@@ -1057,15 +1059,15 @@ EXERCISE VIDEO GUIDELINES:
 - Format: **Exercise**: [Video Title](https://youtube.com/watch?v=ID) by Creator
 - Recommend GCN, TrainerRoad, Dylan Johnson, and other top cycling channels
 - Include motivational fitness creators like Athlean-X and Yoga with Adriene`)}
-                  className="text-xs text-orange-600 hover:text-orange-700 underline"
+                  className="text-xs text-orange-400 hover:text-orange-300 underline"
                 >
                   Use this style
                 </button>
               </div>
 
-              <div className="border border-gray-200 rounded-md p-4">
-                <h4 className="font-medium text-gray-900 mb-2">📊 Data-Driven Analyst</h4>
-                <p className="text-sm text-gray-600 mb-2">
+              <div className="border border-slate-800 bg-slate-800/20 rounded-md p-4">
+                <h4 className="font-medium text-slate-200 mb-2">📊 Data-Driven Analyst</h4>
+                <p className="text-sm text-slate-400 mb-2">
                   Technical, analytical, focuses on metrics and performance optimization
                 </p>
                 <button
@@ -1076,15 +1078,15 @@ EXERCISE VIDEO GUIDELINES:
 - Prioritize Dylan Johnson, TrainerRoad, and GCN's technical content
 - Format: **Technique**: [Video Title](https://youtube.com/watch?v=ID) by Creator
 - Focus on evidence-based training methods and performance optimization videos`)}
-                  className="text-xs text-orange-600 hover:text-orange-700 underline"
+                  className="text-xs text-orange-400 hover:text-orange-300 underline"
                 >
                   Use this style
                 </button>
               </div>
 
-              <div className="border border-gray-200 rounded-md p-4">
-                <h4 className="font-medium text-gray-900 mb-2">🧘 Holistic Wellness Coach</h4>
-                <p className="text-sm text-gray-600 mb-2">
+              <div className="border border-slate-800 bg-slate-800/20 rounded-md p-4">
+                <h4 className="font-medium text-slate-200 mb-2">🧘 Holistic Wellness Coach</h4>
+                <p className="text-sm text-slate-400 mb-2">
                   Balanced approach, emphasizes recovery, mental health, and sustainable training
                 </p>
                 <button
@@ -1095,7 +1097,7 @@ EXERCISE VIDEO GUIDELINES:
 - Prioritize Yoga with Adriene, Peter Attia MD, and GCN's recovery videos
 - Format: **Practice**: [Video Title](https://youtube.com/watch?v=ID) by Creator
 - Focus on sustainable training, recovery techniques, and mental wellness`)}
-                  className="text-xs text-orange-600 hover:text-orange-700 underline"
+                  className="text-xs text-orange-400 hover:text-orange-300 underline"
                 >
                   Use this style
                 </button>

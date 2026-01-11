@@ -24,13 +24,13 @@ const CircularProgress: React.FC<{ score: number; size?: number; strokeWidth?: n
 
   // Color logic
   let colorClass = 'text-red-500';
-  let bgClass = 'text-red-100';
+  let bgClass = 'text-red-900/20';
   if (score >= 80) {
     colorClass = 'text-green-500';
-    bgClass = 'text-green-100';
+    bgClass = 'text-green-900/20';
   } else if (score >= 50) {
     colorClass = 'text-yellow-500';
-    bgClass = 'text-yellow-100';
+    bgClass = 'text-yellow-900/20';
   }
 
   return (
@@ -62,7 +62,7 @@ const CircularProgress: React.FC<{ score: number; size?: number; strokeWidth?: n
         <span className={`text-5xl font-bold ${colorClass.replace('text-', 'text-')}`}>
           {Math.round(score)}
         </span>
-        <span className="text-sm text-gray-500 font-medium mt-1">{label}</span>
+        <span className="text-sm text-slate-500 font-medium mt-1">{label}</span>
       </div>
     </div>
   );
@@ -78,12 +78,12 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
 
   if (loading) {
     return (
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 h-full min-h-[300px] animate-pulse">
+      <div className="bg-slate-900 rounded-2xl shadow-sm border border-slate-800 p-6 h-full min-h-[300px] animate-pulse">
         <div className="flex flex-col md:flex-row gap-6 h-full">
-          <div className="w-full md:w-1/3 bg-gray-100 rounded-xl h-48 md:h-auto"></div>
+          <div className="w-full md:w-1/3 bg-slate-800 rounded-xl h-48 md:h-auto"></div>
           <div className="w-full md:w-2/3 grid grid-cols-2 gap-4">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="bg-gray-100 rounded-xl h-24"></div>
+              <div key={i} className="bg-slate-800 rounded-xl h-24"></div>
             ))}
           </div>
         </div>
@@ -93,9 +93,9 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
 
   if (!sleepData && !readinessData && !dailyMetric) {
     return (
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <div className="text-center text-gray-500 py-12">
-          <Moon className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+      <div className="bg-slate-900 rounded-2xl shadow-sm border border-slate-800 p-6">
+        <div className="text-center text-slate-500 py-12">
+          <Moon className="w-12 h-12 mx-auto mb-3 text-slate-600" />
           <p className="text-base font-medium">No recovery data available</p>
           <p className="text-sm mt-1">Connect your Oura Ring or sync health data.</p>
         </div>
@@ -148,9 +148,9 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
   else statusText = "Recovery Needed";
 
   // Gradient / Background logic based on Overall Score for the Hero Card
-  let heroBg = "bg-red-50";
-  if (overallScore >= 80) heroBg = "bg-green-50";
-  else if (overallScore >= 50) heroBg = "bg-yellow-50";
+  let heroBg = "bg-red-500/10";
+  if (overallScore >= 80) heroBg = "bg-green-500/10";
+  else if (overallScore >= 50) heroBg = "bg-yellow-500/10";
 
   // Helper formatting
   const formatDuration = (secs: number) => {
@@ -161,27 +161,27 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
 
   // Helper for metric card colors
   const getMetricCardClass = (score: number) => {
-    if (score >= 80) return "bg-green-50 border-green-100";
-    if (score >= 50) return "bg-yellow-50 border-yellow-100";
-    return "bg-red-50 border-red-100";
+    if (score >= 80) return "bg-green-500/10 border-green-500/20";
+    if (score >= 50) return "bg-yellow-500/10 border-yellow-500/20";
+    return "bg-red-500/10 border-red-500/20";
   };
 
   const getMetricIconClass = (score: number) => {
-    if (score >= 80) return "text-green-600";
-    if (score >= 50) return "text-yellow-600";
-    return "text-red-600";
+    if (score >= 80) return "text-green-500";
+    if (score >= 50) return "text-yellow-500";
+    return "text-red-500";
   };
 
   return (
-    <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+    <div className="bg-slate-900 rounded-3xl shadow-lg shadow-black/20 border border-slate-800 overflow-hidden">
       <div className="p-6">
-        <h3 className="font-bold text-lg text-gray-900 mb-6 flex items-center">
+        <h3 className="font-bold text-lg text-slate-50 mb-6 flex items-center">
           Recovery & Sleep
         </h3>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* LEFT COL: HERO - Overall Recovery */}
-          <div className={`col-span-1 rounded-2xl ${heroBg} p-8 flex flex-col items-center justify-center text-center relative min-h-[300px]`}>
+          <div className={`col-span-1 rounded-2xl ${heroBg} p-8 flex flex-col items-center justify-center text-center relative min-h-[300px] border border-white/5`}>
 
             <CircularProgress
               score={overallScore}
@@ -189,7 +189,7 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
             />
 
             {/* Moved subLabel outside of CircularProgress to avoid overlap */}
-            <div className="mt-6 text-sm font-semibold text-gray-600 uppercase tracking-wide">
+            <div className="mt-6 text-sm font-semibold text-slate-300 uppercase tracking-wide">
               {statusText}
             </div>
 
@@ -202,11 +202,11 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
             <div className={`rounded-xl p-5 flex flex-col justify-between border ${getMetricCardClass(sleepVal)}`}>
               <div className="flex items-center gap-2 mb-2">
                 <Moon className={`w-5 h-5 ${getMetricIconClass(sleepVal)}`} />
-                <span className="text-sm font-medium text-gray-600">Sleep Score</span>
+                <span className="text-sm font-medium text-slate-400">Sleep Score</span>
               </div>
               <div>
-                <div className="text-3xl font-bold text-gray-900">{sleepVal || '--'}</div>
-                <div className="text-sm text-gray-500 mt-1">{formatDuration(sleepDuration)}</div>
+                <div className="text-3xl font-bold text-slate-50">{sleepVal || '--'}</div>
+                <div className="text-sm text-slate-500 mt-1">{formatDuration(sleepDuration)}</div>
               </div>
             </div>
 
@@ -214,11 +214,11 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
             <div className={`rounded-xl p-5 flex flex-col justify-between border ${getMetricCardClass(hrvScore)}`}>
               <div className="flex items-center gap-2 mb-2">
                 <Activity className={`w-5 h-5 ${getMetricIconClass(hrvScore)}`} />
-                <span className="text-sm font-medium text-gray-600">HRV Score</span>
+                <span className="text-sm font-medium text-slate-400">HRV Score</span>
               </div>
               <div>
-                <div className="text-3xl font-bold text-gray-900">{Math.round(hrvScore) || '--'}</div>
-                <div className="text-sm text-gray-500 mt-1">{Math.round(hrvVal)} ms</div>
+                <div className="text-3xl font-bold text-slate-50">{Math.round(hrvScore) || '--'}</div>
+                <div className="text-sm text-slate-500 mt-1">{Math.round(hrvVal)} ms</div>
               </div>
             </div>
 
@@ -226,30 +226,30 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
             <div className={`rounded-xl p-5 flex flex-col justify-between border ${getMetricCardClass(rhrScore)}`}>
               <div className="flex items-center gap-2 mb-2">
                 <Heart className={`w-5 h-5 ${getMetricIconClass(rhrScore)}`} />
-                <span className="text-sm font-medium text-gray-600">RHR Score</span>
+                <span className="text-sm font-medium text-slate-400">RHR Score</span>
               </div>
               <div>
-                <div className="text-3xl font-bold text-gray-900">
+                <div className="text-3xl font-bold text-slate-50">
                   {rhrScore || '--'}
                 </div>
-                <div className="text-sm text-gray-500 mt-1">{Math.round(rhrVal)} bpm</div>
+                <div className="text-sm text-slate-500 mt-1">{Math.round(rhrVal)} bpm</div>
               </div>
             </div>
 
             {/* Respiratory Rate Card */}
-            <div className="bg-cyan-50 border border-cyan-100 rounded-xl p-5 flex flex-col justify-between">
+            <div className="bg-cyan-900/10 border border-cyan-500/20 rounded-xl p-5 flex flex-col justify-between">
               <div className="flex items-center gap-2 mb-2">
-                <Wind className="w-5 h-5 text-cyan-600" />
-                <span className="text-sm font-medium text-gray-600">Respiratory Rate</span>
+                <Wind className="w-5 h-5 text-cyan-500" />
+                <span className="text-sm font-medium text-slate-400">Respiratory Rate</span>
               </div>
               <div>
-                <div className="text-3xl font-bold text-gray-900">
+                <div className="text-3xl font-bold text-slate-50">
                   {dailyMetric?.respiratory_rate ?? '--'}
                 </div>
-                <div className="text-sm text-gray-500 mt-1">br/min</div>
+                <div className="text-sm text-slate-500 mt-1">br/min</div>
 
                 {dailyMetric?.respiratory_rate && (
-                  <div className="w-full bg-cyan-200/50 rounded-full h-1.5 mt-3 overflow-hidden">
+                  <div className="w-full bg-cyan-900/30 rounded-full h-1.5 mt-3 overflow-hidden">
                     <div className="bg-cyan-500 h-1.5 rounded-full" style={{ width: '60%' }}></div>
                   </div>
                 )}
@@ -260,7 +260,7 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
         </div>
 
         {/* Footer Text */}
-        <div className="mt-8 text-xs text-gray-400 text-center border-t border-gray-100 pt-4">
+        <div className="mt-8 text-xs text-slate-500 text-center border-t border-slate-800 pt-4">
           Recovery efficiency is calculated as a weighted balance of HRV (50%), RHR (30%), and Sleep (20%) normalized against your 30-day baseline.
         </div>
       </div>

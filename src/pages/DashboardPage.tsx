@@ -662,7 +662,7 @@ export const DashboardPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-950">
       {isDemoMode && (
         <div className="sticky top-0 z-50 bg-blue-600 text-white py-3 px-4 shadow-md">
           <div className="max-w-7xl mx-auto flex items-center justify-between">

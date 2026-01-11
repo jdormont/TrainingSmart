@@ -52,30 +52,30 @@ export default function PlanModificationModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-slate-900 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-800">
+        <div className="flex items-center justify-between p-6 border-b border-slate-800">
           <div className="flex items-center space-x-3">
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <Wand2 className="w-6 h-6 text-orange-600" />
+            <div className="p-2 bg-orange-500/10 rounded-lg">
+              <Wand2 className="w-6 h-6 text-orange-400" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Modify Week {weekNumber}</h2>
-              <p className="text-sm text-gray-600">Adjust your training plan using natural language</p>
+              <h2 className="text-xl font-bold text-slate-50">Modify Week {weekNumber}</h2>
+              <p className="text-sm text-slate-400">Adjust your training plan using natural language</p>
             </div>
           </div>
           <button
             onClick={handleClose}
             disabled={isModifying}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+            className="p-2 hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-50 text-slate-400 hover:text-slate-200"
           >
-            <X className="w-6 h-6 text-gray-500" />
+            <X className="w-6 h-6" />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-3">Current Week's Workouts</h3>
+            <h3 className="text-lg font-semibold text-slate-50 mb-3">Current Week's Workouts</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {currentWorkouts.map((workout) => (
                 <WorkoutCard key={workout.id} workout={workout} showDate={false} />
@@ -84,7 +84,7 @@ export default function PlanModificationModal({
           </div>
 
           <div>
-            <label htmlFor="modification-request" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="modification-request" className="block text-sm font-medium text-slate-300 mb-2">
               What would you like to change?
             </label>
             <textarea
@@ -97,9 +97,9 @@ export default function PlanModificationModal({
 • Can't workout on Wednesday and Thursday
 • Feeling tired, reduce intensity by 20%
 • Need to swap Tuesday and Friday workouts"
-              className="w-full h-32 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="w-full h-32 px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none disabled:bg-slate-800/50 disabled:cursor-not-allowed text-slate-50 placeholder-slate-500"
             />
-            <div className="mt-2 flex items-start space-x-2 text-sm text-gray-600">
+            <div className="mt-2 flex items-start space-x-2 text-sm text-slate-400">
               <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
               <p>
                 Be specific about your constraints. The AI will adjust your plan while maintaining training principles.
@@ -118,11 +118,12 @@ export default function PlanModificationModal({
           )}
         </div>
 
-        <div className="p-6 border-t border-gray-200 bg-gray-50 flex justify-end space-x-3">
+        <div className="p-6 border-t border-slate-800 bg-slate-900/50 flex justify-end space-x-3">
           <Button
             variant="secondary"
             onClick={handleClose}
             disabled={isModifying}
+            className="bg-transparent border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-slate-200"
           >
             Cancel
           </Button>

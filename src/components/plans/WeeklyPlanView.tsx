@@ -177,8 +177,8 @@ export default function WeeklyPlanView({
 
   if (workouts.length === 0) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-        <p className="text-gray-500">No workouts scheduled yet</p>
+      <div className="bg-slate-900 rounded-lg border border-slate-800 p-8 text-center">
+        <p className="text-slate-400">No workouts scheduled yet</p>
       </div>
     );
   }
@@ -245,15 +245,15 @@ export default function WeeklyPlanView({
           const isExporting = exportingWeek === weekIndex;
 
           return (
-            <div key={weekIndex} className="bg-white rounded-lg border border-gray-200 p-6">
+            <div key={weekIndex} className="bg-slate-900 rounded-lg border border-slate-800 p-6">
               {/* Header */}
               <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">
+                  <h3 className="text-lg font-semibold text-slate-50">
                     Week {weekIndex + 1} - {format(week.weekStart, 'MMM d, yyyy')}
                   </h3>
                   {alreadyExportedCount > 0 && (
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-slate-500 mt-1">
                       {alreadyExportedCount} of {weekWorkouts.length} workout(s) already in calendar
                     </p>
                   )}
@@ -291,9 +291,9 @@ export default function WeeklyPlanView({
                     date={day.date}
                     className="flex flex-col"
                   >
-                    <div className="text-sm font-medium text-gray-700 mb-2 text-center pointer-events-none select-none">
+                    <div className="text-sm font-medium text-slate-300 mb-2 text-center pointer-events-none select-none">
                       {DAYS_OF_WEEK[dayIndex]}
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-slate-500">
                         {format(day.date, 'MMM d')}
                       </div>
                     </div>
@@ -311,12 +311,12 @@ export default function WeeklyPlanView({
                           </div>
                         ))
                       ) : (
-                        <div className="h-full min-h-[60px] md:min-h-[80px] bg-gray-50/50 rounded-lg border border-dashed border-gray-300 flex flex-col items-center justify-center space-y-2 p-2 group hover:border-blue-300 hover:bg-blue-50/10 transition-colors">
-                          <span className="text-xs text-gray-400 group-hover:text-blue-400 pointer-events-none">Rest Day</span>
+                        <div className="h-full min-h-[60px] md:min-h-[80px] bg-slate-800/20 rounded-lg border-2 border-dashed border-slate-800 flex flex-col items-center justify-center space-y-2 p-2 group hover:border-blue-500/50 hover:bg-blue-500/5 transition-colors">
+                          <span className="text-xs text-slate-500 group-hover:text-blue-400 pointer-events-none">Rest Day</span>
                           {onAddWorkout && (
                             <button
                               onClick={() => onAddWorkout(day.date)}
-                              className="p-1 rounded-full bg-blue-100 text-blue-600 hover:bg-blue-200 transition-colors opacity-0 group-hover:opacity-100"
+                              className="p-1 rounded-full bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors opacity-0 group-hover:opacity-100"
                               title="Add Workout"
                             >
                               <Plus className="w-4 h-4" />

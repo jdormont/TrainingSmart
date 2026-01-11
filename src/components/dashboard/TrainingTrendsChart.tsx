@@ -261,8 +261,8 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
   const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-          <p className="font-medium text-gray-900 mb-2">{`Week of ${label}`}</p>
+        <div className="bg-slate-800 p-3 border border-slate-700 rounded-lg shadow-lg">
+          <p className="font-medium text-slate-50 mb-2">{`Week of ${label}`}</p>
           {payload.map((entry, index) => {
             const metric = metricConfigs.find(m => entry.dataKey === m.key);
             const unit = metric?.unit || '';
@@ -280,22 +280,22 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
 
   if (!activities || activities.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 p-6">
         <div className="mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+          <h3 className="text-lg font-semibold text-slate-50 mb-2">
             Training Trends (Last 8 Weeks)
           </h3>
-          <p className="text-gray-600 text-sm">
+          <p className="text-slate-400 text-sm">
             Analyze your training patterns by activity type and metric
           </p>
         </div>
 
         <div className="h-80 flex flex-col items-center justify-center text-center">
-          <LineChartIcon className="h-12 w-12 text-gray-400 mb-4" />
-          <h4 className="text-lg font-semibold text-gray-900 mb-2">
+          <LineChartIcon className="h-12 w-12 text-slate-600 mb-4" />
+          <h4 className="text-lg font-semibold text-slate-50 mb-2">
             No training data yet
           </h4>
-          <p className="text-gray-600 mb-6 max-w-md">
+          <p className="text-slate-400 mb-6 max-w-md">
             Connect Strava or log your first ride to see your fitness progression.
           </p>
           <Button
@@ -312,12 +312,12 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div className="bg-slate-900 rounded-lg shadow-lg shadow-black/20 border border-slate-800 p-6">
       <div className="mb-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">
+        <h3 className="text-lg font-semibold text-slate-50 mb-2">
           Training Trends (Last 8 Weeks)
         </h3>
-        <p className="text-gray-600 text-sm">
+        <p className="text-slate-400 text-sm">
           Analyze your training patterns by activity type and metric
         </p>
       </div>
@@ -326,7 +326,7 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
       <div className="mb-6 space-y-4">
         {/* Metric Selection */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+          <label className="block text-sm font-medium text-slate-300 mb-2 flex items-center">
             <Filter className="w-4 h-4 mr-1" />
             Metrics to Display (select multiple)
           </label>
@@ -337,7 +337,7 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
                 onClick={() => toggleMetric(metric.id)}
                 className={`flex items-center space-x-2 px-3 py-1.5 text-sm rounded-md transition-colors ${selectedMetrics.has(metric.id)
                   ? 'text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
                   }`}
                 style={selectedMetrics.has(metric.id) ? { backgroundColor: metric.color } : {}}
               >
@@ -357,18 +357,18 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
       <div className="h-80 mb-4">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={weeklyTrends} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
             <XAxis
               dataKey="week"
-              stroke="#6b7280"
+              stroke="#94a3b8"
               fontSize={12}
             />
             <YAxis
-              stroke="#6b7280"
+              stroke="#94a3b8"
               fontSize={12}
             />
             <Tooltip content={<CustomTooltip />} />
-            <Legend />
+            <Legend wrapperStyle={{ color: '#94a3b8' }} />
 
             {metricConfigs
               .filter(metric => selectedMetrics.has(metric.id))
@@ -390,51 +390,51 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
 
       {/* Metric Explanations */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-center">
-        <div className="bg-blue-50 rounded-lg p-3">
+        <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
           <div className="flex items-center justify-center mb-1">
             <div className="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
-            <span className="text-sm font-medium text-gray-700">Distance</span>
+            <span className="text-sm font-medium text-slate-300">Distance</span>
           </div>
-          <p className="text-xs text-gray-600">Weekly mileage volume</p>
+          <p className="text-xs text-slate-400">Weekly mileage volume</p>
         </div>
-        <div className="bg-green-50 rounded-lg p-3">
+        <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
           <div className="flex items-center justify-center mb-1">
             <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-            <span className="text-sm font-medium text-gray-700">Training Load</span>
+            <span className="text-sm font-medium text-slate-300">Training Load</span>
           </div>
-          <p className="text-xs text-gray-600">Intensity × time factor</p>
+          <p className="text-xs text-slate-400">Intensity × time factor</p>
         </div>
-        <div className="bg-orange-50 rounded-lg p-3">
+        <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3">
           <div className="flex items-center justify-center mb-1">
             <div className="w-3 h-3 bg-orange-500 rounded-full mr-2"></div>
-            <span className="text-sm font-medium text-gray-700">Avg Speed</span>
+            <span className="text-sm font-medium text-slate-300">Avg Speed</span>
           </div>
-          <p className="text-xs text-gray-600">Overall pace trends</p>
+          <p className="text-xs text-slate-400">Overall pace trends</p>
         </div>
-        <div className="bg-red-50 rounded-lg p-3">
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
           <div className="flex items-center justify-center mb-1">
             <div className="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
-            <span className="text-sm font-medium text-gray-700">Avg Heart Rate</span>
+            <span className="text-sm font-medium text-slate-300">Avg Heart Rate</span>
           </div>
-          <p className="text-xs text-gray-600">Cardiovascular intensity</p>
+          <p className="text-xs text-slate-400">Cardiovascular intensity</p>
         </div>
-        <div className="bg-violet-50 rounded-lg p-3">
+        <div className="bg-violet-500/10 border border-violet-500/20 rounded-lg p-3">
           <div className="flex items-center justify-center mb-1">
             <div className="w-3 h-3 bg-violet-500 rounded-full mr-2"></div>
-            <span className="text-sm font-medium text-gray-700">Overall Performance</span>
+            <span className="text-sm font-medium text-slate-300">Overall Performance</span>
           </div>
-          <p className="text-xs text-gray-600">Holistic training score</p>
+          <p className="text-xs text-slate-400">Holistic training score</p>
         </div>
-        <div className="bg-pink-50 rounded-lg p-3">
+        <div className="bg-pink-500/10 border border-pink-500/20 rounded-lg p-3">
           <div className="flex items-center justify-center mb-1">
             <div className="w-3 h-3 bg-pink-500 rounded-full mr-2"></div>
-            <span className="text-sm font-medium text-gray-700">Recovery</span>
+            <span className="text-sm font-medium text-slate-300">Recovery</span>
           </div>
-          <p className="text-xs text-gray-600">Calculated recovery status</p>
+          <p className="text-xs text-slate-400">Calculated recovery status</p>
         </div>
       </div>
 
-      <p className="text-xs text-gray-500 text-center mt-4">Powered by Strava</p>
+      <p className="text-xs text-slate-600 text-center mt-4">Powered by Strava</p>
     </div>
   );
 };

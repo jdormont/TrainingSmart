@@ -25,7 +25,7 @@ function App() {
     <Router>
       <PostHogPageView />
       <AuthProvider>
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-slate-950 text-slate-50">
           <Header />
           <Routes>
             {/* Public routes */}

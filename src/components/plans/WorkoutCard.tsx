@@ -17,10 +17,10 @@ interface WorkoutCardProps {
 }
 
 const INTENSITY_COLORS = {
-  easy: 'bg-green-50 border-green-200 text-green-700',
-  recovery: 'bg-blue-50 border-blue-200 text-blue-700',
-  moderate: 'bg-yellow-50 border-yellow-200 text-yellow-700',
-  hard: 'bg-red-50 border-red-200 text-red-700',
+  easy: 'bg-green-500/10 border-green-500/20 text-green-400',
+  recovery: 'bg-blue-500/10 border-blue-500/20 text-blue-400',
+  moderate: 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400',
+  hard: 'bg-red-500/10 border-red-500/20 text-red-400',
 };
 
 const TYPE_ICONS = {
@@ -131,15 +131,15 @@ export default function WorkoutCard({
   const status = workout.status || (workout.completed ? 'completed' : 'planned');
 
   const getCardStyle = () => {
-    if (status === 'completed') return 'border-green-300 bg-green-50/30';
-    if (status === 'skipped') return 'border-gray-200 bg-gray-50 opacity-75';
-    return 'border-gray-200 hover:border-orange-300 hover:shadow-md';
+    if (status === 'completed') return 'border-green-500/30 bg-green-500/5';
+    if (status === 'skipped') return 'border-slate-800 bg-slate-900/50 opacity-50';
+    return 'border-slate-700/50 bg-slate-800/50 hover:border-orange-500/50 hover:shadow-md hover:shadow-black/20';
   };
 
   const getTitleStyle = () => {
-    if (status === 'skipped') return 'text-gray-500 line-through decoration-gray-400';
-    if (status === 'completed') return 'text-gray-900';
-    return 'text-gray-900';
+    if (status === 'skipped') return 'text-slate-500 line-through decoration-slate-600';
+    if (status === 'completed') return 'text-slate-50';
+    return 'text-white';
   };
 
   const handleAction = (action: () => void, e: React.MouseEvent) => {
@@ -179,31 +179,31 @@ export default function WorkoutCard({
           left: `${menuPosition.left}px`,
           zIndex: 9999
         }}
-        className="w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1"
+        className="w-48 bg-slate-900 rounded-md shadow-lg border border-slate-700 py-1"
         onClick={e => e.stopPropagation()}
       >
         <button
           onClick={(e) => handleAction(() => onStatusChange?.(workout.id, 'completed'), e)}
-          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center"
+          className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 flex items-center"
         >
           <Check className="w-4 h-4 mr-2 text-green-600" /> Mark as Completed
         </button>
         <button
           onClick={(e) => handleAction(() => onStatusChange?.(workout.id, 'skipped'), e)}
-          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center"
+          className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 flex items-center"
         >
           <XCircle className="w-4 h-4 mr-2 text-gray-500" /> Mark as Skipped
         </button>
         <button
           onClick={(e) => handleAction(() => onStatusChange?.(workout.id, 'planned'), e)}
-          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center"
+          className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 flex items-center"
         >
           <Circle className="w-4 h-4 mr-2 text-blue-500" /> Mark as Planned
         </button>
         <div className="border-t border-gray-100 my-1"></div>
         <button
           onClick={(e) => handleAction(() => onDelete?.(workout.id), e)}
-          className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"
+          className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 flex items-center"
         >
           <Trash2 className="w-4 h-4 mr-2" /> Delete from Plan
         </button>
@@ -215,7 +215,7 @@ export default function WorkoutCard({
   if (compact) {
     return (
       <div
-        className={`bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow h-full flex flex-col ${getCardStyle()} ${className} ${expanded ? 'shadow-lg' : ''}`}
+        className={`bg-slate-800/50 rounded-lg shadow-sm border border-slate-700/50 overflow-hidden hover:shadow-md transition-shadow h-full flex flex-col ${getCardStyle()} ${className} ${expanded ? 'shadow-lg' : ''}`}
         onClick={() => setExpanded(!expanded)}
       >
         <div className="p-3 relative">
@@ -231,7 +231,7 @@ export default function WorkoutCard({
                 <button
                   ref={menuTriggerRef}
                   onClick={handleToggleMenu}
-                  className="p-1 hover:bg-gray-100 rounded-md text-gray-400 hover:text-gray-600"
+                  className="p-1 hover:bg-slate-700 rounded-md text-slate-400 hover:text-slate-200"
                 >
                   <MoreVertical className="w-4 h-4" />
                 </button>
@@ -242,7 +242,7 @@ export default function WorkoutCard({
           <h3 className={`font-medium text-sm mb-2 line-clamp-2 leading-tight ${getTitleStyle()}`}>
             {workout.name}
           </h3>
-          <div className="space-y-1 text-xs text-gray-600">
+          <div className="space-y-1 text-xs text-slate-200">
             {workout.duration > 0 && (
               <div className="flex items-center">
                 <Clock className="w-3 h-3 mr-1 flex-shrink-0" />
@@ -262,15 +262,15 @@ export default function WorkoutCard({
             </div>
           </div>
           {!expanded && workout.description && (
-            <div className="mt-2 text-xs text-gray-500 italic">
+            <div className="mt-2 text-xs text-orange-400/80 italic">
               Click to see details...
             </div>
           )}
         </div>
         {expanded && workout.description && (
-          <div className="px-3 pb-3 pt-0 border-t border-gray-200 mt-2">
+          <div className="px-3 pb-3 pt-0 border-t border-slate-700 mt-2">
             <div
-              className="prose prose-xs max-w-none text-gray-700 text-xs"
+              className="prose prose-xs prose-invert max-w-none text-slate-200 text-xs prose-p:text-slate-200 prose-li:text-slate-200"
               dangerouslySetInnerHTML={{
                 __html: convertMarkdownToHtml(workout.description),
               }}
@@ -283,7 +283,7 @@ export default function WorkoutCard({
 
   return (
     <div
-      className={`bg-white rounded-lg border-2 transition-all ${getCardStyle()} ${expanded ? 'shadow-lg' : ''}`}
+      className={`bg-slate-800/50 rounded-lg border border-slate-700/50 transition-all ${getCardStyle()} ${expanded ? 'shadow-lg' : ''}`}
     >
       <div
         className="p-4 cursor-pointer"
@@ -292,7 +292,7 @@ export default function WorkoutCard({
         <div className="flex items-start justify-between mb-2">
           <div className="flex items-start space-x-3 flex-1">
             <div
-              className={`p-2 rounded-lg ${status === 'skipped' ? 'bg-gray-100 text-gray-400' : INTENSITY_COLORS[workout.intensity]} flex-shrink-0`}
+              className={`p-2 rounded-lg ${status === 'skipped' ? 'bg-slate-800 text-slate-500' : INTENSITY_COLORS[workout.intensity]} flex-shrink-0`}
             >
               <Icon className="w-5 h-5" />
             </div>
@@ -312,11 +312,11 @@ export default function WorkoutCard({
                 )}
               </h3>
               {showDate && workout.scheduledDate && (
-                <div className="text-sm text-gray-600 mb-2">
+                <div className="text-sm text-slate-400 mb-2">
                   {formatDate(workout.scheduledDate)}
                 </div>
               )}
-              <div className="flex flex-wrap gap-3 text-sm text-gray-600">
+              <div className="flex flex-wrap gap-3 text-sm text-slate-200">
                 {workout.duration > 0 && (
                   <div className="flex items-center">
                     <Clock className="w-4 h-4 mr-1" />
@@ -345,7 +345,7 @@ export default function WorkoutCard({
               <button
                 ref={menuTriggerRef}
                 onClick={handleToggleMenu}
-                className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600"
+                className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-slate-200"
               >
                 <MoreVertical className="w-5 h-5" />
               </button>
@@ -355,8 +355,8 @@ export default function WorkoutCard({
               onClick={handleExportToCalendar}
               disabled={exporting || !!workout.google_calendar_event_id}
               className={`p-2 rounded-lg transition-colors flex-shrink-0 ${workout.google_calendar_event_id
-                ? 'text-green-600 cursor-default'
-                : 'hover:bg-gray-100 text-gray-600'
+                ? 'text-green-500 cursor-default'
+                : 'hover:bg-slate-700/50 text-slate-400 hover:text-slate-200'
                 }`}
               title={workout.google_calendar_event_id ? 'Already in calendar' : 'Export to Google Calendar'}
             >
@@ -370,9 +370,9 @@ export default function WorkoutCard({
         </div>
 
         {expanded && workout.description && (
-          <div className="mt-4 pt-4 border-t border-gray-200">
+          <div className="mt-4 pt-4 border-t border-slate-700">
             <div
-              className="prose prose-sm max-w-none text-gray-700"
+              className="prose prose-sm prose-invert max-w-none text-slate-200 prose-p:text-slate-200 prose-li:text-slate-200"
               dangerouslySetInnerHTML={{
                 __html: convertMarkdownToHtml(workout.description),
               }}
@@ -381,7 +381,7 @@ export default function WorkoutCard({
         )}
 
         {!expanded && workout.description && (
-          <div className="mt-2 text-sm text-gray-500">
+          <div className="mt-2 text-sm text-orange-400/80">
             Click to see details...
           </div>
         )}

@@ -142,21 +142,21 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
   const staticMapUrl = getStaticMapUrl();
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-900 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-slate-800 shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <div className="flex items-center justify-between p-6 border-b border-slate-800 sticky top-0 bg-slate-900/95 backdrop-blur z-10">
           <div className="flex items-center space-x-3">
-            <div className="text-2xl">{getActivityIcon(activity.type)}</div>
+            <div className="text-3xl">{getActivityIcon(activity.type)}</div>
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">{activity.name}</h2>
-              <div className="flex items-center space-x-4 text-sm text-gray-600">
+              <h2 className="text-xl font-bold text-slate-50">{activity.name}</h2>
+              <div className="flex items-center space-x-4 text-sm text-slate-400">
                 <div className="flex items-center">
-                  <Calendar className="w-4 h-4 mr-1" />
+                  <Calendar className="w-4 h-4 mr-1 text-slate-500" />
                   {formatDate(activity.start_date_local)}
                 </div>
                 <div className="flex items-center">
-                  <Clock className="w-4 h-4 mr-1" />
+                  <Clock className="w-4 h-4 mr-1 text-slate-500" />
                   {formatTime(activity.start_date_local)}
                 </div>
               </div>
@@ -164,89 +164,93 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-slate-200"
           >
-            <X className="w-5 h-5" />
+            <X className="w-6 h-6" />
           </button>
         </div>
 
         <div className="p-6 space-y-6">
           {/* Key Metrics Grid */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <div className="bg-blue-50 rounded-lg p-4 text-center">
-              <MapPin className="w-6 h-6 text-blue-600 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-gray-900">{formatDistance(activity.distance)}</div>
-              <div className="text-sm text-gray-600">Distance</div>
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 text-center">
+              <MapPin className="w-6 h-6 text-blue-400 mx-auto mb-2" />
+              <div className="text-2xl font-bold text-slate-50">{formatDistance(activity.distance)}</div>
+              <div className="text-sm text-slate-400">Distance</div>
             </div>
 
-            <div className="bg-green-50 rounded-lg p-4 text-center">
-              <Clock className="w-6 h-6 text-green-600 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-gray-900">{formatDuration(activity.moving_time)}</div>
-              <div className="text-sm text-gray-600">Moving Time</div>
+            <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 text-center">
+              <Clock className="w-6 h-6 text-green-400 mx-auto mb-2" />
+              <div className="text-2xl font-bold text-slate-50">{formatDuration(activity.moving_time)}</div>
+              <div className="text-sm text-slate-400">Moving Time</div>
             </div>
 
-            <div className="bg-orange-50 rounded-lg p-4 text-center">
-              <TrendingUp className="w-6 h-6 text-orange-600 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-gray-900">{formatPace(activity.average_speed, activity.type)}</div>
-              <div className="text-sm text-gray-600">Avg Speed</div>
+            <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-4 text-center">
+              <TrendingUp className="w-6 h-6 text-orange-400 mx-auto mb-2" />
+              <div className="text-2xl font-bold text-slate-50">{formatPace(activity.average_speed, activity.type)}</div>
+              <div className="text-sm text-slate-400">Avg Speed</div>
             </div>
 
             {activity.total_elevation_gain > 0 && (
-              <div className="bg-purple-50 rounded-lg p-4 text-center">
-                <Mountain className="w-6 h-6 text-purple-600 mx-auto mb-2" />
-                <div className="text-2xl font-bold text-gray-900">
+              <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-4 text-center">
+                <Mountain className="w-6 h-6 text-purple-400 mx-auto mb-2" />
+                <div className="text-2xl font-bold text-slate-50">
                   {Math.round(activity.total_elevation_gain * 3.28084)}ft
                 </div>
-                <div className="text-sm text-gray-600">Elevation</div>
+                <div className="text-sm text-slate-400">Elevation</div>
               </div>
             )}
 
             {activity.average_heartrate && (
-              <div className="bg-red-50 rounded-lg p-4 text-center">
-                <Heart className="w-6 h-6 text-red-600 mx-auto mb-2" />
-                <div className="text-2xl font-bold text-gray-900">{Math.round(activity.average_heartrate)}</div>
-                <div className="text-sm text-gray-600">Avg HR</div>
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-center">
+                <Heart className="w-6 h-6 text-red-500 mx-auto mb-2" />
+                <div className="text-2xl font-bold text-slate-50">{Math.round(activity.average_heartrate)}</div>
+                <div className="text-sm text-slate-400">Avg HR</div>
               </div>
             )}
 
             {activity.max_speed && (
-              <div className="bg-yellow-50 rounded-lg p-4 text-center">
-                <Zap className="w-6 h-6 text-yellow-600 mx-auto mb-2" />
-                <div className="text-2xl font-bold text-gray-900">{formatPace(activity.max_speed, activity.type)}</div>
-                <div className="text-sm text-gray-600">Max Speed</div>
+              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 text-center">
+                <Zap className="w-6 h-6 text-yellow-400 mx-auto mb-2" />
+                <div className="text-2xl font-bold text-slate-50">{formatPace(activity.max_speed, activity.type)}</div>
+                <div className="text-sm text-slate-400">Max Speed</div>
               </div>
             )}
           </div>
 
           {/* Heart Rate Zones */}
           {hrZones.length > 0 && (
-            <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
+            <div className="bg-slate-800/50 border border-slate-800 rounded-xl p-5">
+              <h3 className="font-semibold text-slate-200 mb-4 flex items-center">
                 <Heart className="w-5 h-5 mr-2 text-red-500" />
                 Heart Rate Zones
               </h3>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {hrZones.map((zone) => (
                   <div key={zone.zone} className="flex items-center space-x-3">
-                    <div className="w-16 text-sm font-medium text-gray-700">
+                    <div className="w-16 text-sm font-medium text-slate-400">
                       Zone {zone.zone}
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm text-gray-600">{zone.name}</span>
-                        <span className="text-sm text-gray-600">{zone.min}-{zone.max} bpm</span>
+                        <span className="text-xs text-slate-500 uppercase tracking-wider">{zone.name}</span>
+                        <span className="text-xs text-slate-400 font-mono">{zone.min}-{zone.max} bpm</span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div className="w-full bg-slate-700 rounded-full h-2">
                         <div
-                          className="h-2 rounded-full transition-all duration-300"
+                          className="h-2 rounded-full transition-all duration-300 relative"
                           style={{
                             width: `${zone.percentage}%`,
                             backgroundColor: zone.color
                           }}
-                        />
+                        >
+                          {zone.percentage > 5 && (
+                             <div className="absolute -right-1 -top-1 w-2 h-2 rounded-full bg-white/20"></div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <div className="w-12 text-sm text-gray-600 text-right">
+                    <div className="w-12 text-sm text-slate-300 text-right font-medium">
                       {zone.percentage}%
                     </div>
                   </div>
@@ -256,50 +260,50 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
           )}
 
           {/* Route Map */}
-          {/* Route Map */}
           {staticMapUrl && (
-            <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
+            <div className="bg-slate-800/50 border border-slate-800 rounded-xl p-5">
+              <h3 className="font-semibold text-slate-200 mb-4 flex items-center">
                 <MapPin className="w-5 h-5 mr-2 text-blue-500" />
                 Route
               </h3>
-              <div className="bg-gray-200 rounded-lg h-48 overflow-hidden">
+              <div className="bg-slate-900 rounded-lg h-56 overflow-hidden border border-slate-700 relative">
                 <img
                   src={staticMapUrl}
                   alt="Activity route map"
-                  className="w-full h-full object-cover rounded-lg"
+                  className="w-full h-full object-cover rounded-lg opacity-80 hover:opacity-100 transition-opacity"
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
                     target.style.display = 'none';
                     const parent = target.parentElement;
                     if (parent) {
                       parent.innerHTML = `
-                        <div class="w-full h-full flex items-center justify-center">
-                          <div class="text-center text-gray-600">
-                            <div class="w-8 h-8 mx-auto mb-2">🗺️</div>
-                            <p class="text-sm">Failed to load route map</p>
+                        <div class="w-full h-full flex items-center justify-center bg-slate-800">
+                          <div class="text-center text-slate-500">
+                            <div class="w-8 h-8 mx-auto mb-2 text-slate-600">🗺️</div>
+                            <p class="text-sm">Route map unavailable</p>
                           </div>
                         </div>
                       `;
                     }
                   }}
                 />
+                <div className="absolute inset-0 pointer-events-none rounded-lg ring-1 ring-inset ring-white/10"></div>
               </div>
             </div>
           )}
 
           {/* Personal Records */}
           {personalRecords.length > 0 && (
-            <div className="bg-yellow-50 rounded-lg p-4">
-              <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
-                <Trophy className="w-5 h-5 mr-2 text-yellow-600" />
+            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-5">
+              <h3 className="font-semibold text-yellow-400 mb-4 flex items-center">
+                <Trophy className="w-5 h-5 mr-2 text-yellow-500" />
                 Personal Records
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {personalRecords.map((pr, index) => (
-                  <div key={index} className="bg-white rounded-md p-3 text-center">
-                    <div className="text-lg font-bold text-yellow-600">{pr.value}</div>
-                    <div className="text-sm text-gray-600">{pr.type}</div>
+                  <div key={index} className="bg-slate-900/80 border border-yellow-500/20 rounded-lg p-3 text-center">
+                    <div className="text-lg font-bold text-yellow-500">{pr.value}</div>
+                    <div className="text-sm text-slate-400">{pr.type}</div>
                   </div>
                 ))}
               </div>
@@ -308,47 +312,47 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
 
           {/* Comparisons */}
           {comparisons && (
-            <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="font-semibold text-gray-900 mb-4">
-                Compared to Similar Rides ({similarActivities.length} rides)
+            <div className="bg-slate-800/50 border border-slate-800 rounded-xl p-5">
+              <h3 className="font-semibold text-slate-200 mb-4">
+                Compared to Similar Rides <span className="text-slate-500 font-normal text-sm ml-2">({similarActivities.length} recent rides)</span>
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white rounded-md p-3">
-                  <div className="text-sm text-gray-600 mb-1">Distance</div>
+                <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
+                  <div className="text-xs text-slate-500 mb-1 uppercase tracking-wide">Distance</div>
                   <div className="flex items-center justify-between">
-                    <span className="font-semibold">{formatDistance(comparisons.distance.current)}</span>
-                    <span className={`text-sm ${comparisons.distance.percentDiff >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <span className="font-bold text-slate-200">{formatDistance(comparisons.distance.current)}</span>
+                    <span className={`text-sm font-medium ${comparisons.distance.percentDiff >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       {comparisons.distance.percentDiff >= 0 ? '+' : ''}{comparisons.distance.percentDiff.toFixed(1)}%
                     </span>
                   </div>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-slate-600 mt-2">
                     Avg: {formatDistance(comparisons.distance.average)}
                   </div>
                 </div>
 
-                <div className="bg-white rounded-md p-3">
-                  <div className="text-sm text-gray-600 mb-1">Speed</div>
+                <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
+                  <div className="text-xs text-slate-500 mb-1 uppercase tracking-wide">Speed</div>
                   <div className="flex items-center justify-between">
-                    <span className="font-semibold">{formatPace(comparisons.speed.current, activity.type)}</span>
-                    <span className={`text-sm ${comparisons.speed.percentDiff >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <span className="font-bold text-slate-200">{formatPace(comparisons.speed.current, activity.type)}</span>
+                    <span className={`text-sm font-medium ${comparisons.speed.percentDiff >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       {comparisons.speed.percentDiff >= 0 ? '+' : ''}{comparisons.speed.percentDiff.toFixed(1)}%
                     </span>
                   </div>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-slate-600 mt-2">
                     Avg: {formatPace(comparisons.speed.average, activity.type)}
                   </div>
                 </div>
 
                 {comparisons.elevation.average > 0 && (
-                  <div className="bg-white rounded-md p-3">
-                    <div className="text-sm text-gray-600 mb-1">Elevation</div>
+                  <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
+                    <div className="text-xs text-slate-500 mb-1 uppercase tracking-wide">Elevation</div>
                     <div className="flex items-center justify-between">
-                      <span className="font-semibold">{Math.round(comparisons.elevation.current * 3.28084)}ft</span>
-                      <span className={`text-sm ${comparisons.elevation.percentDiff >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <span className="font-bold text-slate-200">{Math.round(comparisons.elevation.current * 3.28084)}ft</span>
+                      <span className={`text-sm font-medium ${comparisons.elevation.percentDiff >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                         {comparisons.elevation.percentDiff >= 0 ? '+' : ''}{comparisons.elevation.percentDiff.toFixed(1)}%
                       </span>
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-slate-600 mt-2">
                       Avg: {Math.round(comparisons.elevation.average * 3.28084)}ft
                     </div>
                   </div>
@@ -359,15 +363,15 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
 
           {/* Social Stats */}
           {(activity.kudos_count > 0 || activity.comment_count > 0) && (
-            <div className="flex items-center justify-center space-x-6 py-4 border-t border-gray-200">
+            <div className="flex items-center justify-center space-x-6 py-4 border-t border-slate-800">
               {activity.kudos_count > 0 && (
-                <div className="flex items-center space-x-2 text-gray-600">
+                <div className="flex items-center space-x-2 text-slate-400">
                   <ThumbsUp className="w-4 h-4" />
                   <span>{activity.kudos_count} kudos</span>
                 </div>
               )}
               {activity.comment_count > 0 && (
-                <div className="flex items-center space-x-2 text-gray-600">
+                <div className="flex items-center space-x-2 text-slate-400">
                   <Users className="w-4 h-4" />
                   <span>{activity.comment_count} comments</span>
                 </div>

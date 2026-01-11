@@ -161,13 +161,13 @@ export const ContentFeed: React.FC<ContentFeedProps> = ({ activities }) => {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+      <div className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 p-8">
         <div className="text-center">
           <LoadingSpinner size="lg" className="text-orange-500 mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+          <h3 className="text-lg font-semibold text-slate-50 mb-2">
             Curating Your Content Feed
           </h3>
-          <p className="text-gray-600">
+          <p className="text-slate-400">
             Analyzing your training data and chat history to find relevant content...
           </p>
         </div>
@@ -177,13 +177,13 @@ export const ContentFeed: React.FC<ContentFeedProps> = ({ activities }) => {
 
   if (error) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+      <div className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 p-8">
         <div className="text-center">
           <div className="text-red-500 text-4xl mb-4">⚠️</div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+          <h3 className="text-lg font-semibold text-slate-50 mb-2">
             Unable to Load Content
           </h3>
-          <p className="text-gray-600 mb-4">{error}</p>
+          <p className="text-slate-400 mb-4">{error}</p>
           <button
             onClick={() => window.location.reload()}
             className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-md transition-colors"
@@ -196,15 +196,15 @@ export const ContentFeed: React.FC<ContentFeedProps> = ({ activities }) => {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+    <div className="bg-slate-900 rounded-lg shadow-sm border border-slate-800">
       {/* Header */}
-      <div className="p-6 border-b border-gray-200">
+      <div className="p-6 border-b border-slate-800">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">
+            <h2 className="text-xl font-semibold text-slate-50">
               Recommended for You
             </h2>
-            <p className="text-gray-600 text-sm">
+            <p className="text-slate-400 text-sm">
               Personalized cycling content based on your training and interests
             </p>
           </div>
@@ -216,16 +216,16 @@ export const ContentFeed: React.FC<ContentFeedProps> = ({ activities }) => {
               loading={refreshing}
               size="sm"
               variant="outline"
-              className="flex items-center space-x-2"
+              className="flex items-center space-x-2 bg-transparent border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-slate-100"
             >
               <RefreshCw className="w-4 h-4" />
               <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
             </Button>
-            <Filter className="w-4 h-4 text-gray-400" />
+            <Filter className="w-4 h-4 text-slate-500" />
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value as any)}
-              className="text-sm border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-orange-500"
+              className="text-sm bg-slate-800 border border-slate-700 text-slate-200 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-orange-500"
             >
               <option value="all">All Content</option>
               <option value="video">Videos</option>
@@ -239,11 +239,11 @@ export const ContentFeed: React.FC<ContentFeedProps> = ({ activities }) => {
       <div className="p-6">
         {filteredContent.length === 0 ? (
           <div className="text-center py-8">
-            <div className="text-gray-400 text-4xl mb-4">📺</div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            <div className="text-slate-600 text-4xl mb-4">📺</div>
+            <h3 className="text-lg font-semibold text-slate-50 mb-2">
               No Content Available
             </h3>
-            <p className="text-gray-600">
+            <p className="text-slate-400">
               We're working on finding great cycling content for you. Check back soon!
             </p>
           </div>
@@ -252,10 +252,10 @@ export const ContentFeed: React.FC<ContentFeedProps> = ({ activities }) => {
             {filteredContent.map((item) => (
               <div
                 key={item.id}
-                className="group border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow"
+                className="group bg-slate-800/50 border border-slate-700/50 rounded-lg overflow-hidden hover:shadow-md hover:shadow-black/20 hover:border-slate-600 transition-all"
               >
                 {/* Thumbnail */}
-                <div className="aspect-video bg-gray-100 relative overflow-hidden">
+                <div className="aspect-video bg-slate-800 relative overflow-hidden">
                   {item.thumbnail ? (
                     <img
                       src={item.thumbnail}
@@ -278,10 +278,10 @@ export const ContentFeed: React.FC<ContentFeedProps> = ({ activities }) => {
                       }}
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gray-200">
+                    <div className="w-full h-full flex items-center justify-center bg-slate-800">
                       <div className="text-center">
                         <div className="text-4xl mb-2">{item.type === 'video' ? '🎥' : '📰'}</div>
-                        <div className="text-sm text-gray-600">{item.author}</div>
+                        <div className="text-sm text-slate-500">{item.author}</div>
                       </div>
                     </div>
                   )}
@@ -299,24 +299,24 @@ export const ContentFeed: React.FC<ContentFeedProps> = ({ activities }) => {
                     <span className={`text-xs px-2 py-1 rounded-full ${getSourceColor(item.source)}`}>
                       {getSourceIcon(item.source)} {item.source}
                     </span>
-                    <div className="flex items-center text-xs text-gray-500">
+                    <div className="flex items-center text-xs text-slate-400">
                       <Calendar className="w-3 h-3 mr-1" />
                       {formatPublishedDate(item.publishedAt)}
                     </div>
                   </div>
 
                   {/* Title */}
-                  <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2 group-hover:text-orange-600 transition-colors">
+                  <h3 className="font-semibold text-slate-50 mb-2 line-clamp-2 group-hover:text-orange-400 transition-colors">
                     {item.title}
                   </h3>
 
                   {/* Author */}
-                  <p className="text-sm text-gray-600 mb-2">
+                  <p className="text-sm text-slate-400 mb-2">
                     by {item.author}
                   </p>
 
                   {/* Description */}
-                  <p className="text-sm text-gray-600 mb-3 line-clamp-5">
+                  <p className="text-sm text-slate-400 mb-3 line-clamp-5">
                     {item.description}
                   </p>
 
@@ -326,7 +326,7 @@ export const ContentFeed: React.FC<ContentFeedProps> = ({ activities }) => {
                       {item.tags.slice(0, 3).map((tag) => (
                         <span
                           key={tag}
-                          className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded"
+                          className="text-xs bg-slate-700 text-slate-300 px-2 py-1 rounded"
                         >
                           {tag}
                         </span>
@@ -336,7 +336,7 @@ export const ContentFeed: React.FC<ContentFeedProps> = ({ activities }) => {
 
                   {/* Stats */}
                   {item.viewCount && (
-                    <div className="flex items-center text-xs text-gray-500 mb-3">
+                    <div className="flex items-center text-xs text-slate-500 mb-3">
                       <Eye className="w-3 h-3 mr-1" />
                       {(item.viewCount / 1000).toFixed(0)}K views
                       {item.channelSubscribers && (
@@ -353,7 +353,7 @@ export const ContentFeed: React.FC<ContentFeedProps> = ({ activities }) => {
                       href={item.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center space-x-2 text-sm text-orange-600 hover:text-orange-700 font-medium"
+                      className="inline-flex items-center space-x-2 text-sm text-orange-400 hover:text-orange-300 font-medium"
                     >
                       <span>{item.type === 'video' ? 'Watch' : 'Read'}</span>
                       <ExternalLink className="w-3 h-3" />
@@ -364,8 +364,8 @@ export const ContentFeed: React.FC<ContentFeedProps> = ({ activities }) => {
                       <button
                         onClick={() => handleFeedback(item.id, 'like')}
                         className={`p-1 rounded-full transition-colors ${feedbackStates[item.id] === 'like'
-                          ? 'bg-green-100 text-green-600'
-                          : 'text-gray-400 hover:text-green-600 hover:bg-green-50'
+                          ? 'bg-green-500/20 text-green-400'
+                          : 'text-slate-400 hover:text-green-400 hover:bg-green-500/10'
                           }`}
                         title="I like this content"
                       >
@@ -374,8 +374,8 @@ export const ContentFeed: React.FC<ContentFeedProps> = ({ activities }) => {
                       <button
                         onClick={() => handleFeedback(item.id, 'dislike')}
                         className={`p-1 rounded-full transition-colors ${feedbackStates[item.id] === 'dislike'
-                          ? 'bg-red-100 text-red-600'
-                          : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+                          ? 'bg-red-500/20 text-red-400'
+                          : 'text-slate-400 hover:text-red-400 hover:bg-red-500/10'
                           }`}
                         title="I don't like this content"
                       >
@@ -398,21 +398,21 @@ export const ContentFeed: React.FC<ContentFeedProps> = ({ activities }) => {
 
         {/* Content Preferences Prompt */}
         {!hasContentPrefsChat && (
-          <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mt-6">
+          <div className="bg-orange-950/20 border border-orange-500/20 rounded-lg p-4 mt-6">
             <div className="flex items-start space-x-3">
-              <MessageCircle className="w-5 h-5 text-orange-600 mt-0.5" />
+              <MessageCircle className="w-5 h-5 text-orange-400 mt-0.5" />
               <div className="flex-1">
-                <h3 className="font-medium text-orange-900 mb-1">
+                <h3 className="font-medium text-orange-200 mb-1">
                   Get Better Content Recommendations
                 </h3>
-                <p className="text-sm text-orange-800 mb-3">
+                <p className="text-sm text-orange-200/80 mb-3">
                   Tell our AI about your content preferences to get more personalized recommendations.
                   This takes just 2-3 minutes and greatly improves your feed quality.
                 </p>
                 <Button
                   onClick={createContentPreferencesChat}
                   size="sm"
-                  className="bg-orange-600 hover:bg-orange-700"
+                  className="bg-orange-600 hover:bg-orange-700 text-white"
                 >
                   <MessageCircle className="w-4 h-4 mr-2" />
                   Set Up Content Preferences

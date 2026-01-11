@@ -613,13 +613,13 @@ Additional Preferences: ${preferences || 'None'}
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <div className="text-center">
           <LoadingSpinner size="lg" className="text-orange-500 mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <h2 className="text-xl font-semibold text-slate-50 mb-2">
             Loading Your Training Data
           </h2>
-          <p className="text-gray-600">
+          <p className="text-slate-400">
             Analyzing your cycling activities...
           </p>
         </div>
@@ -628,16 +628,16 @@ Additional Preferences: ${preferences || 'None'}
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-950">
       <NetworkErrorBanner />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-50 mb-2">
               Training Plans
             </h1>
-            <p className="text-gray-600 text-sm md:text-base">
+            <p className="text-slate-400 text-sm md:text-base">
               AI-generated cycling plans based on your Strava data
             </p>
           </div>
@@ -653,22 +653,22 @@ Additional Preferences: ${preferences || 'None'}
         {/* Current Training Context */}
         {weeklyStats && (
           <div className="mb-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">This Week</h2>
+            <h2 className="text-xl font-semibold text-slate-50 mb-4">This Week</h2>
             <StatsSummary weeklyStats={weeklyStats} streak={streak} />
           </div>
         )}
 
         {/* Plan Generation Form */}
         {showForm && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6 mb-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          <div className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 p-4 md:p-6 mb-8">
+            <h3 className="text-lg font-semibold text-slate-50 mb-4">
               Generate New Cycling Plan
             </h3>
 
             <form onSubmit={handleGeneratePlan} className="space-y-6">
               {/* Goal Type */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
                   Goal Type
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -678,8 +678,8 @@ Additional Preferences: ${preferences || 'None'}
                       type="button"
                       onClick={() => setGoalType(option.value as 'distance' | 'event' | 'fitness')}
                       className={`p-3 text-sm rounded-lg border transition-colors ${goalType === option.value
-                        ? 'border-orange-500 bg-orange-50 text-orange-700'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-orange-500 bg-orange-500/10 text-orange-400'
+                        : 'border-slate-700 bg-slate-800/50 text-slate-300 hover:border-slate-600 hover:bg-slate-800'
                         }`}
                     >
                       {option.label}
@@ -690,7 +690,7 @@ Additional Preferences: ${preferences || 'None'}
 
               {/* Specific Goal */}
               <div>
-                <label htmlFor="goal" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="goal" className="block text-sm font-medium text-slate-300 mb-2">
                   Specific Goal
                 </label>
                 <input
@@ -699,7 +699,7 @@ Additional Preferences: ${preferences || 'None'}
                   value={goal}
                   onChange={(e) => setGoal(e.target.value)}
                   placeholder="e.g., Complete a century ride, Improve FTP by 20 watts, Ride 125mi/week consistently"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-slate-50 placeholder-slate-500"
                   required
                 />
               </div>
@@ -707,13 +707,13 @@ Additional Preferences: ${preferences || 'None'}
               {/* Timeframe and Weekly Hours */}
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
                     Timeframe
                   </label>
                   <select
                     value={timeframe}
                     onChange={(e) => setTimeframe(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-50"
                   >
                     <option value="4 weeks">4 weeks</option>
                     <option value="8 weeks">8 weeks</option>
@@ -723,13 +723,13 @@ Additional Preferences: ${preferences || 'None'}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
                     Weekly Time Available
                   </label>
                   <select
                     value={weeklyHours}
                     onChange={(e) => setWeeklyHours(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-50"
                   >
                     <option value="3-4 hours">3-4 hours</option>
                     <option value="5-6 hours">5-6 hours</option>
@@ -742,7 +742,7 @@ Additional Preferences: ${preferences || 'None'}
 
               {/* Focus Areas */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
                   Focus Areas (select all that apply)
                 </label>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
@@ -752,8 +752,8 @@ Additional Preferences: ${preferences || 'None'}
                       type="button"
                       onClick={() => toggleFocusArea(area)}
                       className={`p-2 text-xs rounded-md border transition-colors text-left ${focusAreas.includes(area)
-                        ? 'border-orange-500 bg-orange-50 text-orange-700'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-orange-500 bg-orange-500/10 text-orange-400'
+                        : 'border-slate-700 bg-slate-800/50 text-slate-300 hover:border-slate-600 hover:bg-slate-800'
                         }`}
                     >
                       {area}
@@ -764,7 +764,7 @@ Additional Preferences: ${preferences || 'None'}
 
               {/* Additional Preferences */}
               <div>
-                <label htmlFor="preferences" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="preferences" className="block text-sm font-medium text-slate-300 mb-2">
                   Additional Preferences
                 </label>
                 <textarea
@@ -773,13 +773,13 @@ Additional Preferences: ${preferences || 'None'}
                   onChange={(e) => setPreferences(e.target.value)}
                   placeholder="e.g., Prefer indoor training on weekdays, avoid back-to-back hard days, include recovery rides..."
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-slate-50 placeholder-slate-500"
                 />
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 rounded-md p-3">
-                  <p className="text-red-600 text-sm">{error}</p>
+                <div className="bg-red-500/10 border border-red-500/20 rounded-md p-3">
+                  <p className="text-red-400 text-sm">{error}</p>
                 </div>
               )}
 
@@ -796,6 +796,7 @@ Additional Preferences: ${preferences || 'None'}
                 <Button
                   type="button"
                   variant="outline"
+                  className="bg-transparent border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-slate-200"
                   onClick={() => setShowForm(false)}
                 >
                   Cancel
@@ -812,12 +813,12 @@ Additional Preferences: ${preferences || 'None'}
           </h2>
 
           {savedPlans.length === 0 ? (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-              <div className="text-gray-400 text-6xl mb-4">🚴</div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            <div className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 p-8 text-center">
+              <div className="text-slate-400 text-6xl mb-4">🚴</div>
+              <h3 className="text-lg font-semibold text-slate-50 mb-2">
                 No Training Plans Yet
               </h3>
-              <p className="text-gray-600 mb-4">
+              <p className="text-slate-400 mb-4">
                 Create your first AI-generated cycling plan based on your Strava data
               </p>
               <Button
@@ -838,22 +839,22 @@ Additional Preferences: ${preferences || 'None'}
                 const totalHours = plan.workouts.reduce((sum, w) => sum + w.duration, 0) / 60;
 
                 return (
-                  <div key={plan.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                  <div key={plan.id} className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 overflow-hidden">
                     <div className="p-6">
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
-                            <h3 className="text-xl font-bold text-gray-900">
+                            <h3 className="text-xl font-bold text-slate-50">
                               {plan.name}
                             </h3>
                             {plan.sourceChatSessionId && (
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
                                 <MessageCircle className="w-3 h-3 mr-1" />
                                 From Chat
                               </span>
                             )}
                           </div>
-                          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 mb-4">
+                          <div className="flex flex-wrap items-center gap-4 text-sm text-slate-400 mb-4">
                             <div className="flex items-center">
                               <Calendar className="w-4 h-4 mr-1" />
                               {plan.startDate.toLocaleDateString()} - {plan.endDate.toLocaleDateString()}
@@ -871,10 +872,10 @@ Additional Preferences: ${preferences || 'None'}
                           {totalWorkouts > 0 && (
                             <div>
                               <div className="flex items-center justify-between text-sm mb-2">
-                                <span className="text-gray-700 font-medium">Progress</span>
-                                <span className="text-gray-600">{completedWorkouts} / {totalWorkouts} workouts completed</span>
+                                <span className="text-slate-300 font-medium">Progress</span>
+                                <span className="text-slate-400">{completedWorkouts} / {totalWorkouts} workouts completed</span>
                               </div>
-                              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                              <div className="w-full bg-slate-800 rounded-full h-2.5">
                                 <div
                                   className="bg-orange-500 h-2.5 rounded-full transition-all"
                                   style={{ width: `${completionPercentage}%` }}
@@ -886,7 +887,7 @@ Additional Preferences: ${preferences || 'None'}
                         <div className="flex items-center space-x-2 ml-4">
                           <button
                             onClick={() => togglePlan(plan.id)}
-                            className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                            className="p-2 text-slate-400 hover:text-slate-200 transition-colors"
                             title={expandedPlan === plan.id ? "Collapse" : "Expand"}
                           >
                             <svg
@@ -900,7 +901,7 @@ Additional Preferences: ${preferences || 'None'}
                           </button>
                           <button
                             onClick={() => deletePlan(plan.id)}
-                            className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                            className="p-2 text-slate-400 hover:text-red-400 transition-colors"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -910,10 +911,11 @@ Additional Preferences: ${preferences || 'None'}
                       {expandedPlan === plan.id && (
                         <div className="mt-6 space-y-6">
                           {plan.description && (
-                            <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
-                              <h4 className="font-semibold text-gray-900 mb-3">Plan Overview</h4>
+                            <div className="bg-slate-900 rounded-lg p-6 border border-slate-800">
+                              <h4 className="font-semibold text-slate-100 mb-3">Plan Overview</h4>
                               <div
-                                className="prose prose-sm max-w-none text-gray-700"
+                                className="prose prose-sm prose-invert max-w-none text-slate-300 [&>p]:text-slate-300 [&>ul>li]:text-slate-300 [&>strong]:text-white"
+                                style={{ color: '#cbd5e1' }}
                                 dangerouslySetInnerHTML={{
                                   __html: convertMarkdownToHtml(plan.description)
                                 }}
@@ -924,13 +926,13 @@ Additional Preferences: ${preferences || 'None'}
                           {totalWorkouts > 0 && (
                             <div>
                               <div className="flex items-center justify-between mb-4">
-                                <h4 className="font-semibold text-gray-900">Workouts</h4>
+                                <h4 className="font-semibold text-slate-50">Workouts</h4>
                                 <div className="flex items-center space-x-2">
                                   <button
                                     onClick={() => setViewMode('calendar')}
                                     className={`p-2 rounded-lg transition-colors ${viewMode === 'calendar'
-                                      ? 'bg-orange-100 text-orange-600'
-                                      : 'text-gray-400 hover:text-gray-600'
+                                      ? 'bg-orange-500/10 text-orange-400'
+                                      : 'text-slate-400 hover:text-slate-200'
                                       }`}
                                     title="Calendar view"
                                   >
@@ -939,8 +941,8 @@ Additional Preferences: ${preferences || 'None'}
                                   <button
                                     onClick={() => setViewMode('list')}
                                     className={`p-2 rounded-lg transition-colors ${viewMode === 'list'
-                                      ? 'bg-orange-100 text-orange-600'
-                                      : 'text-gray-400 hover:text-gray-600'
+                                      ? 'bg-orange-500/10 text-orange-400'
+                                      : 'text-slate-400 hover:text-slate-200'
                                       }`}
                                     title="List view"
                                   >
@@ -997,7 +999,7 @@ Additional Preferences: ${preferences || 'None'}
       />
 
       <div className="mt-8 mb-4 text-center">
-        <p className="text-xs text-gray-400 italic">
+        <p className="text-xs text-slate-500 italic">
           Insights derived in part from Garmin device-sourced data.
         </p>
       </div>

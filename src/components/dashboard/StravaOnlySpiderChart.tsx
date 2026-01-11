@@ -74,9 +74,9 @@ export const StravaOnlySpiderChart: React.FC<StravaOnlySpiderChartProps> = ({
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-          <p className="font-medium text-gray-900">{data.dimension}</p>
-          <p className="text-sm text-gray-600">Score: {data.score}/100</p>
+        <div className="bg-slate-800 p-3 border border-slate-700 rounded-lg shadow-lg">
+          <p className="font-medium text-slate-50">{data.dimension}</p>
+          <p className="text-sm text-slate-300">Score: {data.score}/100</p>
         </div>
       );
     }
@@ -88,10 +88,10 @@ export const StravaOnlySpiderChart: React.FC<StravaOnlySpiderChartProps> = ({
       <div className="p-6">
         <div className="text-center">
           <LoadingSpinner size="lg" className="text-orange-500 mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+          <h3 className="text-lg font-semibold text-slate-50 mb-2">
             Analyzing Your Training Data
           </h3>
-          <p className="text-gray-600">
+          <p className="text-slate-400">
             Processing your Strava activities...
           </p>
         </div>
@@ -102,8 +102,8 @@ export const StravaOnlySpiderChart: React.FC<StravaOnlySpiderChartProps> = ({
   if (!metrics || activities.length < 3) {
     return (
       <div className="p-6">
-        <div className="text-center text-gray-500">
-          <Activity className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+        <div className="text-center text-slate-500">
+          <Activity className="w-8 h-8 mx-auto mb-2 text-slate-600" />
           <p className="text-sm">Not enough training data</p>
           <p className="text-xs">Need at least 3 activities for analysis</p>
         </div>
@@ -143,34 +143,34 @@ export const StravaOnlySpiderChart: React.FC<StravaOnlySpiderChartProps> = ({
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center">
+          <h3 className="text-lg font-semibold text-slate-50 mb-1 flex items-center">
             Training Performance
             <div className="group relative ml-2">
-              <Info className="w-4 h-4 text-gray-400 cursor-help" />
-              <div className="absolute z-10 w-64 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none -left-20 top-6">
+              <Info className="w-4 h-4 text-slate-500 cursor-help" />
+              <div className="absolute z-10 w-64 p-3 bg-slate-800 text-slate-200 text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none -left-20 top-6 border border-slate-700">
                 <p className="font-semibold mb-1">Overall Score Inputs:</p>
-                <ul className="space-y-1 text-gray-300">
+                <ul className="space-y-1 text-slate-300">
                   <li>• Endurance (25%)</li>
                   <li>• Power/Intensity (20%)</li>
                   <li>• Consistency (20%)</li>
                   <li>• Training Load (20%)</li>
                   <li>• Speed (15%)</li>
                 </ul>
-                <div className="absolute w-2 h-2 bg-gray-900 rotate-45 left-24 -top-1"></div>
+                <div className="absolute w-2 h-2 bg-slate-800 rotate-45 left-24 -top-1 border-t border-l border-slate-700"></div>
               </div>
             </div>
           </h3>
-          <p className="text-gray-600 text-sm">
+          <p className="text-slate-400 text-sm">
             Analysis based on Strava activity data
           </p>
         </div>
 
         <div className="text-center">
-          <div className="text-3xl font-bold text-gray-900 mb-1">
+          <div className="text-3xl font-bold text-slate-50 mb-1">
             {metrics.overallScore}
           </div>
-          <div className="text-sm text-gray-600">Overall Score</div>
-          <span className="text-xs px-2 py-1 rounded-full font-medium bg-blue-100 text-blue-600">
+          <div className="text-sm text-slate-400">Overall Score</div>
+          <span className="text-xs px-2 py-1 rounded-full font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
             Strava only
           </span>
         </div>
@@ -179,16 +179,16 @@ export const StravaOnlySpiderChart: React.FC<StravaOnlySpiderChartProps> = ({
       <div className="h-80 mb-6">
         <ResponsiveContainer width="100%" height="100%">
           <RadarChart data={chartData} margin={{ top: 20, right: 30, bottom: 20, left: 30 }}>
-            <PolarGrid stroke="#e5e7eb" />
+            <PolarGrid stroke="#334155" />
             <PolarAngleAxis
               dataKey="dimension"
-              tick={{ fontSize: 12, fill: '#6b7280' }}
+              tick={{ fontSize: 12, fill: '#94a3b8' }}
               className="text-xs"
             />
             <PolarRadiusAxis
               angle={90}
               domain={[0, 100]}
-              tick={{ fontSize: 10, fill: '#9ca3af' }}
+              tick={{ fontSize: 10, fill: '#64748b' }}
               tickCount={6}
             />
             <Radar
@@ -211,10 +211,10 @@ export const StravaOnlySpiderChart: React.FC<StravaOnlySpiderChartProps> = ({
           const isExpanded = expandedDimension === key;
 
           return (
-            <div key={key} className="border border-gray-200 rounded-lg">
+            <div key={key} className="border border-slate-800 rounded-lg">
               <button
                 onClick={() => setExpandedDimension(isExpanded ? null : key)}
-                className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                className="w-full p-4 flex items-center justify-between hover:bg-slate-800/50 transition-colors"
               >
                 <div className="flex items-center space-x-3">
                   <div
@@ -227,10 +227,10 @@ export const StravaOnlySpiderChart: React.FC<StravaOnlySpiderChartProps> = ({
                     />
                   </div>
                   <div className="text-left">
-                    <div className="font-medium text-gray-900">
+                    <div className="font-medium text-slate-200">
                       {formatDimensionName(key)}
                     </div>
-                    <div className="text-sm text-gray-600 flex items-center space-x-1">
+                    <div className="text-sm text-slate-500 flex items-center space-x-1">
                       <span>{detail.score}/100</span>
                       {getTrendIcon(detail.trend)}
                     </div>
@@ -245,25 +245,25 @@ export const StravaOnlySpiderChart: React.FC<StravaOnlySpiderChartProps> = ({
                     {detail.score}
                   </div>
                   {isExpanded ? (
-                    <ChevronUp className="w-4 h-4 text-gray-400" />
+                    <ChevronUp className="w-4 h-4 text-slate-500" />
                   ) : (
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
+                    <ChevronDown className="w-4 h-4 text-slate-500" />
                   )}
                 </div>
               </button>
 
               {isExpanded && (
-                <div className="px-4 pb-4 border-t border-gray-100">
+                <div className="px-4 pb-4 border-t border-slate-800 bg-slate-800/20">
                   <div className="mt-3 space-y-3">
                     <div>
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">Components</h4>
+                      <h4 className="text-sm font-medium text-slate-400 mb-2">Components</h4>
                       <div className="space-y-2">
                         {detail.components.map((component, index) => (
                           <div key={index} className="flex items-center justify-between text-sm">
-                            <span className="text-gray-600">{component.name}</span>
+                            <span className="text-slate-400">{component.name}</span>
                             <div className="flex items-center space-x-2">
-                              <span className="text-gray-900">{component.value}</span>
-                              <span className="text-xs text-gray-500">
+                              <span className="text-slate-200">{component.value}</span>
+                              <span className="text-xs text-slate-500">
                                 (+{component.contribution} pts)
                               </span>
                             </div>
@@ -272,14 +272,14 @@ export const StravaOnlySpiderChart: React.FC<StravaOnlySpiderChartProps> = ({
                       </div>
                     </div>
 
-                    <div className="bg-orange-50 rounded-md p-3">
+                    <div className="bg-orange-500/10 border border-orange-500/20 rounded-md p-3">
                       <div className="flex items-start space-x-2">
-                        <Info className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
+                        <Info className="w-4 h-4 text-orange-500 mt-0.5 flex-shrink-0" />
                         <div>
-                          <h4 className="text-sm font-medium text-orange-900 mb-1">
+                          <h4 className="text-sm font-medium text-orange-400 mb-1">
                             Recommendation
                           </h4>
-                          <p className="text-sm text-orange-800">
+                          <p className="text-sm text-orange-300/80">
                             {detail.suggestion}
                           </p>
                         </div>
@@ -293,8 +293,8 @@ export const StravaOnlySpiderChart: React.FC<StravaOnlySpiderChartProps> = ({
         })}
       </div>
 
-      <div className="mt-4 pt-4 border-t border-gray-200 text-center">
-        <p className="text-xs text-gray-500">
+      <div className="mt-4 pt-4 border-t border-slate-800 text-center">
+        <p className="text-xs text-slate-500">
           Based on activities from last 30 days • Strava data only
         </p>
       </div>

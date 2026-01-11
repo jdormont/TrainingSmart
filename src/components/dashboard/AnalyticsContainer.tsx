@@ -40,9 +40,9 @@ export const AnalyticsContainer: React.FC<AnalyticsContainerProps> = ({
     ];
 
     return (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-slate-900 rounded-2xl shadow-lg shadow-black/20 border border-slate-800 overflow-hidden">
             {/* Tabs Header */}
-            <div className="border-b border-gray-100 flex items-center px-6 overflow-x-auto scrollbar-hide">
+            <div className="border-b border-slate-800 flex items-center px-6 overflow-x-auto scrollbar-hide">
                 {tabs.map((tab) => {
                     const Icon = tab.icon;
                     const isActive = activeTab === tab.id;
@@ -51,11 +51,11 @@ export const AnalyticsContainer: React.FC<AnalyticsContainerProps> = ({
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id as TabType)}
                             className={`flex items-center space-x-2 py-4 px-4 border-b-2 transition-colors whitespace-nowrap ${isActive
-                                ? 'border-orange-500 text-orange-600 font-semibold'
-                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-200'
+                                ? 'border-orange-500 text-orange-500 font-semibold'
+                                : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700'
                                 }`}
                         >
-                            <Icon className={`w-4 h-4 ${isActive ? 'text-orange-500' : 'text-gray-400'}`} />
+                            <Icon className={`w-4 h-4 ${isActive ? 'text-orange-500' : 'text-slate-500'}`} />
                             <span>{tab.label}</span>
                         </button>
                     );

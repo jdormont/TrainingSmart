@@ -50,20 +50,22 @@ export const DashboardHero: React.FC<DashboardHeroProps> = ({
     const styles = getInsightStyles();
 
     return (
-        <div className="bg-white rounded-2xl shadow-sm border border-orange-100 overflow-hidden relative">
+        <div className="bg-slate-900 rounded-2xl shadow-lg shadow-black/20 border border-slate-800 overflow-hidden relative">
             {/* Decorative gradient background opacity */}
-            <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-orange-400 to-orange-100"></div>
+            <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-orange-500 to-orange-900"></div>
 
             <div className="p-6 md:p-8">
                 {/* Top Row: Welcome & Date */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
-                    <div>
-                        <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
+                <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 relative z-10">
+                    <div className="relative">
+                         {/* Glow Effect */}
+                        <div className="absolute -left-4 -top-8 w-64 h-24 bg-gradient-to-r from-orange-500 to-amber-500 opacity-20 blur-2xl -z-10 rounded-full"></div>
+                        
+                        <h1 className="text-2xl md:text-3xl font-bold text-slate-50 relative z-10">
                             Welcome back, {athlete?.firstname || 'Athlete'}!
                         </h1>
-                        <p className="text-gray-500 font-medium mt-1">{currentDate}</p>
+                        <p className="text-slate-400 font-medium mt-1 relative z-10">{currentDate}</p>
                     </div>
-                    {/* Optional: Add user avatar or streak logic here later */}
                 </div>
 
                 {/* Middle Row: Insight & Stats Split */}
@@ -114,50 +116,44 @@ export const DashboardHero: React.FC<DashboardHeroProps> = ({
 
                     {/* Right: "This Week" Compact Stats - Spans 5 cols */}
                     <div className="lg:col-span-5 flex flex-col justify-center">
-                        <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 pl-1">This Week</h4>
+                        <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3 pl-1">This Week</h4>
 
                         <div className="grid grid-cols-2 gap-3">
                             {/* Distance */}
-                            <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                            <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
                                 <div className="flex items-center gap-2 mb-1">
-                                    <Activity className="w-4 h-4 text-blue-500" />
-                                    <span className="text-xs text-gray-500 font-medium">Distance</span>
+                                    <Activity className="w-4 h-4 text-blue-400" />
+                                    <span className="text-xs text-slate-400 font-medium">Distance</span>
                                 </div>
-                                <div className="text-xl font-bold text-gray-900">
+                                <div className="text-xl font-bold text-slate-50">
                                     {weeklyStats ? formatDistance(weeklyStats.totalDistance) : '0mi'}
                                 </div>
                             </div>
 
                             {/* Time */}
-                            <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                            <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
                                 <div className="flex items-center gap-2 mb-1">
-                                    <Clock className="w-4 h-4 text-orange-500" />
-                                    <span className="text-xs text-gray-500 font-medium">Time</span>
+                                    <Clock className="w-4 h-4 text-orange-400" />
+                                    <span className="text-xs text-slate-400 font-medium">Time</span>
                                 </div>
-                                <div className="text-xl font-bold text-gray-900">
+                                <div className="text-xl font-bold text-slate-50">
                                     {weeklyStats ? formatDuration(weeklyStats.totalTime) : '0h 0m'}
                                 </div>
                             </div>
 
-                            {/* Activity Count - Optional/Hidden to match Reference Image compactness if needed, but useful */}
-                            {/* Using Reference Image style: It has Distance, Time, and Readiness vertical list... 
-                  But grid is also good. I'll stick to a clean grid. 
-                  Let's add Readiness if available in the insight, otherwise Activities count.
-              */}
-
-                            <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 col-span-2 flex items-center justify-between">
+                            <div className="bg-slate-800 rounded-lg p-3 border border-slate-700 col-span-2 flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                    <Zap className="w-4 h-4 text-purple-500" />
-                                    <span className="text-xs text-gray-500 font-medium">
+                                    <Zap className="w-4 h-4 text-purple-400" />
+                                    <span className="text-xs text-slate-400 font-medium">
                                         {weeklyInsight?.readinessScore !== undefined ? 'Readiness Score' : 'Activities'}
                                     </span>
                                 </div>
-                                <div className="text-xl font-bold text-gray-900">
+                                <div className="text-xl font-bold text-slate-50">
                                     {weeklyInsight?.readinessScore !== undefined
                                         ? weeklyInsight.readinessScore
                                         : (weeklyStats?.activityCount || 0)}
                                     {weeklyInsight?.readinessScore !== undefined && (
-                                        <span className="text-xs font-normal text-gray-400 ml-1">/ 100</span>
+                                        <span className="text-xs font-normal text-slate-500 ml-1">/ 100</span>
                                     )}
                                 </div>
                             </div>
@@ -174,7 +170,7 @@ export const DashboardHero: React.FC<DashboardHeroProps> = ({
                             analytics.track('insight_action_taken', { type: 'chat' });
                             navigate(ROUTES.CHAT);
                         }}
-                        className="w-full justify-center shadow-orange-100 shadow-lg hover:shadow-xl transition-all"
+                        className="w-full justify-center shadow-lg shadow-orange-500/20 hover:shadow-orange-500/30 transition-all"
                     >
                         <MessageCircle className="w-5 h-5 mr-2" />
                         Chat with AI Coach
@@ -186,7 +182,7 @@ export const DashboardHero: React.FC<DashboardHeroProps> = ({
                             analytics.track('insight_action_taken', { type: 'plans' });
                             navigate(ROUTES.PLANS);
                         }}
-                        className="w-full justify-center bg-white hover:bg-gray-50"
+                        className="w-full justify-center bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700 hover:text-white"
                     >
                         <Calendar className="w-5 h-5 mr-2" />
                         View Training Plans

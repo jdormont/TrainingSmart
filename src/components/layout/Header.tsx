@@ -71,17 +71,17 @@ export const Header: React.FC = () => {
   }
 
   return (
-    <header className="bg-white shadow-sm border-b border-gray-200">
+    <header className="bg-slate-900 shadow-lg shadow-black/20 border-b border-slate-800 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <Link to={ROUTES.DASHBOARD} className="flex items-center space-x-2">
             <Activity className="w-8 h-8 text-orange-500" />
-            <span className="text-xl font-bold text-gray-900">TrainingSmart</span>
+            <span className="text-xl font-bold text-slate-50">TrainingSmart</span>
           </Link>
 
           {/* Navigation */}
-          <nav className="hidden md:flex space-x-8">
+          <nav className="hidden md:flex space-x-1">
             {navigation.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.href;
@@ -90,10 +90,10 @@ export const Header: React.FC = () => {
                 <Link
                   key={item.name}
                   to={item.href}
-                  className={`flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  className={`flex items-center space-x-1 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                     isActive
-                      ? 'text-orange-600 bg-orange-50'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                      ? 'text-orange-500 bg-orange-500/10'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -107,22 +107,22 @@ export const Header: React.FC = () => {
           <div className="relative flex items-center" ref={menuRef}>
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
-              className="p-2 rounded-full text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+              className="p-2 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
             >
               <User className="w-5 h-5" />
             </button>
 
             {showUserMenu && (
-              <div className="absolute right-0 top-12 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-                <div className="px-4 py-3 border-b border-gray-200">
-                  <p className="text-sm font-medium text-gray-900">
+              <div className="absolute right-0 top-12 w-64 bg-slate-900 rounded-lg shadow-xl ring-1 ring-black ring-opacity-5 border border-slate-800 py-2 z-50">
+                <div className="px-4 py-3 border-b border-slate-800">
+                  <p className="text-sm font-medium text-slate-50">
                     {user.user_metadata?.full_name || 'User'}
                   </p>
-                  <p className="text-sm text-gray-500 truncate">{user.email}</p>
+                  <p className="text-sm text-slate-400 truncate">{user.email}</p>
                 </div>
                 <Link
                   to="/privacy"
-                  className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
                   onClick={() => setShowUserMenu(false)}
                 >
                   <Shield className="w-4 h-4" />
@@ -130,7 +130,7 @@ export const Header: React.FC = () => {
                 </Link>
                 <button
                   onClick={handleSignOut}
-                  className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
                 >
                   <LogOut className="w-4 h-4" />
                   <span>Sign Out</span>
@@ -141,7 +141,7 @@ export const Header: React.FC = () => {
         </div>
 
         {/* Mobile Navigation */}
-        <div className="md:hidden border-t border-gray-200">
+        <div className="md:hidden border-t border-slate-800">
           <div className="flex justify-around py-2">
             {navigation.map((item) => {
               const Icon = item.icon;
@@ -151,10 +151,10 @@ export const Header: React.FC = () => {
                 <Link
                   key={item.name}
                   to={item.href}
-                  className={`flex flex-col items-center space-y-1 px-3 py-2 rounded-md text-xs font-medium transition-colors ${
+                  className={`flex flex-col items-center space-y-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
                     isActive
-                      ? 'text-orange-600'
-                      : 'text-gray-600 hover:text-gray-900'
+                      ? 'text-orange-500'
+                      : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   <Icon className="w-5 h-5" />
