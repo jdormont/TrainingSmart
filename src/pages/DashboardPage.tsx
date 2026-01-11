@@ -9,6 +9,7 @@ import { ActivityDetailModal } from '../components/dashboard/ActivityDetailModal
 import { DashboardHero } from '../components/dashboard/DashboardHero';
 import { AnalyticsContainer } from '../components/dashboard/AnalyticsContainer';
 import { SmartWorkoutPreview } from '../components/dashboard/SmartWorkoutPreview';
+import { WorkoutDetailModal } from '../components/dashboard/WorkoutDetailModal';
 import { IntakeWizard } from '../components/onboarding/IntakeWizard';
 import { weeklyInsightService } from '../services/weeklyInsightService';
 import { healthMetricsService } from '../services/healthMetricsService';
@@ -38,6 +39,7 @@ interface AuthError {
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
+  const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [athlete, setAthlete] = useState<StravaAthlete | null>(null);
   const [activities, setActivities] = useState<StravaActivity[]>([]);
@@ -593,13 +595,24 @@ export const DashboardPage: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Stage (Left/Top) */}
           <div className="lg:col-span-2 space-y-6">
-            <DashboardHero
-              athlete={athlete}
-              weeklyInsight={weeklyInsight}
-              weeklyStats={weeklyStats}
-              onRefreshInsight={handleRefreshInsight}
-              insightLoading={insightLoading}
-            />
+              <div className="lg:hidden mb-6">
+                <SmartWorkoutPreview
+                  nextWorkout={nextWorkout}
+                  dailyMetrics={dailyMetric}
+                  onWorkoutGenerated={(workout) => {
+                    setNextWorkout(workout);
+                    fetchStreakData(currentUserId);
+                  }}
+                  onViewDetails={setSelectedWorkout}
+                />
+              </div>
+              <DashboardHero
+                athlete={athlete}
+                weeklyInsight={weeklyInsight}
+                weeklyStats={weeklyStats}
+                onRefreshInsight={handleRefreshInsight}
+                insightLoading={insightLoading}
+              />
 
             <AnalyticsContainer
               activities={activities}
@@ -615,6 +628,17 @@ export const DashboardPage: React.FC = () => {
 
           {/* Right Rail (Recent Activities) */}
           <div className="lg:col-span-1 space-y-4">
+            <div className="hidden lg:block">
+              <SmartWorkoutPreview
+                nextWorkout={nextWorkout}
+                dailyMetrics={dailyMetric}
+                onWorkoutGenerated={(workout) => {
+                  setNextWorkout(workout);
+                  fetchStreakData(currentUserId);
+                }}
+                onViewDetails={setSelectedWorkout}
+              />
+            </div>
             <StreakWidget
               streak={userStreak}
               isRestDay={(() => {
@@ -628,14 +652,6 @@ export const DashboardPage: React.FC = () => {
               })()}
               onStreakUpdate={handleStreakUpdate}
               userId={currentUserId}
-            />
-            <SmartWorkoutPreview
-              nextWorkout={nextWorkout}
-              recoveryScore={
-                readinessData?.score ??
-                dailyMetric?.recovery_score ??
-                null
-              }
             />
 
             <div className="sticky top-4 space-y-4">
@@ -698,6 +714,14 @@ export const DashboardPage: React.FC = () => {
             activity={selectedActivity}
             similarActivities={getSimilarActivities(selectedActivity)}
             onClose={handleCloseModal}
+          />
+        )}
+
+        {/* Workout Detail Modal */}
+        {selectedWorkout && (
+          <WorkoutDetailModal
+            workout={selectedWorkout}
+            onClose={() => setSelectedWorkout(null)}
           />
         )}
 
