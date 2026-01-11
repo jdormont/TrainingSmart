@@ -40,6 +40,7 @@ import {
 } from '../data/mockDashboardData';
 
 import { supabase } from '../services/supabaseClient';
+import { WorkoutAdjustmentChips } from '../components/dashboard/WorkoutAdjustmentChips';
 
 interface AuthError {
   message?: string;
@@ -441,6 +442,20 @@ export const DashboardPage: React.FC = () => {
     await generateWeeklyInsight(athlete, activities, dailyMetrics);
   };
 
+
+
+// ... existing imports
+
+  // Helper to refresh next workout after adjustment
+  const refreshNextWorkout = async () => {
+    try {
+      const next = await trainingPlansService.getNextUpcomingWorkout();
+      setNextWorkout(next);
+    } catch (err) {
+      console.error('Failed to refresh next workout:', err);
+    }
+  };
+
   // Find similar activities for comparison
   const getSimilarActivities = (activity: StravaActivity): StravaActivity[] => {
     return activities.filter(a =>
@@ -666,8 +681,14 @@ export const DashboardPage: React.FC = () => {
                     setNextWorkout(workout);
                     fetchStreakData(currentUserId);
                   }}
-                  onViewDetails={setSelectedWorkout}
+                onViewDetails={setSelectedWorkout}
                 />
+                {nextWorkout && (
+                  <WorkoutAdjustmentChips
+                    workout={nextWorkout}
+                    onWorkoutUpdated={refreshNextWorkout}
+                  />
+                )}
               </div>
               <DashboardHero
                 athlete={athlete}
@@ -701,6 +722,12 @@ export const DashboardPage: React.FC = () => {
                 }}
                 onViewDetails={setSelectedWorkout}
               />
+              {nextWorkout && (
+                <WorkoutAdjustmentChips
+                  workout={nextWorkout}
+                  onWorkoutUpdated={refreshNextWorkout}
+                />
+              )}
             </div>
             <StreakWidget
               streak={userStreak}

@@ -138,5 +138,63 @@ export const recommendationService = {
       console.error('generateInstantWorkout error:', error);
       return null;
     }
+  },
+
+  async adjustDailyWorkout(
+    workout: Workout,
+    adjustment: 'rest' | 'shorten' | 'challenge'
+  ): Promise<void> {
+    try {
+      console.log(`Adjusting workout ${workout.id} with intent: ${adjustment}`);
+      const { trainingPlansService } = await import('./trainingPlansService');
+
+      if (adjustment === 'rest') {
+        // Replace with Active Recovery
+        await trainingPlansService.updateWorkout(
+          workout.id,
+          'Active Recovery Spin',
+          'Light spin to flush out legs. Keep heart rate below Zone 2. Focus on high cadence/low torque.',
+          45,
+          undefined, // Distance (let it be 0 or calculated)
+          'recovery',
+          workout.scheduledDate
+        );
+      } else if (adjustment === 'shorten') {
+        // Reduce duration by 40% (to 60% of original)
+        const newDuration = Math.max(20, Math.round(workout.duration * 0.6)); // Minimum 20 mins
+        const newTitle = workout.name.includes('[Short]') ? workout.name : `${workout.name} [Short]`;
+        
+        await trainingPlansService.updateWorkout(
+          workout.id,
+          newTitle,
+          workout.description, // Keep description
+          newDuration,
+          workout.distance ? workout.distance * 0.6 : undefined,
+          workout.intensity,
+          workout.scheduledDate
+        );
+      } else if (adjustment === 'challenge') {
+        // Upgrade to High Intensity
+        const isVo2 = Math.random() > 0.5;
+        const newName = isVo2 ? 'VO2 Max Intervals' : 'Threshold Builder';
+        const newDesc = isVo2 
+          ? 'High intensity intervals to boost your aerobic ceiling. Warm up for 15m, then 4x4m at 115% FTP with 4m rest. Cool down 15m.'
+          : 'Sustained effort to increase your FTP. Warm up 15m, then 3x10m at 95-100% FTP with 5m rest. Cool down 15m.';
+        const newDuration = isVo2 ? 60 : 75;
+
+        await trainingPlansService.updateWorkout(
+          workout.id,
+          newName,
+          newDesc,
+          newDuration,
+          undefined,
+          'hard',
+          workout.scheduledDate
+        );
+      }
+    } catch (error) {
+      console.error('Error adjusting workout:', error);
+      throw error;
+    }
   }
 };
