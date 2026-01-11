@@ -550,7 +550,7 @@ What would you like to know about your training?`;
   }
 
   return (
-    <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
+    <div className="h-screen bg-slate-950 flex flex-col overflow-hidden">
       <NetworkErrorBanner />
       <div className="flex-1 flex overflow-hidden">
         {/* Desktop Sidebar */}
@@ -575,7 +575,7 @@ What would you like to know about your training?`;
             />
 
             {/* Sidebar content */}
-            <div className="relative flex-1 flex flex-col max-w-xs w-full bg-white transform transition-transform duration-300 ease-in-out">
+            <div className="relative flex-1 flex flex-col max-w-xs w-full bg-slate-900 transform transition-transform duration-300 ease-in-out">
               <SessionSidebar
                 sessions={sessions}
                 activeSessionId={activeSession?.id || null}
@@ -592,28 +592,28 @@ What would you like to know about your training?`;
         {/* Main Chat Area */}
         <div className="flex-1 flex flex-col min-w-0">
           {/* Header */}
-          <div className="bg-white border-b border-gray-200 p-4 flex-shrink-0">
+          <div className="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 p-4 flex-shrink-0">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-center space-x-3 w-full md:w-auto">
                 <button
                   onClick={() => setSidebarOpen(!sidebarOpen)}
-                  className="lg:hidden p-2 text-gray-400 hover:text-gray-600"
+                  className="lg:hidden p-2 text-slate-400 hover:text-slate-200"
                 >
                   {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
                 </button>
 
                 <div className="min-w-0 flex-1">
-                  <h1 className="text-lg md:text-xl font-semibold text-gray-900 truncate">
+                  <h1 className="text-lg md:text-xl font-semibold text-slate-100 truncate capitalize">
                     {activeSession?.name || 'AI Training Coach'}
                   </h1>
                   {activeSession?.description && (
-                    <p className="text-xs md:text-sm text-gray-600 truncate">{activeSession.description}</p>
+                    <p className="text-xs md:text-sm text-slate-400 truncate">{activeSession.description}</p>
                   )}
                 </div>
               </div>
 
               {activeSession && (
-                <div className="flex items-center justify-between md:justify-end space-x-2 w-full md:w-auto pt-2 md:pt-0 border-t md:border-t-0 border-gray-100">
+                <div className="flex items-center justify-between md:justify-end space-x-2 w-full md:w-auto pt-2 md:pt-0 border-t md:border-t-0 border-slate-700/50">
                   {showPlanButton && (
                     <button
                       onClick={handleExtractContext}
@@ -628,7 +628,7 @@ What would you like to know about your training?`;
                     <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${supabaseChatService.getCategoryColor(activeSession.category)}`}>
                       {supabaseChatService.getCategoryIcon(activeSession.category)} {activeSession.category}
                     </span>
-                    <span className="text-xs text-gray-500 whitespace-nowrap">
+                    <span className="text-xs text-slate-500 whitespace-nowrap">
                       {activeSession.messages.length} msgs
                     </span>
                   </div>
@@ -639,27 +639,27 @@ What would you like to know about your training?`;
 
           {/* Training Summary */}
           {athlete && activities.length > 0 && (
-            <div className="bg-white border-b border-gray-200 p-4 flex-shrink-0">
+            <div className="bg-slate-900/40 border-b border-slate-800 p-4 flex-shrink-0">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
                 <div>
-                  <span className="text-gray-500">Recent:</span>
-                  <span className="font-medium ml-1">{activities.length}</span>
+                  <span className="text-slate-500">Recent:</span>
+                  <span className="font-medium ml-1 text-slate-300">{activities.length}</span>
                 </div>
                 <div>
-                  <span className="text-gray-500">Distance:</span>
-                  <span className="font-medium ml-1">
+                  <span className="text-slate-500">Distance:</span>
+                  <span className="font-medium ml-1 text-slate-300">
                     {(calculateWeeklyStats(activities).totalDistance * 0.000621371).toFixed(1)} mi
                   </span>
                 </div>
                 <div>
-                  <span className="text-gray-500">Last Activity:</span>
-                  <span className="font-medium ml-1">
+                  <span className="text-slate-500">Last Activity:</span>
+                  <span className="font-medium ml-1 text-slate-300">
                     {activities[0]?.start_date_local ? format(new Date(activities[0].start_date_local), 'MMM d, yyyy') : 'N/A'}
                   </span>
                 </div>
                 <div>
-                  <span className="text-gray-500">Primary Sport:</span>
-                  <span className="font-medium ml-1">
+                  <span className="text-slate-500">Primary Sport:</span>
+                  <span className="font-medium ml-1 text-slate-300">
                     {activities[0]?.type || 'N/A'}
                   </span>
                 </div>
@@ -670,8 +670,8 @@ What would you like to know about your training?`;
           {/* Chat Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
             {!activeSession ? (
-              <div className="text-center text-gray-500 mt-20">
-                <Bot className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+              <div className="text-center text-slate-500 mt-20">
+                <Bot className="w-12 h-12 mx-auto mb-4 text-slate-600" />
                 <p>Select a chat session or create a new one to start chatting</p>
               </div>
             ) : (
@@ -686,9 +686,9 @@ What would you like to know about your training?`;
                         }`}
                     >
                       <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center ${message.role === 'user'
-                          ? 'bg-blue-500 text-white'
-                          : 'bg-gray-100 text-gray-600'
+                        className={`w-8 h-8 rounded-full flex items-center justify-center border ${message.role === 'user'
+                          ? 'bg-orange-500/10 border-orange-500/20 text-orange-500'
+                          : 'bg-slate-800 border-slate-700 text-slate-400'
                           }`}
                       >
                         {message.role === 'user' ? (
@@ -698,23 +698,40 @@ What would you like to know about your training?`;
                         )}
                       </div>
                       <div
-                        className={`rounded-lg px-4 py-2 ${message.role === 'user'
-                          ? 'bg-blue-500 text-white'
-                          : 'bg-gray-100 text-gray-900'
+                        className={`rounded-2xl px-5 py-3 backdrop-blur-sm border ${message.role === 'user'
+                          ? 'bg-orange-900/40 border-orange-500/30 text-orange-100'
+                          : 'bg-slate-800/60 border-slate-700/60 text-slate-200'
                           }`}
                       >
                         {message.role === 'user' ? (
                           <p className="whitespace-pre-wrap">{message.content}</p>
                         ) : (
                           <div
-                            className="prose prose-sm max-w-none"
+                            className="prose prose-sm max-w-none 
+                              text-slate-200
+                              prose-headings:text-slate-100 
+                              prose-p:text-slate-200 
+                              prose-strong:text-white 
+                              prose-li:text-slate-200
+                              prose-ul:text-slate-200
+                              prose-ol:text-slate-200
+                              prose-code:text-orange-200 prose-code:bg-slate-900/80 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded
+                              [&_*]:text-slate-200
+                              [&_strong]:text-white
+                              [&_h1]:text-slate-100 [&_h2]:text-slate-100 [&_h3]:text-slate-100
+                              [&>table]:w-full [&>table]:border-collapse [&>table]:border [&>table]:border-slate-700 [&>table]:my-4
+                              [&>thead]:bg-slate-800 [&>thead]:text-slate-200 
+                              [&>thead>tr>th]:border-b [&>thead>tr>th]:border-slate-700 [&>thead>tr>th]:p-3 [&>thead>tr>th]:text-left
+                              [&>tbody>tr]:border-b [&>tbody>tr]:border-slate-800 [&>tbody>tr:last-child]:border-0
+                              [&>tbody>tr:nth-child(odd)]:bg-slate-900/50 [&>tbody>tr:nth-child(even)]:bg-slate-900/30
+                              [&>tbody>tr>td]:p-3 [&>tbody>tr>td]:text-slate-200"
                             dangerouslySetInnerHTML={{
                               __html: convertMarkdownToHtml(message.content)
                             }}
                           />
                         )}
                         <p
-                          className={`text-xs mt-1 ${message.role === 'user' ? 'text-blue-100' : 'text-gray-500'
+                          className={`text-xs mt-2 ${message.role === 'user' ? 'text-orange-200/60' : 'text-slate-500'
                             }`}
                         >
                           {message.timestamp.toLocaleTimeString()}
@@ -727,13 +744,13 @@ What would you like to know about your training?`;
                 {loading && (
                   <div className="flex justify-start">
                     <div className="flex items-start space-x-2">
-                      <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                        <Bot className="w-4 h-4 text-gray-600" />
+                      <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700">
+                        <Bot className="w-4 h-4 text-slate-400" />
                       </div>
-                      <div className="bg-gray-100 rounded-lg px-4 py-2">
+                      <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl px-5 py-3">
                         <div className="flex items-center space-x-2">
-                          <Loader2 className="w-4 h-4 animate-spin text-gray-600" />
-                          <span className="text-gray-600">Thinking...</span>
+                          <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+                          <span className="text-slate-400">Thinking...</span>
                         </div>
                       </div>
                     </div>
@@ -747,11 +764,11 @@ What would you like to know about your training?`;
 
           {/* Quick Start Suggestions */}
           {activeSession && activeSession.messages.length === 0 && !loading && (
-            <div className="border-t border-gray-200 p-6 bg-gradient-to-br from-gray-50 to-white flex-shrink-0">
+            <div className="border-t border-slate-800 p-6 bg-slate-900/50 flex-shrink-0">
               <div className="max-w-3xl mx-auto">
                 <div className="text-center mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Quick Start</h3>
-                  <p className="text-sm text-gray-600">Get started with one of these suggestions</p>
+                  <h3 className="text-lg font-semibold text-slate-200 mb-2">Quick Start</h3>
+                  <p className="text-sm text-slate-400">Get started with one of these suggestions</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {getCurrentSuggestions().map((suggestion) => {
@@ -760,12 +777,12 @@ What would you like to know about your training?`;
                       <button
                         key={suggestion.label}
                         onClick={() => handleSuggestedQuestion(suggestion.label)}
-                        className="group flex items-center space-x-3 p-4 bg-white border-2 border-gray-200 rounded-lg hover:border-orange-400 hover:shadow-md transition-all text-left"
+                        className="group flex items-center space-x-3 p-4 bg-slate-800 border-2 border-slate-700 rounded-lg hover:border-orange-500/50 hover:bg-slate-800/80 transition-all text-left"
                       >
-                        <div className="flex-shrink-0 w-10 h-10 bg-orange-50 group-hover:bg-orange-100 rounded-lg flex items-center justify-center transition-colors">
+                        <div className="flex-shrink-0 w-10 h-10 bg-slate-700 group-hover:bg-slate-700/80 rounded-lg flex items-center justify-center transition-colors">
                           <Icon className="w-5 h-5 text-orange-500" />
                         </div>
-                        <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">
+                        <span className="text-sm font-medium text-slate-300 group-hover:text-slate-100">
                           {suggestion.label}
                         </span>
                       </button>
@@ -776,49 +793,48 @@ What would you like to know about your training?`;
             </div>
           )}
 
-          {/* Input Form */}
-          <div className="border-t border-gray-200 p-4 bg-white flex-shrink-0">
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-md p-2 mb-3">
-                <p className="text-red-600 text-sm">{error}</p>
-              </div>
-            )}
+          {/* Floating Input Capsule */}
+          <div className="p-4 pb-8 bg-transparent flex-shrink-0">
+            <div className="max-w-4xl mx-auto">
+              {error && (
+                <div className="bg-red-500/10 border border-red-500/50 rounded-md p-2 mb-3">
+                  <p className="text-red-400 text-sm">{error}</p>
+                </div>
+              )}
 
-            <form onSubmit={handleSendMessage} className="flex space-x-2">
-              <textarea
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={activeSession ? "Ask about your training..." : "Select a session to start chatting..."}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none min-h-[40px] max-h-32"
-                rows={1}
-                disabled={loading || !activeSession}
-                style={{
-                  height: 'auto',
-                  minHeight: '40px',
-                  maxHeight: '128px',
-                  overflowY: inputMessage.split('\n').length > 3 ? 'scroll' : 'hidden'
-                }}
-                onInput={(e) => {
-                  const target = e.target as HTMLTextAreaElement;
-                  target.style.height = 'auto';
-                  target.style.height = Math.min(target.scrollHeight, 128) + 'px';
-                }}
-              />
-              <Button
-                type="submit"
-                disabled={!inputMessage.trim() || loading || !activeSession}
-                className="px-4 py-2 self-end"
-              >
-                <Send className="w-4 h-4" />
-              </Button>
-            </form>
-            <p className="text-xs text-gray-500 mt-1">
-              Press Enter to send, Shift+Enter for new line
-            </p>
-            <p className="text-xs text-gray-400 italic mt-2 text-center">
-              Insights derived in part from Garmin device-sourced data.
-            </p>
+              <form onSubmit={handleSendMessage} className="relative">
+                <textarea
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={activeSession ? "Ask about your training..." : "Select a session to start chatting..."}
+                  className="w-full px-5 py-4 pr-14 bg-slate-800 backdrop-blur-xl border border-slate-700 text-white rounded-2xl shadow-2xl shadow-black/50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent placeholder-slate-400 resize-none"
+                  rows={1}
+                  disabled={loading || !activeSession}
+                  style={{
+                    height: 'auto',
+                    minHeight: '60px',
+                    maxHeight: '128px',
+                    overflowY: inputMessage.split('\n').length > 3 ? 'scroll' : 'hidden'
+                  }}
+                  onInput={(e) => {
+                    const target = e.target as HTMLTextAreaElement;
+                    target.style.height = 'auto';
+                    target.style.height = Math.min(target.scrollHeight, 128) + 'px';
+                  }}
+                />
+                <Button
+                  type="submit"
+                  disabled={!inputMessage.trim() || loading || !activeSession}
+                  className="absolute right-2 bottom-2 p-2 rounded-xl bg-orange-500 hover:bg-orange-400 text-white disabled:bg-slate-700 disabled:text-slate-500 h-10 w-10 flex items-center justify-center transition-colors"
+                >
+                  <Send className="w-5 h-5" />
+                </Button>
+              </form>
+              <p className="text-xs text-slate-600 mt-2 text-center opacity-60">
+                Insights derived in part from Garmin & Strava data. Press Enter to send.
+              </p>
+            </div>
           </div>
         </div>
 
