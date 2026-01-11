@@ -67,6 +67,25 @@ export const SmartWorkoutPreview: React.FC<SmartWorkoutPreviewProps> = ({
         }
 
 
+        // Bio-Check Logic
+        const readiness = dailyMetrics?.recovery_score ?? 0; // Default to 0 if missing, handle null case in UI
+        let bioMessage = `Readiness ${readiness}% — This matches your recovery needs perfectly.`;
+        let BioIcon = Sparkles; // Default neutral/good
+        let bioTextColor = 'text-white/90';
+        let bioBgColor = 'bg-white/10';
+
+        if (readiness > 80 && (intensity === 'hard' || intensity === 'moderate')) {
+            bioMessage = `Readiness ${readiness}% — You are primed for this intensity.`;
+            BioIcon = Zap;
+            bioTextColor = 'text-white';
+            bioBgColor = 'bg-green-500/20'; // Subtle green tint
+        } else if (readiness < 50 && (intensity === 'hard' || intensity === 'moderate')) {
+            bioMessage = `Readiness ${readiness}% — This will be a heavy strain. Be careful.`;
+            BioIcon = Zap; // Warning or Zap
+            bioTextColor = 'text-orange-200';
+            bioBgColor = 'bg-orange-500/20';
+        }
+
         return (
             <div className={`relative w-full rounded-2xl shadow-lg overflow-hidden flex flex-col ${gradientClass} text-white mb-6 transition-all`}>
                 {/* Background Icon Watermark */}
@@ -88,7 +107,7 @@ export const SmartWorkoutPreview: React.FC<SmartWorkoutPreviewProps> = ({
                     </div>
 
                     {/* Middle Info */}
-                    <div className="flex items-center space-x-4 mb-6 text-white/90">
+                    <div className="flex items-center space-x-4 mb-4 text-white/90">
                         <div className="flex items-center">
                             <Calendar className="w-4 h-4 mr-1.5 opacity-80" />
                             <span className="text-sm font-medium">{dateDisplay}</span>
@@ -97,11 +116,17 @@ export const SmartWorkoutPreview: React.FC<SmartWorkoutPreviewProps> = ({
                             <Timer className="w-4 h-4 mr-1.5 opacity-80" />
                             <span className="text-sm font-medium">{durationDisplay}</span>
                         </div>
-                         {/* Optional: Add Activity Type Icon/Text */}
-                        <div className="flex items-center capitalize">
-                            <span className="text-sm font-medium opacity-80">{nextWorkout.type}</span>
-                        </div>
                     </div>
+
+                    {/* Bio-Check Band */}
+                    {dailyMetrics && (
+                        <div className={`mb-4 rounded-lg backdrop-blur-sm px-3 py-2 flex items-center space-x-2 ${bioBgColor} border border-white/10`}>
+                            <BioIcon className={`w-4 h-4 flex-shrink-0 ${bioTextColor}`} />
+                            <span className={`text-sm font-medium leading-snug ${bioTextColor}`}>
+                                {bioMessage}
+                            </span>
+                        </div>
+                    )}
 
                     {/* Action Button */}
                     <button
