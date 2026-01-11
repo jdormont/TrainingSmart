@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { LoadingSpinner } from './LoadingSpinner';
 import { AccountStatus } from '../auth/AccountStatus';
@@ -10,6 +10,8 @@ interface ProtectedRouteProps {
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { user, userProfile, loading } = useAuth();
+  const [searchParams] = useSearchParams();
+  const isDemo = searchParams.get('demo') === 'true';
 
   if (loading) {
     return (
@@ -19,11 +21,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     );
   }
 
-  if (!user) {
+  // Allow access if user is authenticated OR if it's demo mode
+  if (!user && !isDemo) {
     return <Navigate to="/login" replace />;
   }
 
-  if (userProfile?.status !== 'APPROVED') {
+  // If validated user (not demo), check account status
+  if (user && userProfile?.status !== 'APPROVED') {
     return <AccountStatus />;
   }
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { stravaCacheService } from '../services/stravaCacheService';
 import { ouraApi } from '../services/ouraApi';
@@ -23,7 +24,6 @@ import type { StravaActivity, StravaAthlete, WeeklyStats, OuraSleepData, OuraRea
 import type { WeeklyInsight, HealthMetrics } from '../services/weeklyInsightService';
 import { calculateWeeklyStats } from '../utils/dataProcessing';
 import { MessageCircle, ChevronDown, ChevronUp, Calendar, Activity, Eye, Sparkles } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../utils/constants';
 import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
 import { analytics } from '../lib/analytics';
@@ -51,6 +51,7 @@ interface AuthError {
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [athlete, setAthlete] = useState<StravaAthlete | null>(null);
@@ -82,9 +83,17 @@ export const DashboardPage: React.FC = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      try {
+      try { // Start of fetchData
         setLoading(true);
         setError(null);
+
+        // Check for Demo Mode first
+        const isDemo = searchParams.get('demo') === 'true';
+        if (isDemo) {
+          handleEnterDemoMode();
+          setLoading(false);
+          return;
+        }
 
         // Try to fetch athlete data and recent activities from cache
         let athleteData: StravaAthlete;
@@ -316,6 +325,14 @@ export const DashboardPage: React.FC = () => {
 
   useEffect(() => {
     const checkOnboarding = async () => {
+      // Skip onboarding check for demo mode
+      const isDemo = searchParams.get('demo') === 'true';
+      if (isDemo) {
+        setShowWizard(false);
+        setCheckingOnboarding(false);
+        return;
+      }
+
       try {
         const isOnboarded = await getUserOnboardingStatus();
         setShowWizard(!isOnboarded);
@@ -327,7 +344,7 @@ export const DashboardPage: React.FC = () => {
     };
 
     checkOnboarding();
-  }, []);
+  }, [searchParams]);
 
   function handleWizardComplete() {
     setShowWizard(false);
