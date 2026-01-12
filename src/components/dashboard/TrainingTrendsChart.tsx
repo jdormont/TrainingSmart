@@ -51,7 +51,7 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
     const fetchWeeklyMetrics = async () => {
       try {
         const metrics = await dailyMetricsService.getMetricsForDateRange(
-          new Date(Date.now() - 8 * 7 * 24 * 60 * 60 * 1000),
+          new Date(Date.now() - 4 * 7 * 24 * 60 * 60 * 1000),
           new Date()
         );
 
@@ -78,7 +78,7 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
     const now = new Date();
     const weeks: WeeklyTrend[] = [];
 
-    for (let i = 7; i >= 0; i--) {
+    for (let i = 3; i >= 0; i--) {
       const weekStart = startOfWeek(addWeeks(now, -i), { weekStartsOn: 1 });
       const weekEnd = addWeeks(weekStart, 1);
 
@@ -283,7 +283,7 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
       <div className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 p-6">
         <div className="mb-6">
           <h3 className="text-lg font-semibold text-slate-50 mb-2">
-            Training Trends (Last 8 Weeks)
+            Training Trends (Last 4 Weeks)
           </h3>
           <p className="text-slate-400 text-sm">
             Analyze your training patterns by activity type and metric
@@ -315,7 +315,7 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
     <div className="bg-slate-900 rounded-lg shadow-lg shadow-black/20 border border-slate-800 p-6">
       <div className="mb-6">
         <h3 className="text-lg font-semibold text-slate-50 mb-2">
-          Training Trends (Last 8 Weeks)
+          Training Trends (Last 4 Weeks)
         </h3>
         <p className="text-slate-400 text-sm">
           Analyze your training patterns by activity type and metric
