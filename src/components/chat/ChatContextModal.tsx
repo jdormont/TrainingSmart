@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, CheckCircle, AlertCircle, HelpCircle, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import type { ChatContextSnapshot, ChatSession, StravaAthlete, StravaActivity, StravaStats } from '../../types';
+import type { ChatContextSnapshot, StravaAthlete, StravaActivity, StravaStats } from '../../types';
 import { Button } from '../common/Button';
 import { openaiService } from '../../services/openaiApi';
 import { trainingPlansService } from '../../services/trainingPlansService';
@@ -15,7 +15,7 @@ interface ChatContextModalProps {
   sessionName: string;
   athlete: StravaAthlete;
   recentActivities: StravaActivity[];
-  stats: StravaStats;
+  stats?: StravaStats | undefined; // Made optional as dashboard data might not provide it
 }
 
 export const ChatContextModal: React.FC<ChatContextModalProps> = ({
@@ -29,7 +29,7 @@ export const ChatContextModal: React.FC<ChatContextModalProps> = ({
   stats
 }) => {
   const navigate = useNavigate();
-  const [context, setContext] = useState(initialContext);
+  const [context] = useState(initialContext); // Removed unused setContext
   const [timeframe, setTimeframe] = useState('4 weeks');
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,9 +75,13 @@ export const ChatContextModal: React.FC<ChatContextModalProps> = ({
       const trainingContext = {
         athlete,
         recentActivities,
-        stats,
+        stats: stats || undefined,
         weeklyVolume: weeklyStats,
-        recovery: {}
+        recovery: {
+            sleepData: null,
+            readinessData: null, 
+            dailyMetric: null
+        }
       };
 
       const preferences = `
@@ -121,7 +125,8 @@ Intensity Preference: ${context.preferences.intensityPreference || 'Balanced'}
           distance: workout.distance ? workout.distance * 1609.34 : undefined,
           intensity: workout.intensity,
           scheduledDate,
-          completed: false
+          completed: false,
+          status: 'planned' as const
         };
       });
 

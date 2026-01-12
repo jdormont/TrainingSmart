@@ -123,7 +123,7 @@ class TrainingPlansService {
     return plan;
   }
 
-  async getPlans(): Promise<TrainingPlan[]> {
+    async getPlans(): Promise<TrainingPlan[]> {
     try {
       const userId = await this.getCurrentUserId();
       if (!userId) {
@@ -133,7 +133,7 @@ class TrainingPlansService {
 
       const { data: plans, error: plansError } = await supabase
         .from('training_plans')
-        .select('*')
+        .select('*, workouts(*)')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
@@ -143,27 +143,17 @@ class TrainingPlansService {
       }
 
       console.log(`Fetched ${plans?.length || 0} training plans from Supabase`);
-      const trainingPlans: TrainingPlan[] = [];
+      
+      const trainingPlans = (plans || []).map(plan => {
+          // Sort workouts by date as potential join order isn't guaranteed (though usually is)
+          const sortedWorkouts = (plan.workouts || []).sort((a: any, b: any) => 
+            new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime()
+          );
+          
+          return this.dbPlanToTrainingPlan(plan, sortedWorkouts);
+      });
 
-      for (const plan of plans || []) {
-        const { data: workouts, error: workoutsError } = await supabase
-          .from('workouts')
-          .select('*')
-          .eq('plan_id', plan.id)
-          .order('scheduled_date', { ascending: true });
-
-        if (workoutsError) {
-          console.error('Error fetching workouts for plan', plan.id, ':', workoutsError);
-          continue;
-        }
-
-        console.log(`Plan "${plan.name}" (ID: ${plan.id}) has ${workouts?.length || 0} workouts`);
-        trainingPlans.push(this.dbPlanToTrainingPlan(plan, workouts || []));
-      }
-
-      console.log(`Returning ${trainingPlans.length} training plans with workouts:`,
-        trainingPlans.map(p => ({ name: p.name, workoutCount: p.workouts.length })));
-
+      console.log(`Returning ${trainingPlans.length} training plans`);
       return trainingPlans;
     } catch (error) {
       console.error('Error in getPlans:', error);

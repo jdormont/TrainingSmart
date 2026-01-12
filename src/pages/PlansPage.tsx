@@ -23,12 +23,18 @@ import { supabase } from '../services/supabaseClient';
 
 type AiWorkout = Partial<Workout> & { dayOfWeek?: number; week?: number };
 
+import { useQueryClient } from '@tanstack/react-query';
+import { usePlanData } from '../hooks/usePlanData';
+
 export const PlansPage: React.FC = () => {
   const [athlete, setAthlete] = useState<StravaAthlete | null>(null);
   const [activities, setActivities] = useState<StravaActivity[]>([]);
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStats | null>(null);
-  const [savedPlans, setSavedPlans] = useState<TrainingPlan[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Removed local savedPlans state, using usePlanData
+  const { data: planData, isLoading: plansLoading, error: plansError } = usePlanData();
+  const savedPlans = planData?.plans || [];
+  
+  const [loading, setLoading] = useState(true); // Keep for Strava data loading
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -44,7 +50,10 @@ export const PlansPage: React.FC = () => {
     workouts: Workout[];
   }>({ isOpen: false, planId: null, weekNumber: 0, workouts: [] });
 
+  const queryClient = useQueryClient();
+
   // Form state
+  // ... (keep existing form state)
   const [goal, setGoal] = useState('');
   const [goalType, setGoalType] = useState<'distance' | 'event' | 'fitness'>('event');
   const [timeframe, setTimeframe] = useState('12 weeks');
@@ -82,14 +91,7 @@ export const PlansPage: React.FC = () => {
     }
   };
 
-  const loadPlans = async () => {
-    try {
-      const plans = await trainingPlansService.getPlans();
-      setSavedPlans(plans);
-    } catch (error) {
-      console.error('Failed to load plans:', error);
-    }
-  };
+  // Removed loadPlans
 
   useEffect(() => {
     const loadData = async () => {
@@ -109,8 +111,9 @@ export const PlansPage: React.FC = () => {
 
         // Fetch and Sync Streak
         await refreshStreak(activitiesData);
+        
+        // Plans are loaded via hook
 
-        await loadPlans(); // Load plans after initial data
       } catch (err) {
         console.error('Failed to load data:', err);
         setError('Failed to load your training data.');
@@ -165,10 +168,7 @@ Additional Preferences: ${preferences || 'None'}
       const planEndDate = addDays(planStartDate, weeks * 7);
 
       const structuredWorkouts: Omit<Workout, 'id'>[] = aiWorkouts.map((w: AiWorkout, index: number) => {
-        // Use explicit week if available (1-based to 0-based), otherwise fallback to index math (only if every day has a workout)
-        // Since we now allow skipping days, index / 7 is unreliable.
-        // Fallback: if no week provided, assume it's just a flat list and we probably can't do better than index/7, 
-        // but the prompt should now enforce week.
+        // Use explicit week if available (1-based to 0-based), otherwise fallback to index math
         const weekNumber = w.week ? (w.week - 1) : Math.floor(index / 7);
         const dayInWeek = w.dayOfWeek ?? (index % 7);
 
@@ -196,10 +196,16 @@ Additional Preferences: ${preferences || 'None'}
         goal: planDescription,
         workouts: structuredWorkouts as Workout[]
       };
-
       const newPlan = await trainingPlansService.createPlan(planToCreate);
-      const updatedPlans = [...savedPlans, newPlan];
-      setSavedPlans(updatedPlans);
+      
+      await queryClient.cancelQueries({ queryKey: ['plan-data'] });
+      queryClient.setQueryData(['plan-data'], (oldData: any) => {
+          if (!oldData) return { plans: [newPlan], isAuthenticated: true };
+          return {
+              ...oldData,
+              plans: [...(oldData.plans || []), newPlan]
+          };
+      });
 
       setShowForm(false);
       // Reset form
@@ -217,8 +223,14 @@ Additional Preferences: ${preferences || 'None'}
   const deletePlan = async (planId: string) => {
     try {
       await trainingPlansService.deletePlan(planId);
-      const updatedPlans = savedPlans.filter(p => p.id !== planId);
-      setSavedPlans(updatedPlans);
+      
+      queryClient.setQueryData(['plan-data'], (oldData: any) => {
+          if (!oldData) return oldData;
+          return {
+              ...oldData,
+              plans: oldData.plans.filter((p: TrainingPlan) => p.id !== planId)
+          };
+      });
 
       // Close expanded plan if it's being deleted
       if (expandedPlan === planId) {
@@ -227,6 +239,8 @@ Additional Preferences: ${preferences || 'None'}
     } catch (err) {
       console.error('Failed to delete plan:', err);
       setError('Failed to delete plan');
+      // Invalidate on error to ensure sync
+      queryClient.invalidateQueries({ queryKey: ['plan-data'] });
     }
   };
 
@@ -242,7 +256,6 @@ Additional Preferences: ${preferences || 'None'}
     if (!workout) return;
 
     // Toggle logic: if completed, go to 'planned', else 'completed'
-    // This maintains the simple checkbox behavior for legacy support
     const newStatus = workout.status === 'completed' || workout.completed ? 'planned' : 'completed';
 
     await handleUpdateStatus(workoutId, newStatus);
@@ -253,18 +266,24 @@ Additional Preferences: ${preferences || 'None'}
     if (!plan) return;
 
     // Optimistic update
-    setSavedPlans((prevPlans: TrainingPlan[]) =>
-      prevPlans.map((p: TrainingPlan) =>
-        p.id === plan.id
-          ? {
-            ...p,
-            workouts: p.workouts.map((w: Workout) =>
-              w.id === workoutId ? { ...w, status: newStatus, completed: newStatus === 'completed' } : w
+    const previousData = queryClient.getQueryData(['plan-data']);
+    
+    queryClient.setQueryData(['plan-data'], (oldData: any) => {
+        if (!oldData) return oldData;
+        return {
+            ...oldData,
+            plans: oldData.plans.map((p: TrainingPlan) =>
+                p.id === plan.id
+                  ? {
+                    ...p,
+                    workouts: p.workouts.map((w: Workout) =>
+                      w.id === workoutId ? { ...w, status: newStatus, completed: newStatus === 'completed' } : w
+                    )
+                  }
+                  : p
             )
-          }
-          : p
-      )
-    );
+        };
+    });
 
     try {
       await trainingPlansService.updateWorkoutStatus(workoutId, newStatus);
@@ -273,21 +292,7 @@ Additional Preferences: ${preferences || 'None'}
     } catch (err) {
       console.error('Failed to update workout status:', err);
       // Revert on failure
-      const originalWorkout = plan.workouts.find(w => w.id === workoutId);
-      if (originalWorkout) {
-        setSavedPlans((prevPlans: TrainingPlan[]) =>
-          prevPlans.map((p: TrainingPlan) =>
-            p.id === plan.id
-              ? {
-                ...p,
-                workouts: p.workouts.map((w: Workout) =>
-                  w.id === workoutId ? originalWorkout : w
-                )
-              }
-              : p
-          )
-        );
-      }
+      queryClient.setQueryData(['plan-data'], previousData);
       setError('Failed to update workout status');
     }
   };
@@ -299,24 +304,29 @@ Additional Preferences: ${preferences || 'None'}
     if (!plan) return;
 
     // Optimistic update
-    setSavedPlans((prevPlans: TrainingPlan[]) =>
-      prevPlans.map((p: TrainingPlan) =>
-        p.id === plan.id
-          ? {
-            ...p,
-            workouts: p.workouts.filter((w: Workout) => w.id !== workoutId)
-          }
-          : p
-      )
-    );
+    const previousData = queryClient.getQueryData(['plan-data']);
+
+    queryClient.setQueryData(['plan-data'], (oldData: any) => {
+        if (!oldData) return oldData;
+        return {
+            ...oldData,
+            plans: oldData.plans.map((p: TrainingPlan) =>
+                p.id === plan.id
+                  ? {
+                    ...p,
+                    workouts: p.workouts.filter((w: Workout) => w.id !== workoutId)
+                  }
+                  : p
+            )
+        };
+    });
 
     try {
       await trainingPlansService.deleteWorkout(workoutId);
     } catch (err) {
       console.error('Failed to delete workout:', err);
-      // Revert (reload plans to be safe since we lost the deleted object reference easily)
-      const plans = await trainingPlansService.getPlans();
-      setSavedPlans(plans);
+      // Revert
+      queryClient.setQueryData(['plan-data'], previousData);
       setError('Failed to delete workout');
     }
   };
@@ -324,19 +334,25 @@ Additional Preferences: ${preferences || 'None'}
   const handleAddWorkout = async (planId: string, date: Date) => {
     try {
       const newWorkout = await trainingPlansService.addPlaceholderWorkout(planId, date);
-      setSavedPlans((prevPlans: TrainingPlan[]) =>
-        prevPlans.map((p: TrainingPlan) =>
-          p.id === planId
-            ? {
-              ...p,
-              workouts: [...p.workouts, newWorkout]
-            }
-            : p
-        )
-      );
+      
+      queryClient.setQueryData(['plan-data'], (oldData: any) => {
+          if (!oldData) return oldData;
+          return {
+              ...oldData,
+              plans: oldData.plans.map((p: TrainingPlan) =>
+                p.id === planId
+                  ? {
+                    ...p,
+                    workouts: [...p.workouts, newWorkout]
+                  }
+                  : p
+              )
+          };
+      });
     } catch (err) {
       console.error('Failed to add workout:', err);
       setError('Failed to add new workout');
+      queryClient.invalidateQueries({ queryKey: ['plan-data'] });
     }
   };
 
@@ -350,8 +366,7 @@ Additional Preferences: ${preferences || 'None'}
 
   const handleWorkoutsExported = async () => {
     try {
-      const plans = await trainingPlansService.getPlans();
-      setSavedPlans(plans);
+      await queryClient.invalidateQueries({ queryKey: ['plan-data'] });
     } catch (err) {
       console.error('Failed to refresh plans:', err);
     }
@@ -451,19 +466,24 @@ Additional Preferences: ${preferences || 'None'}
         };
       });
 
-      setSavedPlans((prevPlans: TrainingPlan[]) =>
-        prevPlans.map((p: TrainingPlan) =>
-          p.id === modificationModal.planId
-            ? {
-              ...p,
-              workouts: p.workouts.map((w: Workout) => {
-                const updatedWorkout = updatedWorkoutsWithDates.find((uw: Workout) => uw.id === w.id);
-                return updatedWorkout || w;
-              })
-            }
-            : p
-        )
-      );
+      
+      queryClient.setQueryData(['plan-data'], (oldData: any) => {
+          if (!oldData) return oldData;
+          return {
+              ...oldData,
+              plans: oldData.plans.map((p: TrainingPlan) =>
+                p.id === modificationModal.planId
+                  ? {
+                    ...p,
+                    workouts: p.workouts.map((w: Workout) => {
+                      const updatedWorkout = updatedWorkoutsWithDates.find((uw: Workout) => uw.id === w.id);
+                      return updatedWorkout || w;
+                    })
+                  }
+                  : p
+              )
+          };
+      });
 
       for (const workout of updatedWorkoutsWithDates) {
         await trainingPlansService.updateWorkout(
@@ -501,50 +521,60 @@ Additional Preferences: ${preferences || 'None'}
 
   const handleMoveWorkout = async (workoutId: string, newDate: Date, strategy: 'move' | 'swap' | 'replace') => {
     // Optimistic UI update
-    setSavedPlans((prevPlans: TrainingPlan[]) => prevPlans.map((plan: TrainingPlan) => {
-      const planWorkouts = plan.workouts;
-      const originalWorkout = planWorkouts.find((w: Workout) => w.id === workoutId);
-      if (!originalWorkout) return plan;
+    const previousData = queryClient.getQueryData(['plan-data']);
 
-      let updatedWorkouts: Workout[] = [...planWorkouts];
-      const originalDate = new Date(originalWorkout.scheduledDate);
-
-      // Strategy implementations
-      if (strategy === 'move') {
-        updatedWorkouts = updatedWorkouts.map(w =>
-          w.id === workoutId
-            ? { ...w, scheduledDate: newDate }
-            : w
-        );
-      } else if (strategy === 'swap') {
-        const targetWorkout = updatedWorkouts.find(w =>
-          isSameDay(new Date(w.scheduledDate), newDate)
-        );
-
-        if (targetWorkout) {
-          updatedWorkouts = updatedWorkouts.map(w => {
-            if (w.id === workoutId) return { ...w, scheduledDate: newDate };
-            if (w.id === targetWorkout.id) return { ...w, scheduledDate: originalDate };
-            return w;
-          });
-        }
-      } else if (strategy === 'replace') {
-        const targetWorkout = updatedWorkouts.find(w =>
-          isSameDay(new Date(w.scheduledDate), newDate)
-        );
-
-        if (targetWorkout) {
-          updatedWorkouts = updatedWorkouts.filter(w => w.id !== targetWorkout.id);
-          updatedWorkouts = updatedWorkouts.map(w =>
-            w.id === workoutId
-              ? { ...w, scheduledDate: newDate }
-              : w
-          );
-        }
-      }
-
-      return { ...plan, workouts: updatedWorkouts };
-    }));
+    queryClient.setQueryData(['plan-data'], (oldData: any) => {
+        if (!oldData) return oldData;
+        const prevPlans = oldData.plans;
+        
+        return {
+            ...oldData,
+            plans: prevPlans.map((plan: TrainingPlan) => {
+              const planWorkouts = plan.workouts;
+              const originalWorkout = planWorkouts.find((w: Workout) => w.id === workoutId);
+              if (!originalWorkout) return plan;
+        
+              let updatedWorkouts: Workout[] = [...planWorkouts];
+              const originalDate = new Date(originalWorkout.scheduledDate);
+        
+              // Strategy implementations
+              if (strategy === 'move') {
+                updatedWorkouts = updatedWorkouts.map(w =>
+                  w.id === workoutId
+                    ? { ...w, scheduledDate: newDate }
+                    : w
+                );
+              } else if (strategy === 'swap') {
+                const targetWorkout = updatedWorkouts.find(w =>
+                  isSameDay(new Date(w.scheduledDate), newDate)
+                );
+        
+                if (targetWorkout) {
+                  updatedWorkouts = updatedWorkouts.map(w => {
+                    if (w.id === workoutId) return { ...w, scheduledDate: newDate };
+                    if (w.id === targetWorkout.id) return { ...w, scheduledDate: originalDate };
+                    return w;
+                  });
+                }
+              } else if (strategy === 'replace') {
+                const targetWorkout = updatedWorkouts.find(w =>
+                  isSameDay(new Date(w.scheduledDate), newDate)
+                );
+        
+                if (targetWorkout) {
+                  updatedWorkouts = updatedWorkouts.filter(w => w.id !== targetWorkout.id);
+                  updatedWorkouts = updatedWorkouts.map(w =>
+                    w.id === workoutId
+                      ? { ...w, scheduledDate: newDate }
+                      : w
+                  );
+                }
+              }
+        
+              return { ...plan, workouts: updatedWorkouts };
+            })
+        };
+    });
 
     try {
       const plan = savedPlans.find(p => p.workouts.some(w => w.id === workoutId));
@@ -610,7 +640,8 @@ Additional Preferences: ${preferences || 'None'}
       console.error('Failed to move workout:', error);
       alert('Failed to update workout schedule. Reloading plans...');
       // Re-fetch to revert to server state
-      loadPlans();
+      queryClient.setQueryData(['plan-data'], previousData);
+      queryClient.invalidateQueries({ queryKey: ['plan-data'] });
     }
   };
 
@@ -1015,17 +1046,6 @@ Additional Preferences: ${preferences || 'None'}
         <WorkoutDetailModal
           workout={selectedWorkout}
           onClose={() => setSelectedWorkout(null)}
-        />
-      )}
-      
-      {modificationModal.isOpen && (
-        <PlanModificationModal
-          isOpen={modificationModal.isOpen}
-          onClose={() => setModificationModal(prev => ({ ...prev, isOpen: false }))}
-          planId={modificationModal.planId!}
-          weekNumber={modificationModal.weekNumber}
-          workouts={modificationModal.workouts}
-          onApply={handleApplyModification}
         />
       )}
     </div>

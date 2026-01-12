@@ -1,86 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { BookOpen, Sparkles, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { ContentFeed } from '../components/home/ContentFeed';
-import { supabase } from '../services/supabaseClient';
-
-import { stravaCacheService } from '../services/stravaCacheService';
+import { useLearnData } from '../hooks/useLearnData';
 import { ROUTES } from '../utils/constants';
-import type { StravaActivity } from '../types';
-
-interface ContentProfile {
-  interests: string[];
-  goals: string[];
-  skill_level: 'beginner' | 'intermediate' | 'advanced';
-  activity_types: string[];
-  favorite_creators: string[];
-  preferred_content_types: string[];
-}
-
-interface UserProfile {
-  training_goal?: string;
-  coach_persona?: string;
-  weekly_hours?: number;
-}
 
 export const LearnPage: React.FC = () => {
   const navigate = useNavigate();
-  const [activities, setActivities] = useState<StravaActivity[]>([]);
-  const [contentProfile, setContentProfile] = useState<ContentProfile | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Data fetching hook
+  const { data, isLoading: loading, error: queryError } = useLearnData();
+  
+  const activities = data?.activities || [];
+  const contentProfile = data?.contentProfile || null;
+  const userProfile = data?.userProfile || null;
+  const error = queryError ? (queryError as Error).message : null;
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const { data: { user } } = await supabase.auth.getUser();
-
-        if (!user) {
-          throw new Error('User not authenticated');
-        }
-
-        const [profileData, contentData, activitiesData] = await Promise.all([
-          supabase
-            .from('user_profiles')
-            .select('training_goal, coach_persona, weekly_hours')
-            .eq('user_id', user.id)
-            .maybeSingle(),
-          supabase
-            .from('content_profiles')
-            .select('*')
-            .eq('user_id', user.id)
-            .maybeSingle(),
-          stravaCacheService.getActivities(false, 30)
-        ]);
-
-        if (profileData.error) {
-          console.error('Error loading user profile:', profileData.error);
-        } else {
-          setUserProfile(profileData.data);
-        }
-
-        if (contentData.error) {
-          console.error('Error loading content profile:', contentData.error);
-        } else {
-          setContentProfile(contentData.data);
-        }
-
-        setActivities(activitiesData);
-      } catch (err) {
-        console.error('Failed to load Learn page data:', err);
-        setError((err as Error).message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
-  }, []);
 
   const getPageTitle = (): string => {
     if (userProfile?.training_goal) {
