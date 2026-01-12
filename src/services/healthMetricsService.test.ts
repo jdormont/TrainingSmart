@@ -168,6 +168,47 @@ describe('HealthMetricsService', () => {
       expect(metrics.details.intensity.suggestion).toContain("Junk Mile Penalty");
   });
 
+  it('calculates Rider Profile Levels correctly', () => {
+      const activities: StravaActivity[] = [];
+
+      // Scenario:
+      // 1. Consistency: 4 days/week (Level 6: 4 * 1.5 = 6)
+      // 2. Endurance: Longest ride 90 mins (Level 4: 1 + floor(1.5*2) = 4)
+      // 3. Intensity: 10% Z4 (Level 6: 2 + 10/2.5 = 6)
+      
+      // Create 4 days/week pattern, starting from yesterday to ensure they fall in windows
+      for(let w=0; w<8; w++) {
+          for(let d=0; d<4; d++) {
+             // 90 min rides to satisfy endurance
+             activities.push(createActivity(getRelativeDate(w*7 + d + 1), 90, 30000, 'Ride', 145, 170)); 
+             // Avg HR 145 (Z3), Max 170 (Z4 start is 160).
+             // Since Avg < 160, it falls into Z3 bucket logic? 
+             // Logic: Avg >= 160 -> Z4. Avg >= 135 -> Z3.
+             // We want 10% Z4.
+             // If we rely on intervals? "Max HR > 170" adds 15% Z4 per ride?
+             // Let's force Avg HR 165 for 1 ride out of 10?
+          }
+      }
+      
+      // The above loop creates 32 rides. All 90 mins.
+      // Longest ride = 90m -> Lvl 4.
+      // Consistency = 4 days/wk -> Lvl 6.
+      
+      // Intensity: 
+      // Current logic: Sum of Est Z4 / Total Time.
+      // Rides have Avg 145. 
+      // check code: if avg >= 135 (Z3 min), estZ4 += 0.1 * duration.
+      // So every ride contributes 10% to Z4?
+      // Yes. So Z4% = 10%.
+      // Level = 2 + (10 / 2.5) = 6.
+      
+      const metrics = healthMetricsService.calculateHealthMetrics({} as any, activities);
+      
+      expect(metrics.profile.discipline.level).toBe(6);
+      expect(metrics.profile.stamina.level).toBe(4);
+      expect(metrics.profile.punch.level).toBe(6);
+  });
+
   it('calculates Efficiency Trend', () => {
       const activities: StravaActivity[] = [];
 

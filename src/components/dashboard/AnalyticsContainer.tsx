@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { BarChart2, Activity, Heart } from 'lucide-react';
 import { TrainingTrendsChart } from './TrainingTrendsChart';
-import { HealthSpiderChart } from './HealthSpiderChart';
-// StravaOnlySpiderChart removed
+import { RiderProfileChart } from './RiderProfileChart';
 import { RecoveryCard } from './RecoveryCard';
 import type { StravaActivity, StravaAthlete, OuraSleepData, OuraReadinessData, DailyMetric } from '../../types';
 import type { HealthMetrics } from '../../services/weeklyInsightService';
@@ -33,7 +32,7 @@ export const AnalyticsContainer: React.FC<AnalyticsContainerProps> = ({
     // Tab Definitions
     const tabs = [
         { id: 'trends', label: 'Training Trends', icon: BarChart2 },
-        { id: 'health', label: 'Health Balance', icon: Activity },
+        { id: 'health', label: 'Rider Profile', icon: Activity },
         { id: 'recovery', label: 'Recovery', icon: Heart },
     ];
 
@@ -74,10 +73,11 @@ export const AnalyticsContainer: React.FC<AnalyticsContainerProps> = ({
 
                 {/* TAB 2: Health Balance */}
                 <div className={activeTab === 'health' ? 'block' : 'hidden'}>
-                     <HealthSpiderChart
-                        healthMetrics={healthMetrics}
-                        loading={loading}
-                    />
+                     {healthMetrics ? (
+                        <RiderProfileChart profile={healthMetrics.profile} />
+                     ) : (
+                        <div className="p-8 text-center text-slate-500">Loading metrics...</div>
+                     )}
                 </div>
 
                 {/* TAB 3: Recovery */}

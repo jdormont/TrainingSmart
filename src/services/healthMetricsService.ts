@@ -1,6 +1,6 @@
 // Health Metrics Service - Calculates holistic health scores (Dynamic, Relative Model)
 import type { StravaActivity, StravaAthlete, OuraSleepData, OuraReadinessData } from '../types';
-import { startOfWeek, subWeeks, differenceInDays, isSameDay, startOfDay } from 'date-fns';
+import { subWeeks, differenceInDays, startOfDay } from 'date-fns';
 
 export interface HealthMetrics {
   load: number;        // replacing trainingBalance
@@ -18,6 +18,7 @@ export interface HealthMetrics {
     intensity: HealthDimensionDetail;
     efficiency: HealthDimensionDetail;
   };
+  profile: RiderProfile;
 }
 
 export interface HealthDimensionDetail {
@@ -29,6 +30,21 @@ export interface HealthDimensionDetail {
   }>;
   trend: 'improving' | 'stable' | 'declining';
   suggestion: string;
+}
+
+export interface LevelDetail {
+  level: number; // 1-10
+  currentValue: string;
+  nextLevelCriteria: string;
+  prompt: string;
+}
+
+export interface RiderProfile {
+  discipline: LevelDetail; // Consistency
+  stamina: LevelDetail;    // Endurance
+  punch: LevelDetail;      // Intensity
+  capacity: LevelDetail;   // Load (ACWR)
+  form: LevelDetail;       // Efficiency
 }
 
 class HealthMetricsService {
@@ -95,8 +111,159 @@ class HealthMetricsService {
         endurance,
         intensity,
         efficiency
+      },
+      profile: {
+        discipline: this.calculateDisciplineLevel(consistency),
+        stamina: this.calculateStaminaLevel(endurance),
+        punch: this.calculatePunchLevel(intensity),
+        capacity: this.calculateCapacityLevel(load),
+        form: this.calculateFormLevel(efficiency)
       }
     };
+  }
+
+  // ==========================================
+  // LEVELING LOGIC (1-10)
+  // ==========================================
+
+  private calculateDisciplineLevel(detail: HealthDimensionDetail): LevelDetail {
+      // Metric: Avg Training Days / Week
+      // Formula: min(10, avgDays * 1.5)
+      // Ex: 6 days -> 9. 7 days -> 10. 3 days -> 4.5 -> 4.
+      const avgDaysStr = detail.components.find(c => c.name === 'Avg Days/Week')?.value.toString() || "0";
+      const avgDays = parseFloat(avgDaysStr);
+      let level = Math.min(10, Math.floor(avgDays * 1.5));
+      if (level < 1) level = 1;
+
+      // Prompt
+      const nextLevelDays = Math.ceil((level + 1) / 1.5);
+      const prompt = level >= 10 
+        ? "Maximum Discipline achieved! Keep the streak alive." 
+        : "Don't break the chain. Aim for 4 rides this week, even if they are short.";
+
+      return {
+          level,
+          currentValue: `${avgDays.toFixed(1)} days/wk`,
+          nextLevelCriteria: level >= 10 ? "Max" : `${nextLevelDays} days/wk`,
+          prompt
+      };
+  }
+
+  private calculateStaminaLevel(detail: HealthDimensionDetail): LevelDetail {
+      // Metric: Longest Ride duration
+      const durationStr = detail.components.find(c => c.name === 'This Week Longest')?.value.toString() || "0m";
+      const minutes = parseInt(durationStr.replace('m', '')) || 0;
+      
+      let level = 1 + Math.floor((minutes / 60) * 2);
+      if (level > 10) level = 10;
+      if (level < 1) level = 1;
+
+      // Formula: Minutes = (Level - 1) * 30.
+      const nextMin = ((level) * 30) + 30;
+      
+      return {
+          level,
+          currentValue: `${Math.floor(minutes/60)}h ${minutes%60}m`,
+          nextLevelCriteria: `${Math.floor(nextMin/60)}h ${nextMin%60}m`,
+          prompt: level >= 10 ? "Ultra endurance status." : "Extend your weekend long ride by ~30 minutes to unlock the next level."
+      };
+  }
+
+  private calculatePunchLevel(detail: HealthDimensionDetail): LevelDetail {
+      // Metric: Z4 %
+      const z4Str = detail.components.find(c => c.name === 'Z4+ (Hard)')?.value.toString() || "0%";
+      const z4Pct = parseFloat(z4Str);
+
+      // User: 5% = 4, 10% = 6, 15% = 8.
+      // Linear: Level = 2 + (Pct / 2.5)
+      // 5% -> 2 + 2 = 4. 
+      // 10% -> 2 + 4 = 6.
+      // 15% -> 2 + 6 = 8.
+      // 20% -> 2 + 8 = 10.
+      
+      let level = Math.floor(2 + (z4Pct / 2.5));
+      if (level > 10) level = 10;
+      if (level < 1) level = 1; // 0% -> 2? Maybe starts at 1.
+
+      const nextPct = (level - 1) * 2.5; // To get to next level?
+      // Inverse: Pct = (L - 2) * 2.5.
+      // To reach L+1: Pct_next = (L + 1 - 2) * 2.5 = (L - 1) * 2.5.
+      
+      return {
+          level,
+          currentValue: `${z4Pct.toFixed(1)}%`,
+          nextLevelCriteria: `${nextPct.toFixed(1)}%`,
+          prompt: level >= 10 ? "Elite intensity." : "You need more intensity. Try the '4x8m Threshold' workout this week."
+      };
+  }
+
+  private calculateCapacityLevel(detail: HealthDimensionDetail): LevelDetail {
+     // Metric: ACWR
+     // User: 1.0 (Maintenance) = 5. 1.2 (Growth) = 8. 0.8 = 2.
+     // Formula? 
+     // 1.0 -> 5. 
+     // 0.1 change = 1.5 levels?
+     // Linear map: Level = 5 + (Ratio - 1.0) * 15 ?
+     // 1.2 -> 5 + 0.2*15 = 8. Correct.
+     // 0.8 -> 5 - 0.2*15 = 2. Correct.
+     // 1.3 -> 9.5 (10).
+     // 1.45 (Danger) -> Maybe cap at 10 but warn? Or penalize?
+     // "Capacity" implies ability to absorb load. High ACWR means expanding capacity. 
+     // But safety limit? Let's implement raw growth potential for now.
+     
+     const ratioStr = detail.components.find(c => c.name === 'A:C Ratio')?.value.toString() || "0";
+     const ratio = parseFloat(ratioStr);
+     
+     let level = Math.floor(5 + (ratio - 1.0) * 15);
+     
+     // Cap for safety? If ratio > 1.5, maybe level drops?
+     // User logic said "Gamified Leveling". Usually higher is better until it breaks.
+     // Let's cap at 10.
+     if (level > 10) level = 10;
+     if (level < 1) level = 1;
+
+     const nextRatio = ((level + 1 - 5) / 15) + 1.0;
+
+     return {
+         level,
+         currentValue: ratio.toFixed(2),
+         nextLevelCriteria: nextRatio.toFixed(2),
+         prompt: level >= 10 ? "Max Growth Rate." : `Safely increase volume to ACWR ${nextRatio.toFixed(2)} for Level ${level + 1}.`
+     };
+  }
+
+  private calculateFormLevel(detail: HealthDimensionDetail): LevelDetail {
+      // Metric: EF Trend (Efficiency)
+      // Range: -5% to +5% usually.
+      // 0% (Flat) -> Level 5.
+      // +2% (Growth) -> Level 8.
+      // linear: Level = 5 + (Trend / 0.66) ?
+      // Trend 2 -> 5 + 3 = 8.
+      // Trend -2 -> 2.
+      // Value is "trendValue" which isn't directly exposed in components array as raw number easily?
+      // calculatedEfficiency returns "trend" string and suggestions.
+      // We need the raw trend %. 
+      // Re-extract from suggestion string? Or just recalculate?
+      // Component array has "Current EF" and "Baseline EF".
+      
+      const curr = parseFloat(detail.components[0].value.toString());
+      const base = parseFloat(detail.components[1].value.toString());
+      
+      let trendVal = 0;
+      if (base > 0) trendVal = ((curr - base) / base) * 100;
+      
+      let level = Math.floor(5 + (trendVal / 0.7)); // 2.1% -> +3 levels
+      if (level > 10) level = 10;
+      if (level < 1) level = 1;
+
+      const nextTrend = (level + 1 - 5) * 0.7;
+
+      return {
+          level,
+          currentValue: `${trendVal > 0 ? '+' : ''}${trendVal.toFixed(1)}%`,
+          nextLevelCriteria: `+${nextTrend.toFixed(1)}%`,
+          prompt: level >= 10 ? "Peak Efficiency." : "Focus on steady-state Zone 2 rides. Avoid coasting to improve your power-to-heart-rate efficiency."
+      };
   }
 
   // ==========================================
