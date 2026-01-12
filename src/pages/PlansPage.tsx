@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { addDays, isSameDay, startOfWeek } from 'date-fns';
-import { Calendar, Target, Clock, MapPin, Plus, Trash2, List, CalendarDays, MessageCircle } from 'lucide-react';
+import { addDays, isSameDay, startOfWeek, format } from 'date-fns';
+import { Target, Plus, Trash2, MessageCircle, ChevronDown } from 'lucide-react';
 
 import { Button } from '../components/common/Button';
 import { stravaCacheService } from '../services/stravaCacheService';
@@ -10,8 +10,7 @@ import type { StravaActivity, StravaAthlete, TrainingPlan, Workout, WeeklyStats 
 import { calculateWeeklyStats } from '../utils/dataProcessing';
 
 import { convertMarkdownToHtml } from '../utils/markdownToHtml';
-import { StatsSummary } from '../components/dashboard/StatsSummary';
-import WorkoutCard from '../components/plans/WorkoutCard';
+
 import WeeklyPlanView from '../components/plans/WeeklyPlanView';
 import PlanModificationModal from '../components/plans/PlanModificationModal';
 import { WorkoutDetailModal } from '../components/dashboard/WorkoutDetailModal';
@@ -39,10 +38,8 @@ export const PlansPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
   const [streak, setStreak] = useState<UserStreak | null>(null);
   const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
-  const [isOverviewExpanded, setIsOverviewExpanded] = useState(false);
   const [modificationModal, setModificationModal] = useState<{
     isOpen: boolean;
     planId: string | null;
@@ -676,13 +673,7 @@ Additional Preferences: ${preferences || 'None'}
           </Button>
         </div>
 
-        {/* Current Training Context */}
-        {weeklyStats && (
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-slate-50 mb-4">This Week</h2>
-            <StatsSummary weeklyStats={weeklyStats} streak={streak} />
-          </div>
-        )}
+
 
         {/* Plan Generation Form */}
         {showForm && (
@@ -832,14 +823,129 @@ Additional Preferences: ${preferences || 'None'}
           </div>
         )}
 
-        {/* Saved Plans */}
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">
-            Your Training Plans
-          </h2>
+        {/* Sticky Header and Active Plan View */}
+        {savedPlans.length > 0 && savedPlans.map((plan) => {
+            const totalWorkouts = plan.workouts.length;
+            const completedWorkouts = plan.workouts.filter(w => w.completed).length;
+            const completionPercentage = totalWorkouts > 0 ? Math.round((completedWorkouts / totalWorkouts) * 100) : 0;
+            const totalDistance = plan.workouts.reduce((sum, w) => sum + (w.distance || 0), 0);
+            
+            return (
+              <div key={plan.id} className="mb-24 relative">
+                 {/* Slim Sticky Header */}
+                 <div className="sticky top-0 z-40 bg-slate-950/80 backdrop-blur-md border-b border-white/5 py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 mb-6 shadow-2xl">
+                    <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
+                        {/* Left: Title + Badge */}
+                        <div className="flex items-center gap-4">
+                            <div>
+                                <h2 className="text-lg font-bold text-white leading-tight">{plan.name}</h2>
+                                <div className="flex items-center gap-2 text-xs text-slate-400">
+                                   <span className="bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/20">
+                                      {Math.ceil(totalWorkouts / 7)} Weeks
+                                   </span>
+                                   <span>
+                                     {format(plan.startDate, 'MMM d')} - {format(plan.endDate, 'MMM d')}
+                                   </span>
+                                </div>
+                            </div>
+                        </div>
 
-          {savedPlans.length === 0 ? (
-            <div className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 p-8 text-center">
+                        {/* Right: Progress + Info */}
+                        <div className="flex items-center gap-4">
+                             <div className="hidden md:block text-right">
+                                <div className="text-xs text-slate-400 mb-1">
+                                    {completedWorkouts}/{totalWorkouts} Complete
+                                </div>
+                                <div className="w-32 bg-slate-800 rounded-full h-1.5">
+                                    <div 
+                                        className="bg-orange-500 h-1.5 rounded-full transition-all duration-500" 
+                                        style={{ width: `${completionPercentage}%` }}
+                                    />
+                                </div>
+                             </div>
+
+                             <div className="flex items-center gap-2 border-l border-white/10 pl-4">
+                                <button
+                                    onClick={() => deletePlan(plan.id)}
+                                    className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-full transition-colors"
+                                    title="Delete Plan"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                    onClick={() => togglePlan(plan.id)}
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                                        expandedPlan === plan.id 
+                                        ? 'bg-orange-500 text-white' 
+                                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                                    }`}
+                                >
+                                    <span>Plan Info</span>
+                                    <ChevronDown className={`w-4 h-4 transition-transform ${expandedPlan === plan.id ? 'rotate-180' : ''}`} />
+                                </button>
+                             </div>
+                        </div>
+                    </div>
+
+                    {/* Collapsible Info Drawer (Absolute positioned below header) */}
+                    <div className={`overflow-hidden transition-all duration-300 bg-slate-900 border-b border-white/5 ${expandedPlan === plan.id ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
+                         <div className="max-w-7xl mx-auto px-4 py-6">
+                            <div className="grid md:grid-cols-3 gap-8">
+                                <div className="md:col-span-2 prose prose-sm prose-invert">
+                                    <h4 className="text-slate-400 font-medium mb-2 uppercase tracking-wider text-xs">Description</h4>
+                                    <div 
+                                       dangerouslySetInnerHTML={{ __html: convertMarkdownToHtml(plan.description || '') }} 
+                                       className="text-slate-300 [&_p]:text-slate-300 [&_li]:text-slate-300 [&_strong]:text-white [&_h1]:text-white [&_h2]:text-white [&_h3]:text-white"
+                                    />
+                                </div>
+                                <div className="bg-slate-950/50 rounded-lg p-4 border border-white/5 h-fit">
+                                    <h4 className="text-slate-400 font-medium mb-4 uppercase tracking-wider text-xs">At a Glance</h4>
+                                    <div className="space-y-3 text-sm">
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-500">Total Distance</span>
+                                            <span className="text-slate-300">{(totalDistance / 1609.34).toFixed(1)} mi</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-500">Avg. Intensity</span>
+                                            <span className="text-slate-300 capitalize">Moderate</span>
+                                        </div>
+                                         <div className="flex justify-between">
+                                            <span className="text-slate-500">Source</span>
+                                            <span className="text-blue-400 flex items-center gap-1">
+                                                <MessageCircle className="w-3 h-3" /> AI Chat
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                         </div>
+                    </div>
+                 </div>
+
+                 {/* Main Content Area */}
+                 <div className="relative z-0">
+                    <WeeklyPlanView
+                        workouts={plan.workouts}
+                        startDate={plan.startDate}
+                        onToggleComplete={handleToggleWorkoutComplete}
+                        onStatusChange={handleUpdateStatus}
+                        onDelete={handleDeleteWorkout}
+                        onAddWorkout={(date) => handleAddWorkout(plan.id, date)}
+                        onModifyWeek={(weekNumber, weekWorkouts) => handleOpenModifyWeek(plan.id, weekNumber, weekWorkouts)}
+                        onWorkoutsExported={handleWorkoutsExported}
+                        onMoveWorkout={handleMoveWorkout}
+                        onWorkoutClick={setSelectedWorkout}
+                        weeklyStats={weeklyStats}
+                        streak={streak}
+                    />
+                 </div>
+              </div>
+            );
+        })}
+
+        {/* Empty State */}
+          {savedPlans.length === 0 && (
+            <div className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 p-8 text-center mt-8">
               <div className="text-slate-400 text-6xl mb-4">🚴</div>
               <h3 className="text-lg font-semibold text-slate-50 mb-2">
                 No Training Plans Yet
@@ -849,178 +955,13 @@ Additional Preferences: ${preferences || 'None'}
               </p>
               <Button
                 onClick={() => setShowForm(true)}
-                className="flex items-center space-x-2"
+                className="flex items-center justify-center space-x-2 mx-auto"
               >
                 <Plus className="w-4 h-4" />
                 <span>Create Your First Plan</span>
               </Button>
             </div>
-          ) : (
-            <div className="space-y-6">
-              {savedPlans.map((plan) => {
-                const completedWorkouts = plan.workouts.filter(w => w.completed).length;
-                const totalWorkouts = plan.workouts.length;
-                const completionPercentage = totalWorkouts > 0 ? Math.round((completedWorkouts / totalWorkouts) * 100) : 0;
-                const totalDistance = plan.workouts.reduce((sum, w) => sum + (w.distance || 0), 0);
-                const totalHours = plan.workouts.reduce((sum, w) => sum + w.duration, 0) / 60;
-
-                return (
-                  <div key={plan.id} className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 overflow-hidden">
-                    <div className="p-6">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <h3 className="text-xl font-bold text-slate-50">
-                              {plan.name}
-                            </h3>
-                            {plan.sourceChatSessionId && (
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                                <MessageCircle className="w-3 h-3 mr-1" />
-                                From Chat
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex flex-wrap items-center gap-4 text-sm text-slate-400 mb-4">
-                            <div className="flex items-center">
-                              <Calendar className="w-4 h-4 mr-1" />
-                              {plan.startDate.toLocaleDateString()} - {plan.endDate.toLocaleDateString()}
-                            </div>
-                            <div className="flex items-center">
-                              <Clock className="w-4 h-4 mr-1" />
-                              {totalWorkouts} workouts, {totalHours.toFixed(1)}h total
-                            </div>
-                            <div className="flex items-center">
-                              <MapPin className="w-4 h-4 mr-1" />
-                              {(totalDistance / 1609.34).toFixed(1)} mi
-                            </div>
-                          </div>
-
-                          {totalWorkouts > 0 && (
-                            <div>
-                              <div className="flex items-center justify-between text-sm mb-2">
-                                <span className="text-slate-300 font-medium">Progress</span>
-                                <span className="text-slate-400">{completedWorkouts} / {totalWorkouts} workouts completed</span>
-                              </div>
-                              <div className="w-full bg-slate-800 rounded-full h-2">
-                                <div
-                                  className="bg-orange-500 h-2 rounded-full transition-all"
-                                  style={{ width: `${completionPercentage}%` }}
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex items-center space-x-2 ml-4">
-                          <button
-                            onClick={() => togglePlan(plan.id)}
-                            className="p-2 text-slate-400 hover:text-slate-200 transition-colors"
-                            title={expandedPlan === plan.id ? "Collapse" : "Expand"}
-                          >
-                            <svg
-                              className={`w-5 h-5 transition-transform ${expandedPlan === plan.id ? 'rotate-180' : ''}`}
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => deletePlan(plan.id)}
-                            className="p-2 text-slate-400 hover:text-red-400 transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {expandedPlan === plan.id && (
-                        <div className="mt-6 space-y-6">
-                          {plan.description && (
-                            <div className="bg-slate-900/60 backdrop-blur-md rounded-lg p-6 border border-white/5">
-                              <h4 className="font-semibold text-slate-100 mb-3">Plan Overview</h4>
-                              <div className={`prose prose-sm prose-invert max-w-none text-slate-300 [&>p]:text-slate-300 [&>ul>li]:text-slate-300 [&>strong]:text-white transition-all duration-300 ${isOverviewExpanded ? '' : 'line-clamp-3'}`}
-                                style={{ color: '#cbd5e1' }}
-                                dangerouslySetInnerHTML={{
-                                  __html: convertMarkdownToHtml(plan.description)
-                                }}
-                              />
-                                <button
-                                  onClick={() => setIsOverviewExpanded(!isOverviewExpanded)}
-                                  className="text-orange-400 hover:text-orange-300 text-sm font-medium mt-2 inline-flex items-center"
-                                >
-                                  {isOverviewExpanded ? 'Show Less' : 'Read More'}
-                                </button>
-                            </div>
-                          )}
-
-                          {totalWorkouts > 0 && (
-                            <div>
-                              <div className="flex items-center justify-between mb-4">
-                                <h4 className="font-semibold text-slate-50">Workouts</h4>
-                                <div className="flex items-center space-x-2">
-                                  <button
-                                    onClick={() => setViewMode('calendar')}
-                                    className={`p-2 rounded-lg transition-colors ${viewMode === 'calendar'
-                                      ? 'bg-orange-500/10 text-orange-400'
-                                      : 'text-slate-400 hover:text-slate-200'
-                                      }`}
-                                    title="Calendar view"
-                                  >
-                                    <CalendarDays className="w-5 h-5" />
-                                  </button>
-                                  <button
-                                    onClick={() => setViewMode('list')}
-                                    className={`p-2 rounded-lg transition-colors ${viewMode === 'list'
-                                      ? 'bg-orange-500/10 text-orange-400'
-                                      : 'text-slate-400 hover:text-slate-200'
-                                      }`}
-                                    title="List view"
-                                  >
-                                    <List className="w-5 h-5" />
-                                  </button>
-                                </div>
-                              </div>
-
-                              {viewMode === 'calendar' ? (
-                                <WeeklyPlanView
-                                  workouts={plan.workouts}
-                                  startDate={plan.startDate}
-                                  onToggleComplete={handleToggleWorkoutComplete}
-                                  onStatusChange={handleUpdateStatus}
-                                  onDelete={handleDeleteWorkout}
-                                  onAddWorkout={(date) => handleAddWorkout(plan.id, date)}
-                                  onModifyWeek={(weekNumber, weekWorkouts) => handleOpenModifyWeek(plan.id, weekNumber, weekWorkouts)}
-                                  onWorkoutsExported={handleWorkoutsExported}
-                                  onMoveWorkout={handleMoveWorkout}
-                                  onWorkoutClick={setSelectedWorkout}
-                                />
-                              ) : (
-                                <div className="space-y-3">
-                                  {plan.workouts
-                                    .sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime())
-                                    .map(workout => (
-                                      <WorkoutCard
-                                        key={workout.id}
-                                        workout={workout}
-                                        onStatusChange={handleUpdateStatus}
-                                        onWorkoutExported={handleWorkoutsExported}
-                                        onClick={() => setSelectedWorkout(workout)}
-                                      />
-                                    ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
           )}
-        </div>
       </div>
 
       <PlanModificationModal

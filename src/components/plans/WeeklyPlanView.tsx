@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
-import { Workout } from '../../types';
+import { useMemo, useState, useEffect, useRef } from 'react';
+import { Workout, WeeklyStats } from '../../types';
 import WorkoutCard from './WorkoutCard';
-import { addDays, startOfWeek, format, isSameDay } from 'date-fns';
+import { addDays, startOfWeek, format, isSameDay, isWithinInterval, endOfWeek } from 'date-fns';
 import { Wand2, Calendar, Plus } from 'lucide-react';
 import { Button } from '../common/Button';
 import { googleCalendarService } from '../../services/googleCalendarService';
@@ -20,6 +20,8 @@ import { DraggableWorkoutCard } from './DraggableWorkoutCard';
 import { DroppableDayColumn } from './DroppableDayColumn';
 import { ConflictResolutionModal } from './ConflictResolutionModal';
 import { analytics } from '../../lib/analytics';
+import { WeekGroup } from './WeekGroup';
+import { UserStreak } from '../../services/streakService';
 
 interface WeeklyPlanViewProps {
   workouts: Workout[];
@@ -32,6 +34,8 @@ interface WeeklyPlanViewProps {
   onWorkoutsExported?: () => void;
   onMoveWorkout?: (workoutId: string, newDate: Date, strategy: 'move' | 'swap' | 'replace') => void;
   onWorkoutClick?: (workout: Workout) => void;
+  weeklyStats?: WeeklyStats | null;
+  streak?: UserStreak | null;
 }
 
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -46,7 +50,9 @@ export default function WeeklyPlanView({
   onModifyWeek,
   onWorkoutsExported,
   onMoveWorkout,
-  onWorkoutClick
+  onWorkoutClick,
+  weeklyStats,
+  streak
 }: WeeklyPlanViewProps) {
   const [exportingWeek, setExportingWeek] = useState<number | null>(null);
   const [activeDragItem, setActiveDragItem] = useState<Workout | null>(null);
@@ -61,6 +67,9 @@ export default function WeeklyPlanView({
     targetWorkout: null,
     targetDate: null,
   });
+
+  const [expandedWeekIndex, setExpandedWeekIndex] = useState<number | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Configure sensors for mobile/desktop support
   const sensors = useSensors(
@@ -92,6 +101,8 @@ export default function WeeklyPlanView({
 
     while (currentWeek <= weekEnd) {
       const weekDays = [];
+      const currentWeekEnd = endOfWeek(currentWeek, { weekStartsOn: 1 });
+      
       for (let i = 0; i < 7; i++) {
         const day = addDays(currentWeek, i);
         const dayWorkouts = workouts.filter(w =>
@@ -104,6 +115,7 @@ export default function WeeklyPlanView({
       }
       weeksArray.push({
         weekStart: currentWeek,
+        weekEnd: currentWeekEnd,
         days: weekDays,
       });
       currentWeek = addDays(currentWeek, 7);
@@ -111,6 +123,36 @@ export default function WeeklyPlanView({
 
     return weeksArray;
   }, [workouts]);
+
+  // Determine current week and auto-expand
+  useEffect(() => {
+    const today = new Date();
+    const currentWeekIdx = weeks.findIndex(w => 
+      isWithinInterval(today, { start: w.weekStart, end: w.weekEnd })
+    );
+
+    if (currentWeekIdx !== -1) {
+      // Only set if we haven't manually interacted yet? Or always on load.
+      // Since weeks is memoized, this might run once or when workouts change.
+      // Better to have a separate 'initialized' state if we don't want to override user interaction.
+      // But user requirement says "When the user loads the page".
+      // Let's just set it.
+      setExpandedWeekIndex(currentWeekIdx);
+      
+      // Auto-scroll after a short delay to allow rendering
+      setTimeout(() => {
+        const element = document.getElementById(`week-${currentWeekIdx + 1}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 500);
+    } else {
+       if (expandedWeekIndex === null && weeks.length > 0) {
+           setExpandedWeekIndex(0);
+       }
+    }
+  }, [weeks.length]); // Depend on weeks length so it runs when data is ready.
+
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
@@ -240,98 +282,116 @@ export default function WeeklyPlanView({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="space-y-8">
+      <div className="space-y-4" ref={scrollRef}>
         {weeks.map((week, weekIndex) => {
           const weekWorkouts = week.days.flatMap(day => day.workouts);
           const alreadyExportedCount = weekWorkouts.filter(w => w.google_calendar_event_id).length;
           const isExporting = exportingWeek === weekIndex;
+          
+          const today = new Date();
+          let status: 'completed' | 'current' | 'upcoming' = 'upcoming';
+          if (isWithinInterval(today, { start: week.weekStart, end: week.weekEnd })) {
+            status = 'current';
+          } else if (today > week.weekEnd) {
+            status = 'completed';
+          }
 
           return (
-            <div key={weekIndex} className="bg-slate-900/60 backdrop-blur-md rounded-lg border border-white/5 p-6">
-              {/* Header */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-50">
-                    Week {weekIndex + 1} - {format(week.weekStart, 'MMM d, yyyy')}
-                  </h3>
-                  {alreadyExportedCount > 0 && (
-                    <p className="text-xs text-slate-500 mt-1">
-                      {alreadyExportedCount} of {weekWorkouts.length} workout(s) already in calendar
-                    </p>
-                  )}
-                </div>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
-                  {weekWorkouts.length > 0 && (
-                    <Button
-                      variant="secondary"
-                      onClick={() => handleExportWeek(weekIndex, weekWorkouts)}
-                      loading={isExporting}
-                      className="flex items-center justify-center space-x-2"
-                    >
-                      <Calendar className="w-4 h-4" />
-                      <span>Export to Calendar</span>
-                    </Button>
-                  )}
-                  {onModifyWeek && weekWorkouts.length > 0 && (
-                    <Button
-                      variant="secondary"
-                      onClick={() => onModifyWeek(weekIndex + 1, weekWorkouts)}
-                      className="flex items-center justify-center space-x-2"
-                    >
-                      <Wand2 className="w-4 h-4" />
-                      <span>Modify Week</span>
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              {/* Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
-                {week.days.map((day, dayIndex) => (
-                  <DroppableDayColumn
-                    key={dayIndex}
-                    date={day.date}
-                    className="flex flex-col"
-                  >
-                    <div className="text-sm font-medium text-slate-300 mb-2 text-center pointer-events-none select-none">
-                      {DAYS_OF_WEEK[dayIndex]}
-                      <div className="text-xs text-slate-500">
-                        {format(day.date, 'MMM d')}
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 flex-1 min-h-[60px] md:min-h-[100px]">
-                      {day.workouts.length > 0 ? (
-                        day.workouts.map(workout => (
-                          <div key={workout.id} className="w-full">
-                            <DraggableWorkoutCard
-                              workout={workout}
-                              onToggleComplete={onToggleComplete}
-                              onStatusChange={onStatusChange}
-                              onDelete={onDelete}
-                              onClick={() => onWorkoutClick?.(workout)}
-                            />
-                          </div>
-                        ))
-                      ) : (
-                        <div className="h-full min-h-[60px] md:min-h-[80px] bg-transparent rounded-lg border-2 border-dashed border-white/5 flex flex-col items-center justify-center space-y-2 p-2 group hover:border-blue-500/50 hover:bg-blue-500/5 transition-colors">
-                          <span className="text-xs text-slate-500 group-hover:text-blue-400 pointer-events-none">Rest Day</span>
-                          {onAddWorkout && (
-                            <button
-                              onClick={() => onAddWorkout(day.date)}
-                              className="p-1 rounded-full bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors opacity-0 group-hover:opacity-100"
-                              title="Add Workout"
-                            >
-                              <Plus className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
+            <WeekGroup
+              key={weekIndex}
+              weekNumber={weekIndex + 1}
+              status={status}
+              dateRange={{ start: week.weekStart, end: week.weekEnd }}
+              workouts={weekWorkouts}
+              isOpen={expandedWeekIndex === weekIndex}
+              onToggle={() => setExpandedWeekIndex(expandedWeekIndex === weekIndex ? null : weekIndex)}
+              weeklyStats={status === 'current' ? weeklyStats : null}
+              streak={status === 'current' ? streak : null}
+            >
+              {/* Inner Content (Actions + Grid) */}
+              <div className="space-y-6">
+                 {/* Week Actions */}
+                 <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/5 pb-4">
+                    <div className="text-sm text-slate-400">
+                      {alreadyExportedCount > 0 && (
+                        <span>{alreadyExportedCount}/{weekWorkouts.length} synced to calendar</span>
                       )}
                     </div>
-                  </DroppableDayColumn>
-                ))}
+                    <div className="flex items-center space-x-2">
+                        {weekWorkouts.length > 0 && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleExportWeek(weekIndex, weekWorkouts)}
+                          loading={isExporting}
+                          className="flex items-center space-x-2 text-xs"
+                        >
+                          <Calendar className="w-3 h-3" />
+                          <span>Sync to Google</span>
+                        </Button>
+                      )}
+                      {onModifyWeek && weekWorkouts.length > 0 && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => onModifyWeek(weekIndex + 1, weekWorkouts)}
+                          className="flex items-center space-x-2 text-xs"
+                        >
+                          <Wand2 className="w-3 h-3" />
+                          <span>AI Coach Adjust</span>
+                        </Button>
+                      )}
+                    </div>
+                 </div>
+
+                {/* Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
+                  {week.days.map((day, dayIndex) => (
+                    <DroppableDayColumn
+                      key={dayIndex}
+                      date={day.date}
+                      className="flex flex-col"
+                    >
+                      <div className="text-sm font-medium text-slate-300 mb-2 text-center pointer-events-none select-none">
+                        {DAYS_OF_WEEK[dayIndex]}
+                        <div className="text-xs text-slate-500">
+                          {format(day.date, 'MMM d')}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 flex-1 min-h-[60px] md:min-h-[100px]">
+                        {day.workouts.length > 0 ? (
+                          day.workouts.map(workout => (
+                            <div key={workout.id} className="w-full">
+                              <DraggableWorkoutCard
+                                workout={workout}
+                                onToggleComplete={onToggleComplete}
+                                onStatusChange={onStatusChange}
+                                onDelete={onDelete}
+                                onClick={() => onWorkoutClick?.(workout)}
+                              />
+                            </div>
+                          ))
+                        ) : (
+                          <div className="h-full min-h-[60px] md:min-h-[80px] bg-transparent rounded-lg border-2 border-dashed border-white/5 flex flex-col items-center justify-center space-y-2 p-2 group hover:border-blue-500/50 hover:bg-blue-500/5 transition-colors">
+                            <span className="text-xs text-slate-500 group-hover:text-blue-400 pointer-events-none">Rest Day</span>
+                            {onAddWorkout && (
+                              <button
+                                onClick={() => onAddWorkout(day.date)}
+                                className="p-1 rounded-full bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors opacity-0 group-hover:opacity-100"
+                                title="Add Workout"
+                              >
+                                <Plus className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </DroppableDayColumn>
+                  ))}
+                </div>
               </div>
-            </div>
+            </WeekGroup>
           );
         })}
       </div>
