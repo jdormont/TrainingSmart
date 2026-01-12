@@ -3,7 +3,6 @@ import { addDays, isSameDay, startOfWeek } from 'date-fns';
 import { Calendar, Target, Clock, MapPin, Plus, Trash2, List, CalendarDays, MessageCircle } from 'lucide-react';
 
 import { Button } from '../components/common/Button';
-import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { stravaCacheService } from '../services/stravaCacheService';
 import { openaiService } from '../services/openaiApi';
 import { trainingPlansService } from '../services/trainingPlansService';
@@ -25,6 +24,7 @@ type AiWorkout = Partial<Workout> & { dayOfWeek?: number; week?: number };
 
 import { useQueryClient } from '@tanstack/react-query';
 import { usePlanData } from '../hooks/usePlanData';
+import { PlansSkeleton } from '../components/skeletons/PlansSkeleton';
 
 export const PlansPage: React.FC = () => {
   const [athlete, setAthlete] = useState<StravaAthlete | null>(null);
@@ -646,11 +646,7 @@ Additional Preferences: ${preferences || 'None'}
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <LoadingSpinner size="lg" className="text-orange-500" />
-      </div>
-    );
+    return <PlansSkeleton />;
   }
 
   return (

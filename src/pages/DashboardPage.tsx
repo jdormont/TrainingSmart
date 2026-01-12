@@ -29,10 +29,10 @@ import { AnalyticsContainer } from '../components/dashboard/AnalyticsContainer';
 import { ActivityCard } from '../components/dashboard/ActivityCard';
 import { WorkoutDetailModal } from '../components/dashboard/WorkoutDetailModal';
 import { ActivityDetailModal } from '../components/dashboard/ActivityDetailModal';
-import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { IntakeWizard } from '../components/onboarding/IntakeWizard'; // Import IntakeWizard
 import { getUserOnboardingStatus } from '../services/onboardingService';
 import { SmartWorkoutPreview } from '../components/dashboard/SmartWorkoutPreview';
+import { DashboardSkeleton } from '../components/skeletons/DashboardSkeleton';
 import { ROUTES } from '../utils/constants';
 import { analytics } from '../lib/analytics';
 import { Button } from '../components/common/Button';
@@ -64,7 +64,7 @@ export const DashboardPage: React.FC = () => {
   const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
   const [selectedActivity, setSelectedActivity] = useState<StravaActivity | null>(null);
   const [showAllActivities, setShowAllActivities] = useState(false);
-  const [displayedActivities, setDisplayedActivities] = useState<StravaActivity[]>([]);
+  // const [displayedActivities, setDisplayedActivities] = useState<StravaActivity[]>([]); // Removed state
   const [showWizard, setShowWizard] = useState(false);
   const [insightLoading, setInsightLoading] = useState(false);
 
@@ -89,16 +89,11 @@ export const DashboardPage: React.FC = () => {
   const error = queryError ? (queryError as Error).message : null;
   const INITIAL_ACTIVITIES_COUNT = 5;
 
-  // Handle displayed activities update
-  useEffect(() => {
-    if (activities) {
-      if (showAllActivities) {
-        setDisplayedActivities(activities);
-      } else {
-        setDisplayedActivities(activities.slice(0, INITIAL_ACTIVITIES_COUNT));
-      }
-    }
-  }, [showAllActivities, activities]);
+  // Derived displayed activities
+  const displayedActivities = React.useMemo(() => {
+    if (!activities) return [];
+    return showAllActivities ? activities : activities.slice(0, INITIAL_ACTIVITIES_COUNT);
+  }, [activities, showAllActivities]);
 
   // Handle Onboarding Check (Separate side effect)
   const isDemo = searchParams.get('demo') === 'true';
@@ -208,19 +203,7 @@ export const DashboardPage: React.FC = () => {
 
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <LoadingSpinner size="lg" className="text-orange-500 mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
-            Loading Your Training Data
-          </h2>
-          <p className="text-gray-600">
-            Fetching your latest activities from Strava...
-          </p>
-        </div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   if (error) {
