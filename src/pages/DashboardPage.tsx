@@ -3,16 +3,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useDashboardData } from '../hooks/useDashboardData';
 
-import { stravaCacheService } from '../services/stravaCacheService';
-import { ouraApi } from '../services/ouraApi';
 import { weeklyInsightService } from '../services/weeklyInsightService';
-import { trainingPlansService } from '../services/trainingPlansService';
 import {
   StravaActivity,
-  StravaAthlete,
-  Workout,
-  UserStreak,
-  DailyMetric
+  Workout
 } from '../types';
 import {
   Activity as ActivityIcon,
@@ -41,12 +35,7 @@ import { StreakWidget } from '../components/dashboard/StreakWidget';
 import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
 import { WorkoutAdjustmentChips } from '../components/dashboard/WorkoutAdjustmentChips';
 
-interface AuthError {
-  message?: string;
-  response?: {
-    status?: number;
-  };
-}
+
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
