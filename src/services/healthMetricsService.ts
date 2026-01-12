@@ -1,22 +1,22 @@
-// Health Metrics Service - Calculates holistic health scores
+// Health Metrics Service - Calculates holistic health scores (Dynamic, Relative Model)
 import type { StravaActivity, StravaAthlete, OuraSleepData, OuraReadinessData } from '../types';
-import { startOfWeek, subWeeks, differenceInDays } from 'date-fns';
+import { startOfWeek, subWeeks, differenceInDays, isSameDay, startOfDay } from 'date-fns';
 
 export interface HealthMetrics {
-  cardiovascular: number;
-  endurance: number;
-  recovery: number;
-  sleep: number;
-  trainingBalance: number;
+  load: number;        // replacing trainingBalance
+  consistency: number; // replacing recovery
+  endurance: number;   // same name, new logic
+  intensity: number;   // replacing cardiovascular
+  efficiency: number;  // replacing sleep
   overallScore: number;
   lastUpdated: Date;
   dataQuality: 'excellent' | 'good' | 'limited';
   details: {
-    cardiovascular: HealthDimensionDetail;
+    load: HealthDimensionDetail;
+    consistency: HealthDimensionDetail;
     endurance: HealthDimensionDetail;
-    recovery: HealthDimensionDetail;
-    sleep: HealthDimensionDetail;
-    trainingBalance: HealthDimensionDetail;
+    intensity: HealthDimensionDetail;
+    efficiency: HealthDimensionDetail;
   };
 }
 
@@ -25,7 +25,7 @@ export interface HealthDimensionDetail {
   components: Array<{
     name: string;
     value: number | string;
-    contribution: number; // points contributed to total score
+    contribution: number; // points contributed to total score or just for display
   }>;
   trend: 'improving' | 'stable' | 'declining';
   suggestion: string;
@@ -36,632 +36,451 @@ class HealthMetricsService {
   calculateHealthMetrics(
     _athlete: StravaAthlete,
     activities: StravaActivity[],
-    sleepData: OuraSleepData[] = [],
-    readinessData: OuraReadinessData[] = []
+    _sleepData: OuraSleepData[] = [],     // Kept for signature compatibility but unused for core calc now
+    _readinessData: OuraReadinessData[] = [] // Kept for signature compatibility
   ): HealthMetrics {
-    console.log('Calculating health metrics...');
+    console.log('Calculating dynamic health metrics...');
 
-    // Filter to last 4 weeks of data
-    const fourWeeksAgo = subWeeks(new Date(), 4);
+    // 1. DATA PREP
+    // We need up to 8 weeks for Consistency, 42 days for Load (Chronic).
+    // Let's filter generally to last 60 days to cover 8 weeks.
+    const eightWeeksAgo = subWeeks(new Date(), 8);
     const recentActivities = activities.filter(a =>
-      new Date(a.start_date_local) >= fourWeeksAgo
-    );
+      new Date(a.start_date_local) >= eightWeeksAgo
+    ).sort((a, b) => new Date(b.start_date_local).getTime() - new Date(a.start_date_local).getTime()); // Newest first
 
-    const recentSleep = sleepData.filter(s =>
-      new Date(s.day) >= fourWeeksAgo
-    );
-
-    const recentReadiness = readinessData.filter(r =>
-      new Date(r.day) >= fourWeeksAgo
-    );
-
-    // Calculate each dimension
-    const cardiovascular = this.calculateCardiovascular(recentActivities, recentSleep);
+    // 2. CALCULATE AXES
+    const load = this.calculateLoad(recentActivities);
+    const consistency = this.calculateConsistency(recentActivities);
     const endurance = this.calculateEndurance(recentActivities);
-    const recovery = this.calculateRecovery(recentReadiness, recentActivities);
-    const sleep = this.calculateSleep(recentSleep);
-    const trainingBalance = this.calculateTrainingBalance(recentActivities);
+    const intensity = this.calculateIntensity(recentActivities);
+    const efficiency = this.calculateEfficiency(recentActivities);
 
-    // Calculate dynamic weights based on available data
+    // 3. OVERALL SCORE
+    // Weighted average of the 5 axes. Currently equal weights implied, but can be adjusted.
     const weights = {
-      cardiovascular: 0.25,
-      endurance: 0.25,
-      recovery: 0.2,
-      sleep: 0.15,
-      trainingBalance: 0.15
+      load: 0.2,
+      consistency: 0.2,
+      endurance: 0.2,
+      intensity: 0.2,
+      efficiency: 0.2
     };
 
-    let totalWeight = 0;
-    let weightedSum = 0;
+    const weightedSum =
+      (load.score * weights.load) +
+      (consistency.score * weights.consistency) +
+      (endurance.score * weights.endurance) +
+      (intensity.score * weights.intensity) +
+      (efficiency.score * weights.efficiency);
 
-    // Helper to add component if available
-    const addComponent = (score: number, weight: number, isAvailable: boolean) => {
-      if (isAvailable) {
-        weightedSum += score * weight;
-        totalWeight += weight;
-      }
-    };
+    const overallScore = Math.round(weightedSum);
 
-    // Check availability
-    const hasStrava = recentActivities.length > 0;
-    const hasSleep = recentSleep.length > 0;
-    const hasReadiness = recentReadiness.length > 0;
-
-    // Components dependent primarily on Strava (always assumed available if we're generating this)
-    addComponent(cardiovascular.score, weights.cardiovascular, true); // Cardio can fallback to speed variance
-    addComponent(endurance.score, weights.endurance, true);
-    addComponent(trainingBalance.score, weights.trainingBalance, true);
-
-    // Components dependent on extra data
-    // If we have readiness data OR we returned a score > 0 (meaning we estimated it), include it.
-    // However, estimateRecoveryFromTraining returns a max of 75, so it's safe to include.
-    // Let's use the hasReadiness flag or if we have enough activity data to estimate.
-    addComponent(recovery.score, weights.recovery, hasReadiness || hasStrava);
-
-    // Sleep strictly requires Oura data to be meaningful
-    // If no sleep data, we exclude this weight entirely from the denominator
-    addComponent(sleep.score, weights.sleep, hasSleep);
-
-    // Recalculate Overall Score
-    // If totalWeight is 0 (shouldn't happen with Strava data), default to 0
-    const overallScore = totalWeight > 0
-      ? Math.round(weightedSum / totalWeight)
-      : 0;
-
-    // Determine data quality
-    const dataQuality = this.assessDataQuality(recentActivities, recentSleep, recentReadiness);
+    // 4. DATA QUALITY
+    // Check if we have enough history for the "Chronic" and "Baseline" calculations.
+    // Ideally need 42 days (6 weeks) for Load, 4 weeks for others.
+    const dataQuality = this.assessDataQuality(recentActivities);
 
     return {
-      cardiovascular: cardiovascular.score,
+      load: load.score,
+      consistency: consistency.score,
       endurance: endurance.score,
-      recovery: recovery.score,
-      sleep: sleep.score,
-      trainingBalance: trainingBalance.score,
+      intensity: intensity.score,
+      efficiency: efficiency.score,
       overallScore,
       lastUpdated: new Date(),
       dataQuality,
       details: {
-        cardiovascular,
+        load,
+        consistency,
         endurance,
-        recovery,
-        sleep,
-        trainingBalance
+        intensity,
+        efficiency
       }
     };
   }
 
-  // Calculate cardiovascular fitness score
-  private calculateCardiovascular(activities: StravaActivity[], sleepData: OuraSleepData[]): HealthDimensionDetail {
-    const components = [];
-    let totalScore = 0;
+  // ==========================================
+  // 1. LOAD (ACWR) - "The Growth Tax"
+  // ==========================================
+  private calculateLoad(activities: StravaActivity[]): HealthDimensionDetail {
+    // Acute: Last 7 days duration
+    // Chronic: Last 42 days daily average duration * 7
+    // Metrics: Duration (moving_time) in minutes.
 
-    // Track maximum possible score based on available data
-    let maxPossibleScore = 0;
+    const today = startOfDay(new Date());
+    const dayInMs = 86400000;
 
-    // Average speed trends (40 points)
-    if (activities.length >= 4) {
-      maxPossibleScore += 40;
-      const speeds = activities.map(a => a.average_speed * 2.237); // Convert to mph
-      const avgSpeed = speeds.reduce((sum, s) => sum + s, 0) / speeds.length;
-      const recentSpeeds = speeds.slice(0, Math.floor(speeds.length / 2));
-      const olderSpeeds = speeds.slice(Math.floor(speeds.length / 2));
+    const getActivityLoad = (act: StravaActivity) => act.moving_time / 60; // minutes
 
-      const recentAvg = recentSpeeds.reduce((sum, s) => sum + s, 0) / recentSpeeds.length;
-      const olderAvg = olderSpeeds.reduce((sum, s) => sum + s, 0) / olderSpeeds.length;
-
-      const speedImprovement = ((recentAvg - olderAvg) / olderAvg) * 100;
-      const speedScore = Math.min(40, Math.max(0, 20 + speedImprovement * 2));
-
-      components.push({
-        name: 'Average Speed',
-        value: `${avgSpeed.toFixed(1)} mph`,
-        contribution: Math.round(speedScore)
-      });
-      totalScore += speedScore;
-    }
-
-    // Heart rate efficiency (30 points) - estimated from speed consistency
-    if (activities.length > 0) {
-      maxPossibleScore += 30;
-      const heartRateActivities = activities.filter(a => a.average_heartrate && a.average_heartrate > 0);
-      if (heartRateActivities.length > 0) {
-        const avgHR = heartRateActivities.reduce((sum, a) => sum + (a.average_heartrate || 0), 0) / heartRateActivities.length;
-        // Assume good HR efficiency if average is reasonable (120-160 for cycling)
-        const hrScore = avgHR >= 120 && avgHR <= 160 ? 25 : 15;
-
-        components.push({
-          name: 'Heart Rate Efficiency',
-          value: `${Math.round(avgHR)} bpm avg`,
-          contribution: hrScore
-        });
-        totalScore += hrScore;
-      } else {
-        // Estimate from speed consistency
-        const speeds = activities.map(a => a.average_speed);
-        const speedVariance = this.calculateVariance(speeds);
-        const consistencyScore = Math.max(0, 25 - speedVariance * 10);
-
-        components.push({
-          name: 'Performance Consistency',
-          value: 'Estimated from speed',
-          contribution: Math.round(consistencyScore)
-        });
-        totalScore += consistencyScore;
-      }
-    }
-
-    // Resting heart rate trends (30 points)
-    if (sleepData.length > 0) {
-      maxPossibleScore += 30; // Only add this to max potential if we actually have the data
-      const restingHRs = sleepData
-        .filter(s => s.lowest_heart_rate && s.lowest_heart_rate > 0)
-        .map(s => s.lowest_heart_rate);
-
-      if (restingHRs.length > 0) {
-        const avgRestingHR = restingHRs.reduce((sum, hr) => sum + hr, 0) / restingHRs.length;
-        // Lower resting HR generally indicates better cardiovascular fitness
-        const restingHRScore = Math.max(0, Math.min(30, 50 - avgRestingHR * 0.4));
-
-        components.push({
-          name: 'Resting Heart Rate',
-          value: `${Math.round(avgRestingHR)} bpm`,
-          contribution: Math.round(restingHRScore)
-        });
-        totalScore += restingHRScore;
-      }
-    }
-
-    // Normalize score to 100 based on what was available
-    let finalScore = 0;
-    if (maxPossibleScore > 0) {
-      finalScore = Math.min(100, Math.max(0, Math.round((totalScore / maxPossibleScore) * 100)));
-    }
-
-    return {
-      score: finalScore,
-      components,
-      trend: this.calculateTrend(activities, 'speed'),
-      suggestion: finalScore < 60 ?
-        'Focus on consistent aerobic training to improve cardiovascular base' :
-        finalScore < 80 ?
-          'Add some tempo intervals to boost cardiovascular efficiency' :
-          'Excellent cardiovascular fitness - maintain with varied intensity'
+    const getLoadForPeriod = (startDate: Date, endDate: Date) => {
+      return activities
+        .filter(a => {
+          const d = new Date(a.start_date_local);
+          return d >= startDate && d < endDate;
+        })
+        .reduce((sum, a) => sum + getActivityLoad(a), 0);
     };
-  }
 
-  // Calculate endurance capacity score
-  private calculateEndurance(activities: StravaActivity[]): HealthDimensionDetail {
-    const components = [];
-    let totalScore = 0;
+    // Acute: Last 7 days
+    const endDate = new Date(today.getTime() + dayInMs);
+    const acuteStart = new Date(endDate.getTime() - (7 * dayInMs));
+    const acuteLoad = getLoadForPeriod(acuteStart, endDate);
 
-    // Weekly volume vs baseline (40 points)
-    const weeklyDistances = this.getWeeklyDistances(activities);
-    if (weeklyDistances.length > 0) {
-      const avgWeeklyDistance = weeklyDistances.reduce((sum, d) => sum + d, 0) / weeklyDistances.length;
-      const avgWeeklyMiles = avgWeeklyDistance * 0.000621371;
+    // Chronic: Last 42 days
+    const chronicStart = new Date(endDate.getTime() - (42 * dayInMs));
+    const total42DayLoad = getLoadForPeriod(chronicStart, endDate);
+    const chronicLoad = (total42DayLoad / 42) * 7;
 
-      // Score based on weekly volume (rough cycling benchmarks)
-      let volumeScore = 0;
-      if (avgWeeklyMiles >= 150) volumeScore = 40;
-      else if (avgWeeklyMiles >= 100) volumeScore = 35;
-      else if (avgWeeklyMiles >= 75) volumeScore = 30;
-      else if (avgWeeklyMiles >= 50) volumeScore = 25;
-      else if (avgWeeklyMiles >= 25) volumeScore = 20;
-      else volumeScore = Math.max(0, avgWeeklyMiles * 0.8);
-
-      components.push({
-        name: 'Weekly Volume',
-        value: `${avgWeeklyMiles.toFixed(1)} miles/week`,
-        contribution: Math.round(volumeScore)
-      });
-      totalScore += volumeScore;
-    }
-
-    // Longest ride capacity (30 points)
-    if (activities.length > 0) {
-      const longestRide = Math.max(...activities.map(a => a.distance)) * 0.000621371;
-      let longestRideScore = 0;
-
-      if (longestRide >= 100) longestRideScore = 30;
-      else if (longestRide >= 75) longestRideScore = 25;
-      else if (longestRide >= 50) longestRideScore = 20;
-      else if (longestRide >= 25) longestRideScore = 15;
-      else longestRideScore = longestRide * 0.6;
-
-      components.push({
-        name: 'Longest Ride',
-        value: `${longestRide.toFixed(1)} miles`,
-        contribution: Math.round(longestRideScore)
-      });
-      totalScore += longestRideScore;
-    }
-
-    // Training consistency (30 points)
-    const consistencyScore = this.calculateConsistencyScore(activities);
-    components.push({
-      name: 'Training Consistency',
-      value: `${consistencyScore}/100`,
-      contribution: Math.round(consistencyScore * 0.3)
-    });
-    totalScore += consistencyScore * 0.3;
-
-    const finalScore = Math.min(100, Math.max(0, Math.round(totalScore)));
-
-    return {
-      score: finalScore,
-      components,
-      trend: this.calculateTrend(activities, 'distance'),
-      suggestion: finalScore < 60 ?
-        'Build endurance base with longer, easier rides' :
-        finalScore < 80 ?
-          'Gradually increase weekly volume by 10% each week' :
-          'Strong endurance base - focus on maintaining consistency'
-    };
-  }
-
-  // Calculate recovery quality score
-  private calculateRecovery(readinessData: OuraReadinessData[], activities: StravaActivity[]): HealthDimensionDetail {
-    const components = [];
-    let totalScore = 0;
-
-    if (readinessData.length > 0) {
-      // Average readiness score (50 points)
-      const avgReadiness = readinessData.reduce((sum, r) => sum + r.score, 0) / readinessData.length;
-      const readinessScore = avgReadiness * 0.5; // Convert to 50-point scale
-
-      components.push({
-        name: 'Readiness Score',
-        value: `${Math.round(avgReadiness)}/100`,
-        contribution: Math.round(readinessScore)
-      });
-      totalScore += readinessScore;
-
-      // Recovery consistency (25 points)
-      const readinessScores = readinessData.map(r => r.score);
-      const readinessVariance = this.calculateVariance(readinessScores);
-      const consistencyScore = Math.max(0, 25 - readinessVariance * 0.5);
-
-      components.push({
-        name: 'Recovery Consistency',
-        value: `${Math.round(100 - readinessVariance)}% consistent`,
-        contribution: Math.round(consistencyScore)
-      });
-      totalScore += consistencyScore;
-
-      // Recovery trend (25 points)
-      if (readinessData.length >= 7) {
-        const recentReadiness = readinessData.slice(0, 3).reduce((sum, r) => sum + r.score, 0) / 3;
-        const olderReadiness = readinessData.slice(-3).reduce((sum, r) => sum + r.score, 0) / 3;
-        const trendScore = Math.max(0, Math.min(25, 12.5 + (recentReadiness - olderReadiness) * 0.25));
-
-        components.push({
-          name: 'Recovery Trend',
-          value: recentReadiness > olderReadiness ? 'Improving' : 'Stable',
-          contribution: Math.round(trendScore)
-        });
-        totalScore += trendScore;
-      }
+    let ratio = 0;
+    if (chronicLoad > 10) {
+       ratio = acuteLoad / chronicLoad;
+    } else if (acuteLoad > 0) {
+       ratio = 2.0; 
     } else {
-      // Estimate recovery from training patterns
-      const estimatedScore = this.estimateRecoveryFromTraining(activities);
-      components.push({
-        name: 'Estimated Recovery',
-        value: 'Based on training patterns',
-        contribution: Math.round(estimatedScore)
-      });
-      totalScore += estimatedScore;
+       ratio = 1.0; 
     }
 
-    const finalScore = Math.min(100, Math.max(0, Math.round(totalScore)));
+    // STRICT SCORING LOGIC
+    let score = 0;
+    let suggestion = "";
+    let trend: 'improving' | 'stable' | 'declining' = 'stable';
+
+    if (ratio >= 1.10 && ratio <= 1.30) {
+      score = 100;
+      suggestion = "Perfect Growth Zone (1.1 - 1.3). You are building fitness.";
+    } else if (ratio >= 0.95 && ratio < 1.10) {
+      score = 85;
+      suggestion = "Maintenance Mode (0.95 - 1.1). Push volume slightly to grow.";
+    } else if (ratio >= 1.31 && ratio <= 1.45) {
+      score = 80;
+      suggestion = "Aggressive Build (1.3 - 1.45). Watch for fatigue.";
+    } else if (ratio < 0.95) {
+      score = 60;
+      suggestion = "Detraining Risk (< 0.95). Increase training volume.";
+    } else { // ratio > 1.45
+      score = 50;
+      suggestion = "Danger Zone (> 1.45). Too much too soon! Back off.";
+    }
+
+    if (ratio > 1.05) trend = 'improving';
+    else if (ratio < 0.95) trend = 'declining';
 
     return {
-      score: finalScore,
-      components,
-      trend: readinessData.length > 0 ? this.calculateTrend(readinessData, 'readiness') : 'stable',
-      suggestion: finalScore < 60 ?
-        'Focus on sleep quality and consider more rest days' :
-        finalScore < 80 ?
-          'Good recovery - maintain current rest patterns' :
-          'Excellent recovery capacity - you can handle current training load'
+      score,
+      components: [
+        { name: 'Acute Load (7d)', value: `${Math.round(acuteLoad)} mins`, contribution: 0 },
+        { name: 'Chronic Load (42d)', value: `${Math.round(chronicLoad)} mins`, contribution: 0 },
+        { name: 'A:C Ratio', value: ratio.toFixed(2), contribution: score }
+      ],
+      trend,
+      suggestion
     };
   }
 
-  // Calculate sleep health score
-  private calculateSleep(sleepData: OuraSleepData[]): HealthDimensionDetail {
-    const components = [];
-    let totalScore = 0;
+  // ==========================================
+  // 2. CONSISTENCY (Habit Formation) - "The Machine Standard"
+  // ==========================================
+  private calculateConsistency(activities: StravaActivity[]): HealthDimensionDetail {
+    // Input: Count of active days per week for last 8 weeks.
+    // Calc: Std Dev of training days/week.
 
-    if (sleepData.length > 0) {
-      // Sleep duration consistency (40 points)
-      const sleepHours = sleepData.map(s => s.total_sleep_duration / 3600);
-      const avgSleepHours = sleepHours.reduce((sum, h) => sum + h, 0) / sleepHours.length;
+    const today = startOfDay(new Date());
+    const weeks: number[] = [];
 
-      let durationScore = 0;
-      if (avgSleepHours >= 7 && avgSleepHours <= 9) durationScore = 40;
-      else if (avgSleepHours >= 6.5 && avgSleepHours <= 9.5) durationScore = 30;
-      else if (avgSleepHours >= 6 && avgSleepHours <= 10) durationScore = 20;
-      else durationScore = 10;
+    for (let i = 0; i < 8; i++) {
+        const end = new Date(today.getTime() - (i * 7 * 86400000));
+        const start = new Date(end.getTime() - (7 * 86400000));
 
-      components.push({
-        name: 'Sleep Duration',
-        value: `${avgSleepHours.toFixed(1)}h avg`,
-        contribution: durationScore
-      });
-      totalScore += durationScore;
+        const activeDays = new Set(
+            activities
+                .filter(a => {
+                    const d = new Date(a.start_date_local);
+                    return d >= start && d < end;
+                })
+                .map(a => new Date(a.start_date_local).toISOString().split('T')[0])
+        ).size;
+        weeks.push(activeDays);
+    }
 
-      // Sleep efficiency (30 points)
-      const avgEfficiency = sleepData.reduce((sum, s) => sum + s.efficiency, 0) / sleepData.length;
-      const efficiencyScore = Math.min(30, avgEfficiency * 0.3);
+    const mean = weeks.reduce((sum, v) => sum + v, 0) / weeks.length;
+    const variance = weeks.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / weeks.length;
+    const stdDev = Math.sqrt(variance);
 
-      components.push({
-        name: 'Sleep Efficiency',
-        value: `${Math.round(avgEfficiency)}%`,
-        contribution: Math.round(efficiencyScore)
-      });
-      totalScore += efficiencyScore;
+    // STRICT SCORING
+    let score = 0;
+    let suggestion = "";
 
-      // Deep sleep percentage (30 points)
-      const deepSleepPercentages = sleepData.map(s =>
-        (s.deep_sleep_duration / s.total_sleep_duration) * 100
-      );
-      const avgDeepSleep = deepSleepPercentages.reduce((sum, p) => sum + p, 0) / deepSleepPercentages.length;
-
-      let deepSleepScore = 0;
-      if (avgDeepSleep >= 15 && avgDeepSleep <= 20) deepSleepScore = 30;
-      else if (avgDeepSleep >= 10 && avgDeepSleep <= 25) deepSleepScore = 20;
-      else deepSleepScore = 10;
-
-      components.push({
-        name: 'Deep Sleep',
-        value: `${avgDeepSleep.toFixed(1)}%`,
-        contribution: deepSleepScore
-      });
-      totalScore += deepSleepScore;
+    if (stdDev < 0.5) {
+        score = 100;
+        suggestion = "Machine-like Consistency! (< 0.5)";
+    } else if (stdDev >= 0.5 && stdDev < 1.0) {
+        score = 85;
+        suggestion = "Good Consistency (< 1.0). Don't miss sessions.";
+    } else if (stdDev >= 1.0 && stdDev <= 1.5) {
+        score = 70;
+        suggestion = "Variable Schedule. Try to lock in your days.";
     } else {
-      // No sleep data available
-      components.push({
-        name: 'Sleep Data',
-        value: 'Connect Oura Ring',
-        contribution: 0
-      });
+        score = 50;
+        suggestion = "Erratic (> 1.5). Establish a routine.";
     }
 
-    const finalScore = Math.min(100, Math.max(0, Math.round(totalScore)));
+    const recentWeeks = weeks.slice(0, 4);
+    const olderWeeks = weeks.slice(4);
+    const recentStdDev = this.calculateStdDev(recentWeeks);
+    const olderStdDev = this.calculateStdDev(olderWeeks);
+    const trend = recentStdDev < olderStdDev ? 'improving' : (recentStdDev > olderStdDev ? 'declining' : 'stable');
+
 
     return {
-      score: finalScore,
-      components,
-      trend: sleepData.length > 0 ? this.calculateTrend(sleepData, 'sleep') : 'stable',
-      suggestion: sleepData.length === 0 ?
-        'Connect your Oura Ring for detailed sleep insights' :
-        finalScore < 60 ?
-          'Focus on consistent bedtime and sleep hygiene' :
-          finalScore < 80 ?
-            'Good sleep patterns - aim for 7-9 hours nightly' :
-            'Excellent sleep quality supporting your training'
+        score,
+        components: [
+            { name: 'Avg Days/Week', value: mean.toFixed(1), contribution: 0 },
+            { name: 'Variability', value: `±${stdDev.toFixed(1)} days`, contribution: score }
+        ],
+        trend,
+        suggestion
     };
   }
 
-  // Calculate training balance score
-  private calculateTrainingBalance(activities: StravaActivity[]): HealthDimensionDetail {
-    const components = [];
-    let totalScore = 0;
-
-    if (activities.length > 0) {
-      // Intensity distribution (40 points) - 80/20 rule
-      const intensityDistribution = this.calculateIntensityDistribution(activities);
-      const easyPercentage = intensityDistribution.easy;
-
-      // Ideal is 80% easy, 20% moderate/hard
-      let intensityScore = 0;
-      if (easyPercentage >= 75 && easyPercentage <= 85) intensityScore = 40;
-      else if (easyPercentage >= 70 && easyPercentage <= 90) intensityScore = 30;
-      else if (easyPercentage >= 60 && easyPercentage <= 95) intensityScore = 20;
-      else intensityScore = 10;
-
-      components.push({
-        name: 'Easy/Hard Balance',
-        value: `${easyPercentage}% easy rides`,
-        contribution: intensityScore
-      });
-      totalScore += intensityScore;
-
-      // Rest day frequency (30 points)
-      const restDayScore = this.calculateRestDayScore(activities);
-      components.push({
-        name: 'Rest Day Frequency',
-        value: `${restDayScore > 20 ? 'Good' : 'Needs improvement'}`,
-        contribution: Math.round(restDayScore)
-      });
-      totalScore += restDayScore;
-
-      // Training load progression (30 points)
-      const progressionScore = this.calculateProgressionScore(activities);
-      components.push({
-        name: 'Load Progression',
-        value: `${progressionScore > 20 ? 'Appropriate' : 'Too aggressive'}`,
-        contribution: Math.round(progressionScore)
-      });
-      totalScore += progressionScore;
-    }
-
-    const finalScore = Math.min(100, Math.max(0, Math.round(totalScore)));
-
-    return {
-      score: finalScore,
-      components,
-      trend: 'stable',
-      suggestion: finalScore < 60 ?
-        'Balance hard training with more easy recovery rides' :
-        finalScore < 80 ?
-          'Good training balance - maintain 80/20 easy/hard split' :
-          'Excellent training balance supporting long-term development'
-    };
-  }
-
-  // Helper methods
-  private calculateVariance(values: number[]): number {
+  private calculateStdDev(values: number[]): number {
     if (values.length === 0) return 0;
     const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
     const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
     return Math.sqrt(variance);
   }
 
-  private calculateConsistencyScore(activities: StravaActivity[]): number {
-    const weeklyDistances = this.getWeeklyDistances(activities);
-    if (weeklyDistances.length < 2) return 50;
+  // ==========================================
+  // 3. ENDURANCE (Long Ride Progression) - "Pushing Boundaries"
+  // ==========================================
+  private calculateEndurance(activities: StravaActivity[]): HealthDimensionDetail {
+      // Input: Single longest ride duration (seconds) of current week vs 4-week avg longest ride.
 
-    const mean = weeklyDistances.reduce((sum, d) => sum + d, 0) / weeklyDistances.length;
-    const variance = this.calculateVariance(weeklyDistances);
+      const today = startOfDay(new Date());
+      const dayInMs = 86400000;
 
-    if (mean === 0) return 0;
-    const consistencyScore = Math.max(0, 100 - (variance / mean) * 100);
-    return Math.round(consistencyScore);
+      // Current Week (last 7 days rolling) Longest Ride
+      const last7DaysStart = new Date(today.getTime() - 7 * dayInMs);
+      const currentWeekActivities = activities.filter(a => new Date(a.start_date_local) >= last7DaysStart);
+      const currentLongest = Math.max(0, ...currentWeekActivities.map(a => a.moving_time));
+
+      // Baseline: Avg of Longest Rides for previous 4 weeks
+      const baselineLongestRides: number[] = [];
+      for(let i=1; i<=4; i++) {
+          const end = new Date(today.getTime() - (i * 7 * dayInMs));
+          const start = new Date(end.getTime() - (7 * dayInMs));
+          const weeksActs = activities.filter(a => {
+              const d = new Date(a.start_date_local);
+              return d >= start && d < end;
+          });
+          const weekLongest = Math.max(0, ...weeksActs.map(a => a.moving_time));
+          baselineLongestRides.push(weekLongest);
+      }
+
+      const baselineAvg = baselineLongestRides.reduce((sum,v) => sum+v, 0) / (baselineLongestRides.length || 1);
+
+      let ratio = 0;
+      if (baselineAvg > 0) {
+          ratio = currentLongest / baselineAvg;
+      } else if (currentLongest > 0) {
+          ratio = 2.0; 
+      } else {
+          ratio = 1.0; 
+      }
+
+      // STRICT SCORING
+      let score = 0;
+      let suggestion = "";
+      const toMinutes = (sec: number) => Math.round(sec/60);
+      const targetMin = toMinutes(baselineAvg * 1.10);
+
+      if (ratio > 1.10) {
+          score = 100;
+          suggestion = "Excellent! Pushing boundaries (> 110% of baseline).";
+      } else if (ratio >= 0.95 && ratio <= 1.10) {
+          score = 80;
+          suggestion = `Comfort Zone. To reach Score 100, extend your long ride to > ${targetMin} mins.`;
+      } else {
+          score = 50;
+          suggestion = `Regression (< 95% baseline). Long ride needs to be at least ${toMinutes(baselineAvg * 0.95)} mins to maintain.`;
+      }
+
+      const trend = ratio >= 1.0 ? 'improving' : 'declining';
+
+      return {
+          score,
+          components: [
+              { name: 'This Week Longest', value: `${toMinutes(currentLongest)}m`, contribution: 0 },
+              { name: 'Baseline Longest', value: `${toMinutes(baselineAvg)}m`, contribution: score }
+          ],
+          trend,
+          suggestion
+      };
   }
 
-  private getWeeklyDistances(activities: StravaActivity[]): number[] {
-    const weeks: number[] = [];
-    const now = new Date();
+  // ==========================================
+  // 4. INTENSITY (Zone Distribution) - "Polarization Enforcement"
+  // ==========================================
+  private calculateIntensity(activities: StravaActivity[]): HealthDimensionDetail {
+      // Goal: Reward "Quality Work" (Zone 4+). Penalize "Junk Miles" (Zone 3).
+      // Z4 Threshold: approx 160bpm.
+      // Z3 Proxy: avg HR 135-159.
 
-    for (let i = 0; i < 4; i++) {
-      const weekStart = startOfWeek(subWeeks(now, i), { weekStartsOn: 1 });
-      const weekEnd = subWeeks(weekStart, -1);
+      const Z4_THRESHOLD = 160; 
+      const Z3_MIN = 135;
 
-      const weekActivities = activities.filter(a => {
-        const activityDate = new Date(a.start_date_local);
-        return activityDate >= weekStart && activityDate < weekEnd;
+      const oneWeekAgo = new Date(Date.now() - 7 * 86400000);
+      const recentActivities = activities.filter(a => new Date(a.start_date_local) >= oneWeekAgo);
+
+      let totalDuration = 0;
+      let estimatedZ4Duration = 0;
+      let estimatedZ3Duration = 0;
+
+      recentActivities.forEach(a => {
+          if (!a.average_heartrate) {
+               totalDuration += a.moving_time;
+               return; 
+          }
+
+          totalDuration += a.moving_time;
+
+          // Heuristic Proxy
+          if (a.average_heartrate >= Z4_THRESHOLD) {
+              // Hard ride: Mostly Z4
+              estimatedZ4Duration += a.moving_time * 0.9;
+              estimatedZ3Duration += a.moving_time * 0.1;
+          } else if (a.average_heartrate >= Z3_MIN) {
+              // Tempo ride: Mostly Z3 ("Grey Zone")
+              estimatedZ3Duration += a.moving_time * 0.8;
+              estimatedZ4Duration += a.moving_time * 0.1; 
+          } else if (a.max_heartrate && a.max_heartrate >= Z4_THRESHOLD + 10) {
+              // Intervals with low avg HR
+              estimatedZ4Duration += a.moving_time * 0.15;
+              estimatedZ3Duration += a.moving_time * 0.25;
+          }
       });
 
-      const weekDistance = weekActivities.reduce((sum, a) => sum + a.distance, 0);
-      weeks.push(weekDistance);
-    }
+      const z4Percentage = totalDuration > 0 ? (estimatedZ4Duration / totalDuration) * 100 : 0;
+      const z3Percentage = totalDuration > 0 ? (estimatedZ3Duration / totalDuration) * 100 : 0;
 
-    return weeks;
-  }
+      let score = 0;
+      let suggestion = "";
 
-  private calculateIntensityDistribution(activities: StravaActivity[]) {
-    const intensityBuckets = { easy: 0, moderate: 0, hard: 0 };
-
-    activities.forEach(activity => {
-      const speedMph = activity.average_speed * 2.237;
-      if (speedMph < 15) {
-        intensityBuckets.easy++;
-      } else if (speedMph < 18) {
-        intensityBuckets.moderate++;
+      // STRICT SCORING & JUNK MILE PENALTY
+      if (z3Percentage > 30) {
+          score = 60;
+          suggestion = `Junk Mile Penalty! Zone 3 is ${z3Percentage.toFixed(0)}% (>30%). Rides should be Hard (Z4) or Easy (Z2). Avoid the middle.`;
+      } else if (z4Percentage >= 15 && z3Percentage < 20) {
+          score = 100;
+          suggestion = "Perfect Polarization! High quality work with disciplined easy days.";
+      } else if (z4Percentage >= 10) {
+          score = 75;
+          suggestion = "Good intensity, but watch your 'Grey Zone' (Z3) volume.";
       } else {
-        intensityBuckets.hard++;
+          score = 50;
+          suggestion = "Not enough intensity. Push harder on hard days (> 15% Z4).";
       }
-    });
 
-    const total = activities.length;
-    return {
-      easy: total > 0 ? Math.round((intensityBuckets.easy / total) * 100) : 0,
-      moderate: total > 0 ? Math.round((intensityBuckets.moderate / total) * 100) : 0,
-      hard: total > 0 ? Math.round((intensityBuckets.hard / total) * 100) : 0
-    };
+      return {
+          score,
+          components: [
+              { name: 'Training Time', value: `${Math.round(totalDuration/60)}m`, contribution: 0 },
+              { name: 'Z4+ (Hard)', value: `${z4Percentage.toFixed(1)}%`, contribution: 0 },
+              { name: 'Z3 (Tempo)', value: `${z3Percentage.toFixed(1)}%`, contribution: score }
+          ],
+          trend: 'stable', 
+          suggestion
+      };
   }
 
-  private calculateRestDayScore(activities: StravaActivity[]): number {
-    // Simple heuristic: should have at least 1-2 rest days per week
-    const daysWithActivities = new Set(
-      activities.map(a => a.start_date_local.split('T')[0])
-    ).size;
+  // ==========================================
+  // 5. EFFICIENCY (EF Trend) - "Demanding Results"
+  // ==========================================
+  private calculateEfficiency(activities: StravaActivity[]): HealthDimensionDetail {
+      // EF = (Avg Speed m/s) / Avg HR. 
+      // Calc: Compare this week's Avg EF to 4-week Baseline EF.
 
-    const totalDays = Math.min(28, differenceInDays(new Date(), new Date(activities[activities.length - 1]?.start_date_local || new Date())));
-    const restDays = totalDays - daysWithActivities;
-    const restDaysPerWeek = (restDays / totalDays) * 7;
+      const getEF = (a: StravaActivity): number | null => {
+          if (!a.average_heartrate || a.average_heartrate < 50) return null; 
+          
+          let output = 0;
+          if (a.weighted_average_watts) output = a.weighted_average_watts;
+          else if (a.average_watts) output = a.average_watts;
+          else if (a.average_speed) output = a.average_speed * 100; 
+          
+          if (output === 0 && a.average_speed) output = a.average_speed * 100;
 
-    // Ideal: 1-3 rest days per week
-    if (restDaysPerWeek >= 1 && restDaysPerWeek <= 3) return 30;
-    if (restDaysPerWeek >= 0.5 && restDaysPerWeek <= 4) return 20;
-    return 10;
+          return output / a.average_heartrate;
+      };
+
+      const today = startOfDay(new Date());
+      const dayInMs = 86400000;
+
+      // 1. Current Week EF
+      const last7DaysStart = new Date(today.getTime() - 7 * dayInMs);
+      const currentWeekActivities = activities.filter(a => new Date(a.start_date_local) >= last7DaysStart);
+      const currentEFs = currentWeekActivities.map(getEF).filter((x): x is number => x !== null);
+      const currentAvgEF = currentEFs.length > 0 ? currentEFs.reduce((a,b)=>a+b,0)/currentEFs.length : 0;
+
+      // 2. Baseline EF (Late 4 weeks)
+      const baselineStart = new Date(today.getTime() - 35 * dayInMs); // 5 weeks ago
+      const baselineEnd = last7DaysStart;
+      const baselineActivities = activities.filter(a => {
+          const d = new Date(a.start_date_local);
+          return d >= baselineStart && d < baselineEnd;
+      });
+      const baselineEFs = baselineActivities.map(getEF).filter((x): x is number => x !== null);
+      const baselineAvgEF = baselineEFs.length > 0 ? baselineEFs.reduce((a,b)=>a+b,0)/baselineEFs.length : 0;
+
+      let trendValue = 0; // % diff
+      if (baselineAvgEF > 0) {
+          trendValue = ((currentAvgEF - baselineAvgEF) / baselineAvgEF) * 100;
+      }
+
+      // STRICT SCORING
+      let score = 0;
+      let suggestion = "";
+
+      if (currentAvgEF === 0 && baselineAvgEF === 0) {
+          score = 50;
+          suggestion = "No HR/Power data to calculate efficiency.";
+      } else if (trendValue > 2.0) {
+          score = 100;
+          suggestion = `Strong Efficiency Gains (+${trendValue.toFixed(1)}%)! Fitness is rising.`;
+      } else if (trendValue >= 0 && trendValue <= 2.0) {
+          score = 85;
+          suggestion = `Marginal Gains (+${trendValue.toFixed(1)}%). Push for > 2% improvement.`;
+      } else {
+          score = 50;
+          suggestion = `Efficiency Loss (${trendValue.toFixed(1)}%). Fatigue or detraining detected.`;
+      }
+
+      const trend = trendValue > 0 ? 'improving' : (trendValue < 0 ? 'declining' : 'stable');
+
+      return {
+          score,
+          components: [
+              { name: 'Current EF', value: currentAvgEF.toFixed(2), contribution: 0 },
+              { name: 'Baseline EF', value: baselineAvgEF.toFixed(2), contribution: score }
+          ],
+          trend,
+          suggestion
+      };
   }
 
-  private calculateProgressionScore(activities: StravaActivity[]): number {
-    const weeklyDistances = this.getWeeklyDistances(activities);
-    if (weeklyDistances.length < 3) return 25;
+  // Helper: Data Quality Assessment
+  private assessDataQuality(activities: StravaActivity[]): 'excellent' | 'good' | 'limited' {
+    if (activities.length === 0) return 'limited';
+    
+    // Check history length
+    const oldest = new Date(Math.min(...activities.map(a => new Date(a.start_date_local).getTime())));
+    const daysHistory = differenceInDays(new Date(), oldest);
+    
+    // Check HR availability
+    const hrCount = activities.filter(a => a.average_heartrate).length;
+    const hrCoverage = hrCount / activities.length;
 
-    // Check for reasonable progression (not more than 10% increase per week)
-    let appropriateProgression = true;
-    for (let i = 1; i < weeklyDistances.length; i++) {
-      const prevWeek = weeklyDistances[i];
-      const currentWeek = weeklyDistances[i - 1];
-
-      if (prevWeek > 0) {
-        const increase = ((currentWeek - prevWeek) / prevWeek) * 100;
-        if (increase > 15) { // More than 15% increase is risky
-          appropriateProgression = false;
-          break;
-        }
-      }
-    }
-
-    return appropriateProgression ? 30 : 15;
-  }
-
-  private estimateRecoveryFromTraining(activities: StravaActivity[]): number {
-    // Estimate recovery based on training consistency and load
-    const consistencyScore = this.calculateConsistencyScore(activities);
-    const intensityDist = this.calculateIntensityDistribution(activities);
-
-    // Good consistency + appropriate easy percentage = better estimated recovery
-    const estimatedRecovery = (consistencyScore * 0.4) + (intensityDist.easy * 0.6);
-    return Math.min(75, estimatedRecovery); // Cap at 75 since it's estimated
-  }
-
-  private calculateTrend(data: (StravaActivity | OuraSleepData | OuraReadinessData)[], type: string): 'improving' | 'stable' | 'declining' {
-    if (data.length < 4) return 'stable';
-
-    const midpoint = Math.floor(data.length / 2);
-    let recentAvg = 0;
-    let olderAvg = 0;
-
-    switch (type) {
-      case 'speed': {
-        const speedData = data as StravaActivity[];
-        recentAvg = speedData.slice(0, midpoint).reduce((sum, a) => sum + a.average_speed, 0) / midpoint;
-        olderAvg = speedData.slice(midpoint).reduce((sum, a) => sum + a.average_speed, 0) / (data.length - midpoint);
-        break;
-      }
-      case 'distance': {
-        const distData = data as StravaActivity[];
-        recentAvg = distData.slice(0, midpoint).reduce((sum, a) => sum + a.distance, 0) / midpoint;
-        olderAvg = distData.slice(midpoint).reduce((sum, a) => sum + a.distance, 0) / (data.length - midpoint);
-        break;
-      }
-      case 'readiness': {
-        const readyData = data as OuraReadinessData[];
-        recentAvg = readyData.slice(0, midpoint).reduce((sum, r) => sum + r.score, 0) / midpoint;
-        olderAvg = readyData.slice(midpoint).reduce((sum, r) => sum + r.score, 0) / (data.length - midpoint);
-        break;
-      }
-      case 'sleep': {
-        const sleepData = data as OuraSleepData[];
-        recentAvg = sleepData.slice(0, midpoint).reduce((sum, s) => sum + s.efficiency, 0) / midpoint;
-        olderAvg = sleepData.slice(midpoint).reduce((sum, s) => sum + s.efficiency, 0) / (data.length - midpoint);
-        break;
-      }
-      default:
-        return 'stable';
-    }
-
-    const change = ((recentAvg - olderAvg) / olderAvg) * 100;
-    if (change > 5) return 'improving';
-    if (change < -5) return 'declining';
-    return 'stable';
-  }
-
-  private assessDataQuality(
-    activities: StravaActivity[],
-    sleepData: OuraSleepData[],
-    readinessData: OuraReadinessData[]
-  ): 'excellent' | 'good' | 'limited' {
-    const hasStrava = activities.length >= 8; // At least 2 weeks of data
-    const hasOura = sleepData.length >= 14 || readinessData.length >= 14; // At least 2 weeks
-    const hasHeartRate = activities.some(a => a.average_heartrate && a.average_heartrate > 0);
-
-    if (hasStrava && hasOura && hasHeartRate) return 'excellent';
-    if (hasStrava && (hasOura || hasHeartRate)) return 'good';
+    if (daysHistory >= 42 && hrCoverage > 0.8) return 'excellent';
+    if (daysHistory >= 28) return 'good';
     return 'limited';
   }
 }

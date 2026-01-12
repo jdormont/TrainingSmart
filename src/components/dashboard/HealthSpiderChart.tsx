@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer, Tooltip } from 'recharts';
-import { Heart, Activity, Moon, Battery, Scale, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, Info } from 'lucide-react';
+import { Activity, BarChart2, Zap, TrendingUp, Calendar, Heart, TrendingDown, Minus, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import type { HealthMetrics } from '../../services/healthMetricsService';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 
@@ -17,11 +17,11 @@ export const HealthSpiderChart: React.FC<HealthSpiderChartProps> = ({
 
   const getDimensionIcon = (dimension: string) => {
     switch (dimension) {
-      case 'cardiovascular': return Heart;
+      case 'load': return BarChart2;
+      case 'consistency': return Calendar;
       case 'endurance': return Activity;
-      case 'recovery': return Battery;
-      case 'sleep': return Moon;
-      case 'trainingBalance': return Scale;
+      case 'intensity': return Heart; // or Zap
+      case 'efficiency': return TrendingUp;
       default: return Activity;
     }
   };
@@ -42,21 +42,14 @@ export const HealthSpiderChart: React.FC<HealthSpiderChartProps> = ({
 
   const getDataQualityColor = (quality: string) => {
     switch (quality) {
-      case 'excellent': return 'text-green-600 bg-green-100';
-      case 'good': return 'text-blue-600 bg-blue-100';
-      default: return 'text-yellow-600 bg-yellow-100';
+      case 'excellent': return 'text-green-400 bg-green-500/10 border border-green-500/20';
+      case 'good': return 'text-blue-400 bg-blue-500/10 border border-blue-500/20';
+      default: return 'text-yellow-400 bg-yellow-500/10 border border-yellow-500/20';
     }
   };
 
   const formatDimensionName = (key: string) => {
-    switch (key) {
-      case 'cardiovascular': return 'Cardiovascular';
-      case 'endurance': return 'Endurance';
-      case 'recovery': return 'Recovery';
-      case 'sleep': return 'Sleep';
-      case 'trainingBalance': return 'Training Balance';
-      default: return key;
-    }
+    return key.charAt(0).toUpperCase() + key.slice(1);
   };
 
   // Custom tooltip for radar chart
@@ -82,7 +75,7 @@ export const HealthSpiderChart: React.FC<HealthSpiderChartProps> = ({
             Analyzing Your Health Metrics
           </h3>
           <p className="text-slate-400">
-            Processing your training and recovery data...
+            Processing your training history...
           </p>
         </div>
       </div>
@@ -93,7 +86,7 @@ export const HealthSpiderChart: React.FC<HealthSpiderChartProps> = ({
     return (
       <div className="p-6">
         <div className="text-center text-slate-500">
-          <Heart className="w-8 h-8 mx-auto mb-2 text-slate-600" />
+          <Activity className="w-8 h-8 mx-auto mb-2 text-slate-600" />
           <p className="text-sm">No health metrics available</p>
           <p className="text-xs">Need more training data to generate insights</p>
         </div>
@@ -101,34 +94,13 @@ export const HealthSpiderChart: React.FC<HealthSpiderChartProps> = ({
     );
   }
 
-  // Prepare data for radar chart
-  const chartData = [
-    {
-      dimension: 'Cardiovascular',
-      score: healthMetrics.cardiovascular,
-      fullMark: 100
-    },
-    {
-      dimension: 'Endurance',
-      score: healthMetrics.endurance,
-      fullMark: 100
-    },
-    {
-      dimension: 'Recovery',
-      score: healthMetrics.recovery,
-      fullMark: 100
-    },
-    {
-      dimension: 'Sleep',
-      score: healthMetrics.sleep,
-      fullMark: 100
-    },
-    {
-      dimension: 'Training Balance',
-      score: healthMetrics.trainingBalance,
-      fullMark: 100
-    }
-  ];
+  // Prepare data for radar chart in specific order
+  const axesOrder = ['load', 'consistency', 'endurance', 'intensity', 'efficiency'];
+  const chartData = axesOrder.map(key => ({
+    dimension: formatDimensionName(key),
+    score: (healthMetrics as any)[key],
+    fullMark: 100
+  }));
 
   return (
     <div className="p-6">
@@ -136,10 +108,10 @@ export const HealthSpiderChart: React.FC<HealthSpiderChartProps> = ({
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="text-lg font-semibold text-slate-50 mb-1">
-            Health Overview
+            Health Balance
           </h3>
           <p className="text-slate-400 text-sm">
-            Holistic view of your fitness and recovery
+            Dynamic analysis of your training state
           </p>
         </div>
 
@@ -148,7 +120,7 @@ export const HealthSpiderChart: React.FC<HealthSpiderChartProps> = ({
             {healthMetrics.overallScore}
           </div>
           <div className="text-sm text-slate-400">Overall Score</div>
-          <span className={`text-xs px-2 py-1 rounded-full font-medium ${getDataQualityColor(healthMetrics.dataQuality).replace('text-green-600 bg-green-100', 'text-green-400 bg-green-500/10 border border-green-500/20').replace('text-blue-600 bg-blue-100', 'text-blue-400 bg-blue-500/10 border border-blue-500/20').replace('text-yellow-600 bg-yellow-100', 'text-yellow-400 bg-yellow-500/10 border border-yellow-500/20')}`}>
+          <span className={`text-xs px-2 py-1 rounded-full font-medium ${getDataQualityColor(healthMetrics.dataQuality)}`}>
             {healthMetrics.dataQuality} data
           </span>
         </div>
@@ -186,9 +158,12 @@ export const HealthSpiderChart: React.FC<HealthSpiderChartProps> = ({
 
       {/* Dimension Scores */}
       <div className="space-y-3">
-        {Object.entries(healthMetrics.details).map(([key, detail]) => {
+        {axesOrder.map((key) => {
+          const detail = (healthMetrics.details as any)[key];
           const Icon = getDimensionIcon(key);
           const isExpanded = expandedDimension === key;
+
+          if (!detail) return null;
 
           return (
             <div key={key} className="border border-slate-800 rounded-lg">
@@ -210,7 +185,7 @@ export const HealthSpiderChart: React.FC<HealthSpiderChartProps> = ({
                     <div className="font-medium text-slate-200">
                       {formatDimensionName(key)}
                     </div>
-                    <div className="text-sm text-slate-500">
+                    <div className="text-sm text-slate-500 flex items-center gap-1">
                       {detail.score}/100 {getTrendIcon(detail.trend)}
                     </div>
                   </div>
@@ -237,16 +212,18 @@ export const HealthSpiderChart: React.FC<HealthSpiderChartProps> = ({
                   <div className="mt-3 space-y-3">
                     {/* Components */}
                     <div>
-                      <h4 className="text-sm font-medium text-slate-400 mb-2">Components</h4>
+                      <h4 className="text-sm font-medium text-slate-400 mb-2">Metrics</h4>
                       <div className="space-y-2">
-                        {detail.components.map((component, index) => (
+                        {detail.components.map((component: any, index: number) => (
                           <div key={index} className="flex items-center justify-between text-sm">
                             <span className="text-slate-400">{component.name}</span>
                             <div className="flex items-center space-x-2">
                               <span className="text-slate-200">{component.value}</span>
-                              <span className="text-xs text-slate-500">
-                                (+{component.contribution} pts)
-                              </span>
+                              {/* Only show point contribution if meaningful (>0 and not just score) */}
+                              {/* Actually for this model, contribution isn't additive like before, it's just a display value often. 
+                                  So we might hide this or change logic. The implementation sets 'contribution: score' or 0.
+                                  Let's just show value.
+                              */}
                             </div>
                           </div>
                         ))}
@@ -259,7 +236,7 @@ export const HealthSpiderChart: React.FC<HealthSpiderChartProps> = ({
                         <Info className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
                         <div>
                           <h4 className="text-sm font-medium text-blue-400 mb-1">
-                            Recommendation
+                            Analysis
                           </h4>
                           <p className="text-sm text-blue-300/80">
                             {detail.suggestion}
@@ -278,11 +255,10 @@ export const HealthSpiderChart: React.FC<HealthSpiderChartProps> = ({
       {/* Footer */}
       <div className="mt-4 pt-4 border-t border-slate-800 text-center space-y-1">
         <p className="text-xs text-slate-500">
-          Last updated: {healthMetrics.lastUpdated.toLocaleDateString()} •
-          Based on last 4 weeks of data
+          Last updated: {healthMetrics.lastUpdated.toLocaleDateString()}
         </p>
         <p className="text-xs text-slate-600 italic">
-          Insights derived in part from Garmin device-sourced data.
+          Scoring relative to your 6-week baseline.
         </p>
       </div>
     </div>

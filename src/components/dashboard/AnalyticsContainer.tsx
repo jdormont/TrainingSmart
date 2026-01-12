@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { BarChart2, Activity, Heart } from 'lucide-react';
 import { TrainingTrendsChart } from './TrainingTrendsChart';
 import { HealthSpiderChart } from './HealthSpiderChart';
-import { StravaOnlySpiderChart } from './StravaOnlySpiderChart';
+// StravaOnlySpiderChart removed
 import { RecoveryCard } from './RecoveryCard';
 import type { StravaActivity, StravaAthlete, OuraSleepData, OuraReadinessData, DailyMetric } from '../../types';
 import type { HealthMetrics } from '../../services/weeklyInsightService';
@@ -29,8 +29,6 @@ export const AnalyticsContainer: React.FC<AnalyticsContainerProps> = ({
     loading = false
 }) => {
     const [activeTab, setActiveTab] = useState<TabType>('trends');
-
-    const hasOuraData = !!(sleepData || readinessData);
 
     // Tab Definitions
     const tabs = [
@@ -76,23 +74,10 @@ export const AnalyticsContainer: React.FC<AnalyticsContainerProps> = ({
 
                 {/* TAB 2: Health Balance */}
                 <div className={activeTab === 'health' ? 'block' : 'hidden'}>
-                    {hasOuraData ? (
-                        <HealthSpiderChart
-                            healthMetrics={healthMetrics}
-                            loading={loading}
-                        />
-                    ) : (
-                        <>
-                            {athlete && (
-                                <StravaOnlySpiderChart
-                                    athlete={athlete}
-                                    activities={activities}
-                                    loading={loading}
-                                />
-                            )}
-                            {/* Suggest Oura if using Strava Only view logic can be handled inside the chart or here */}
-                        </>
-                    )}
+                     <HealthSpiderChart
+                        healthMetrics={healthMetrics}
+                        loading={loading}
+                    />
                 </div>
 
                 {/* TAB 3: Recovery */}
