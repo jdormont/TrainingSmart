@@ -1,292 +1,156 @@
-# TrainingSmart AI - Design Brief
+# TrainingSmart AI - Product Design Brief
 
-## Product Identity
-
-**TrainingSmart AI** is an intelligent training assistant that bridges the gap between real workout data and personalized coaching. It transforms Strava activity history into actionable training insights through conversational AI, giving solo athletes a personal coach in their pocket.
-
----
-
-## Core Value Proposition
-
-| Pillar | Benefit |
-|--------|---------|
-| **Data-Driven** | Uses your real Strava data, not generic advice |
-| **AI-Powered** | Conversational interface for personalized guidance |
-| **Privacy-First** | Built for individual use with full data privacy |
-| **Schedule-Integrated** | Connects training plans to your actual calendar |
+**TrainingSmart AI** is an intelligent training assistant that transforms Strava
+activity data into actionable, bio-aware training plans via a private,
+conversational AI coach.
 
 ---
 
-## Target User
+## 💎 Primary Value Proposition
 
-**Solo Athlete / Fitness Enthusiast**
-- Uses Strava to track workouts (not just for social sharing)
-- Wants personalized training guidance beyond generic plans
-- Values data-driven decision-making
-- Willing to invest in structured training planning
-- Tech-savvy but not necessarily expert-level athletes
-
-**Key Characteristics:**
-- Ages 25-50, primarily cycling-focused
-- High engagement with fitness apps (Strava, Oura, Garmin)
-- Motivated by self-improvement and performance metrics
-- Limited access to professional coaching (cost/availability)
+1. **Bio-Aware Intelligence**: Your training plan adapts daily to your _actual_
+   recovery (Sleep, HRV) and execution, not just a static spreadsheet.
+2. **Conversational Command**: Build, modify, and analyze your training
+   naturally—"I'm tired today, give me a recovery ride"—without complex UI
+   menus.
+3. **Privacy-First Focus**: Professional-grade analytics that live on your
+   device and calendar, with no data training on your personal activities.
 
 ---
 
-## Current Features (MVP Complete)
+## 🎯 Target User Segments
 
-### 1. Authentication & Data Sync
-- **Strava OAuth integration** - Secure connection to activity history
-- **Real-time activity sync** - Latest workouts automatically fetch
-- **Multiple auth flows** - Flexible connection options
-- **Token management** - Automatic refresh, zero manual intervention
+### 1. The Data-Driven Soloist
 
-### 2. Intelligent Dashboard
-- **Advanced analytics** - 8-week training trends with multiple metrics
-- **Weekly summaries** - Key stats at a glance (distance, elevation, volume)
-- **Activity filtering** - View by type, intensity, or custom ranges
-- **Visual trends** - Beautiful charts showing fitness progression
-- **Responsive design** - Works seamlessly on desktop and mobile
+- **Profile**: Uses Strava, Oura/Garmin; loves numbers but lacks the time to
+  analyze them deeply.
+- **Need**: Wants the "Pro Coach" insight—_why_ did I fail that
+  interval?—without the $300/mo cost.
+- **Why Us**: We turn their expensive sensor data into plain-english advice.
 
-### 3. AI Coaching Chat
-- **Context-aware conversations** - AI has access to 30 recent activities
-- **Real-time analysis** - Ask questions about training patterns
-- **Customizable personality** - Choose your coach style (supportive, demanding, technical)
-- **Message history** - Organized by topic (training, recovery, nutrition)
-- **Suggested questions** - Easy prompts for first-time users
+### 2. The Time-Crunched Achiever
 
-### 4. Training Plan Generator
-- **AI-powered creation** - Generate plans from conversational context
-- **Performance-based** - Considers current fitness level from Strava data
-- **Structured workouts** - Specific sessions with details (distance, intensity, type)
-- **Modification support** - Adjust plans through chat conversation
-- **Visual calendar** - Weekly view with integrated workout details
-
-### 5. Google Calendar Export
-- **One-way sync** - Export workouts to your calendar
-- **Batch operations** - Save entire weeks at once
-- **Individual exports** - Export specific workouts as needed
-- **Visual indicators** - See which workouts are scheduled
-- **Detailed descriptions** - Workout details available in calendar event
-
-### 6. Personalized Content Feed
-- **YouTube integration** - Curated cycling videos and tutorials
-- **AI-powered scoring** - Content ranked by your interests
-- **Multi-source support** - Content from established cycling channels
-- **Home page stream** - Beautiful card-based layout
-- **Preference learning** - Improves over time as you engage
+- **Profile**: Busy professional (30-45yo) with 6-8 hours/week to train.
+- **Need**: Efficiency. If a meeting runs late, they need their plan to adapt
+  _instantly_.
+- **Why Us**: **Intent Chips** and **Calendar Sync** ensure training fits life,
+  not the other way around.
 
 ---
 
-## Marketing Angles
+## 🌟 Standout Differentiators
 
-### For Solo Athletes
-> **"Your Personal Coach, Powered by Your Data"**
-- Stop guessing about your training. Let AI analyze your actual performance.
-- Real advice based on YOUR fitness level, not generic templates.
-- Same insights a professional coach would give, without the price tag.
-
-### For Data-Driven Athletes
-> **"From Data to Insights to Action"**
-- Watch Strava metrics transform into personalized training plans.
-- Understand not just what you should do, but WHY based on your data.
-- Track planned vs actual performance with built-in analytics.
-
-### For Time-Constrained Athletes
-> **"Structured Training Without the Complexity"**
-- AI handles the hard thinking about what to do next.
-- Plans automatically adjust based on your current fitness.
-- Chat interface makes coaching advice conversational, not intimidating.
-
-### For Serious Cyclists
-> **"Professional-Grade Analysis, Personal Scale"**
-- Training plans generated by AI with deep cycling knowledge.
-- Recovery insights based on data patterns (if Oura connected).
-- Content recommendations matched to your goals and interests.
+- **Bio-Aware Training Insights**: We don't just track load; we weight it
+  against **Sleep**, **HRV**, and **Resting Heart Rate** to give a daily
+  "Readiness Score."
+- **Intent Chips**: One-click interventions ("Need Rest", "Short on Time", "Feel
+  Fresh") that instantly rewrite the day's workout logic.
+- **Midnight Pro UI**: A cohesive, high-contrast dark theme designed to reduce
+  eye strain and highlight data vibrancy during late-night planning.
+- **Focus Mode**: A streamlined planning interface that keeps the current week
+  front-and-center, reducing decision fatigue.
 
 ---
 
-## Competitive Advantages
+## 🔑 Key Features
 
-1. **Real Strava Integration** - Most coaching apps don't connect to your actual training history
-2. **Conversational AI** - Natural language coaching, not form-filling
-3. **Privacy by Design** - All data stays with you, no training models built from your workouts
-4. **Calendar Integration** - Actually gets your plans into your schedule
-5. **Cost-Effective** - AI coaching at fraction of professional coach pricing
-6. **Personalization** - Plans adapt to YOUR data, not templates
-
----
-
-## User Experience Highlights
-
-### Dashboard
-- **Clean at a glance** - Key metrics visible immediately
-- **Deep analytics** - Detailed charts for serious analysis
-- **Contextual filters** - View data multiple ways without clutter
-- **Mobile-first** - Fully responsive across all devices
-
-### Chat Interface
-- **Natural conversation** - Talk like you would to a coach
-- **Smart suggestions** - Get helpful prompts without intrusion
-- **Organized history** - Sessions grouped by topic
-- **Quick actions** - Common requests available as suggestions
-
-### Training Plans
-- **Visual planning** - See your week at a glance
-- **Actionable detail** - Each workout has specific instructions
-- **Calendar sync** - Plans that actually get done
-- **Performance tracking** - See what you completed vs planned
+- **Smart Dashboard**: Split-view hero header with status alerts and 8-week
+  **Training Trends** analysis.
+- **AI Coach Chat**: Context-aware agent that knows your last 30 rides and can
+  build structured plans from conversation.
+- **Interactive Planner**: Drag-and-drop scheduling with **Strava
+  Reconciliation** (Plan vs Actual adherence).
+- **Apple Watch Health Sync**: Private, direct ingestion of health metrics via
+  iOS Shortcuts.
+- **Guest/Demo Mode**: Frictionless onboarding preview for new users.
 
 ---
 
-## Tech Stack (Transparent to Users)
+## 📣 Marketing Angles
 
-- **Frontend:** React + TypeScript for reliability
-- **Styling:** Tailwind CSS for consistent design
-- **Data:** Supabase for secure, privacy-respecting storage
-- **AI:** OpenAI GPT-4 for intelligent coaching
-- **Charts:** Recharts for beautiful data visualization
-- **Icons:** Lucide React for clean, modern UI
-
-**Key Technical Benefit:** Edge functions keep API keys secure server-side, not exposed to browser.
+- **"Permission to Rest"**: Most apps push you to do more. We use your bio-data
+  to tell you when to back off, preventing burnout.
+- **"Your Data, Your Coach"**: Stop following generic PDFs. Train with a system
+  that knows your FTP history and yesterday's sleep score.
+- **"From Insight to Action"**: Don't just look at a graph. Click a button to
+  turn that "Fatigue" warning into a "Recovery Week."
 
 ---
 
-## Compliance & Privacy
+## 🗺️ User Highlights
 
-✅ **Strava API Compliant** - Uses data for inference only, zero model training
-✅ **User Data Private** - No data sharing with third parties for AI improvement
-✅ **Row-Level Security** - Database policies ensure users see only their own data
-✅ **Transparent Practices** - Full compliance documentation available
+- **The Morning Check-in**:
+  1. User wakes up, checks **Dashboard**.
+  2. Sees "Recovery: 42% (Low)" due to poor sleep.
+  3. Clicks **"Need Rest" Intent Chip**.
+  4. AI swaps "VO2 Max Intervals" for "Zone 1 Spin".
 
----
-
-## Future Roadmap
-
-### Phase 2: Enhanced Features
-- Advanced data visualization and insights
-- Training plan persistence and versioning
-- Goal setting and automatic tracking
-- Recovery-focused coaching (Oura integration expansion)
-
-### Phase 3: Community & Social
-- Share training plans with friends
-- Compare progress with training partners
-- Group coaching features
-- Performance leaderboards
-
-### Phase 4: AI Advancement
-- Machine learning pattern recognition
-- Predictive performance analysis
-- Personalized recommendation engine
-- Automatic plan optimization
+- **The Sunday Ritual**:
+  1. Opens **Plans Page** in **Focus Mode**.
+  2. Reviews last week's "Plan vs Actual" adherence (85%).
+  3. Drags missed workout to Tuesday.
+  4. Clicks **"Export to Calendar"** to sync logistics for the week ahead.
 
 ---
 
-## Key Metrics to Track
+## 🛤️ Roadmap
 
-**Engagement:**
-- Daily/weekly active users
-- Chat message frequency
-- Plan generation rate
-- Content feed interactions
+### ✅ Now (Live & Complete)
 
-**Retention:**
-- 30-day/60-day retention rates
-- Strava sync frequency
-- Calendar export adoption
-- Return user patterns
+- **Core**: Strava OAuth, Supabase Persistence, OpenAI Integration.
+- **Bio-Awareness**: Health Metrics (Sleep/HRV) + Weighted Recovery Score.
+- **Experience**: Midnight Pro Theme, Intent Chips, Planner Focus Mode.
+- **Analytics**: PostHog Integration, Training Trends Refactor.
 
-**Quality:**
-- User satisfaction (plans completed)
-- AI coaching usefulness ratings
-- Data accuracy and relevance
-- Performance improvement tracking
+### 🔮 Next (Near Future)
+
+- **Advanced Periodization**: Seasonal planning (Base, Build, Peak) logic in
+  Plan Generator.
+- **Social & Community**: Share plans or "Challenge" friends.
+- **Content Feed Phase 2**: Instagram/RSS integration for personalized learning.
 
 ---
 
-## Design Philosophy
+## 🎨 Design Philosophy
 
-### Simplicity Over Complexity
-- Obvious primary actions (chat, view plan, export)
-- Advanced features available but not overwhelming
-- Progressive disclosure of details
+### 1. Immersion & Focus ("Midnight Pro")
 
-### Data Visualization
-- Clean, modern charts that tell stories
-- Color coding for quick pattern recognition
-- Mobile-responsive graphics
+Data should pop, but the interface should recede. We use a deep "Midnight"
+palette to make colorful training metrics (Zones, Heart Rate) stand out without
+visual clutter.
 
-### User Control
-- Clear choices and transparent decisions
-- Reversible actions (link/unlink, connect/disconnect)
-- Customizable AI personality and coaching style
+### 2. Simplicity Over Complexity
 
----
+Obvious primary actions. Complex tools (like the CSV exporter or raw JSON views)
+are tucked away. The "Golden Path"—Check Status -> Adjust Plan -> Ride—is
+frictionless.
 
-## Messaging Framework
+### 3. User Agency
 
-### Headline
-"AI-Powered Training Plans Based on YOUR Data"
-
-### Subheading
-"From your real Strava workouts to personalized coaching insights"
-
-### Call to Action
-"Connect Strava. Chat with Your Coach. Get Your Training Plan."
-
-### Brand Voice
-- **Tone:** Professional but approachable
-- **Style:** Data-driven but encouraging
-- **Technical Level:** Accessible to non-experts
-- **Authority:** Expert knowledge backed by real athlete data
+We suggest, you decide. The AI offers a _recommendation_, but features like
+**Intent Chips** and **Drag-and-Drop** put the final decision firmly in the
+user's hands.
 
 ---
 
-## Differentiation Matrix
+## ⚔️ Differentiation Matrix
 
-| Feature | TrainingSmart | Generic Plans | Professional Coach | Strava | Training Apps |
-|---------|---|---|---|---|---|
-| Real data analysis | ✅ | ❌ | ✅ | ✅ | ❌ |
-| AI coaching | ✅ | ❌ | ✅ | ❌ | ❌ |
-| Calendar integration | ✅ | ❌ | ❌ | ❌ | Varies |
-| Conversational | ✅ | ❌ | ✅ | ❌ | ❌ |
-| Affordable | ✅ | ✅ | ❌ | ✅ | ✅ |
-| Privacy | ✅ | Varies | ✅ | ❌ | Varies |
-
----
-
-## Success Definition
-
-**Short-term (3 months):**
-- 100+ active users with Strava connected
-- 50%+ of users generating at least one training plan
-- Positive feedback on AI coaching quality
-- Mobile experience works flawlessly
-
-**Medium-term (6 months):**
-- 1000+ active users
-- 30% week-over-week growth
-- Average user completes 70%+ of planned workouts
-- Featured in cycling forums/communities
-
-**Long-term (12 months):**
-- Profitable or sustainably funded
-- 5000+ active users
-- Expansion to new sports (running, triathlon)
-- Community features enabling user-to-user coaching
+| Feature                | TrainingSmart | Generic Plans | Pro Coach  | Strava Premium |
+| :--------------------- | :-----------: | :-----------: | :--------: | :------------: |
+| **Real Data Analysis** |      ✅       |      ❌       |     ✅     |       ✅       |
+| **AI Personalization** |      ✅       |      ❌       | ⚠️ (Human) |       ❌       |
+| **Bio-Aware Recovery** |      ✅       |      ❌       |     ✅     |  ⚠️ (Limited)  |
+| **Calendar Workouts**  |      ✅       |      ✅       |     ❌     |       ❌       |
+| **Privacy First**      |      ✅       |      ⚠️       |     ✅     |       ❌       |
+| **Cost**               |     **$**     |     **$**     |  **$$$**   |     **$**      |
 
 ---
 
-## Quick Links
+## 📈 Success Metrics
 
-- **Full PRD:** [/PRD.md](./PRD.md)
-- **Privacy Policy:** [/src/pages/PrivacyPage.tsx](./src/pages/PrivacyPage.tsx)
-- **Compliance Docs:** [/STRAVA_COMPLIANCE.md](./STRAVA_COMPLIANCE.md)
-- **README:** [/README.md](./README.md)
-
----
-
-**Last Updated:** December 10, 2025
-**Version:** 1.0
+- **Adherence**: % of planned workouts matched to actual Strava activities.
+- **Engagement**: Daily Active Users (DAU) interacting with **Intent Chips** or
+  **Chat**.
+- **Retention**: 30-day retention of users who sync **Health Metrics** (high
+  investment).
+- **Conversion**: % of "Demo Mode" users who auth with Strava.
