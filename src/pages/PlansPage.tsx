@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { addDays, isSameDay, startOfWeek, format } from 'date-fns';
-import { Target, Plus, Trash2, MessageCircle, ChevronDown } from 'lucide-react';
+import { Target, Plus, Trash2, MessageCircle, ChevronDown, Calendar as CalendarIcon } from 'lucide-react';
 
 import { Button } from '../components/common/Button';
 import { stravaCacheService } from '../services/stravaCacheService';
@@ -14,6 +14,7 @@ import { convertMarkdownToHtml } from '../utils/markdownToHtml';
 import WeeklyPlanView from '../components/plans/WeeklyPlanView';
 import PlanModificationModal from '../components/plans/PlanModificationModal';
 import { WorkoutDetailModal } from '../components/dashboard/WorkoutDetailModal';
+import { CalendarSyncModal } from '../components/plans/CalendarSyncModal';
 import { ouraApi } from '../services/ouraApi';
 import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
 import { streakService, UserStreak } from '../services/streakService';
@@ -30,7 +31,7 @@ export const PlansPage: React.FC = () => {
   const [activities, setActivities] = useState<StravaActivity[]>([]);
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStats | null>(null);
   // Removed local savedPlans state, using usePlanData
-  const { data: planData, isLoading: plansLoading, error: plansError } = usePlanData();
+  const { data: planData } = usePlanData();
   const savedPlans = planData?.plans || [];
   
   const [loading, setLoading] = useState(true); // Keep for Strava data loading
@@ -46,6 +47,7 @@ export const PlansPage: React.FC = () => {
     weekNumber: number;
     workouts: Workout[];
   }>({ isOpen: false, planId: null, weekNumber: 0, workouts: [] });
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -361,13 +363,7 @@ Additional Preferences: ${preferences || 'None'}
     );
   };
 
-  const handleWorkoutsExported = async () => {
-    try {
-      await queryClient.invalidateQueries({ queryKey: ['plan-data'] });
-    } catch (err) {
-      console.error('Failed to refresh plans:', err);
-    }
-  };
+
 
   const handleOpenModifyWeek = (planId: string, weekNumber: number, weekWorkouts: Workout[]) => {
     setModificationModal({
@@ -664,14 +660,29 @@ Additional Preferences: ${preferences || 'None'}
               AI-generated cycling plans based on your Strava data
             </p>
           </div>
-          <Button
-            onClick={() => setShowForm(true)}
-            className="flex items-center justify-center space-x-2 w-full md:w-auto"
-          >
-            <Plus className="w-4 h-4" />
-            <span>New Plan</span>
-          </Button>
+          <div className="flex gap-2 w-full md:w-auto">
+             <Button
+              onClick={() => setShowCalendarModal(true)}
+              variant="outline"
+              className="flex items-center justify-center space-x-2 w-full md:w-auto border-slate-700 text-slate-300 hover:text-white"
+            >
+              <CalendarIcon className="w-4 h-4" />
+              <span>Sync</span>
+            </Button>
+            <Button
+              onClick={() => setShowForm(true)}
+              className="flex items-center justify-center space-x-2 w-full md:w-auto"
+            >
+              <Plus className="w-4 h-4" />
+              <span>New Plan</span>
+            </Button>
+          </div>
         </div>
+
+        <CalendarSyncModal 
+          isOpen={showCalendarModal} 
+          onClose={() => setShowCalendarModal(false)} 
+        />
 
 
 
@@ -932,7 +943,6 @@ Additional Preferences: ${preferences || 'None'}
                         onDelete={handleDeleteWorkout}
                         onAddWorkout={(date) => handleAddWorkout(plan.id, date)}
                         onModifyWeek={(weekNumber, weekWorkouts) => handleOpenModifyWeek(plan.id, weekNumber, weekWorkouts)}
-                        onWorkoutsExported={handleWorkoutsExported}
                         onMoveWorkout={handleMoveWorkout}
                         onWorkoutClick={setSelectedWorkout}
                         weeklyStats={weeklyStats}

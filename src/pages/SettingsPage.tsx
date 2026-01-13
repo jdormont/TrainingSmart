@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Save, RotateCcw, Bot, User, Settings, Moon, Activity, Calendar as CalendarIcon, TrendingUp, Target, Watch, Copy, Eye, EyeOff, Download } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Save, RotateCcw, Bot, User, Settings, Moon, Activity, TrendingUp, Target, Watch, Copy, Eye, EyeOff, Download } from 'lucide-react';
 import { Button } from '../components/common/Button';
 import { stravaApi } from '../services/stravaApi';
 import { stravaCacheService } from '../services/stravaCacheService';
 import { ouraApi } from '../services/ouraApi';
-import { googleCalendarService } from '../services/googleCalendarService';
 import { AdminDashboard } from '../components/admin/AdminDashboard';
 import { useAuth } from '../contexts/AuthContext';
 import { STORAGE_KEYS } from '../utils/constants';
 import { supabase } from '../services/supabaseClient';
+import { Integrations } from '../components/settings/Integrations';
 import {
   userProfileService,
   COACH_PERSONAS,
@@ -68,9 +68,7 @@ export const SettingsPage: React.FC = () => {
   const [saved, setSaved] = useState(false);
   const [athlete, setAthlete] = useState<StravaAthlete | null>(null);
   const [ouraConnected, setOuraConnected] = useState(false);
-  const [calendarConnected, setCalendarConnected] = useState(false);
-  const [calendarConnectedAt, setCalendarConnectedAt] = useState<Date | null>(null);
-  const [connectingCalendar, setConnectingCalendar] = useState(false);
+  const [calendarToken, setCalendarToken] = useState<string | null>(null);
   const [refreshingCache, setRefreshingCache] = useState(false);
   const [stravaConnectedAt, setStravaConnectedAt] = useState<Date | null>(null);
   const [gender, setGender] = useState<string>('');
@@ -89,9 +87,6 @@ export const SettingsPage: React.FC = () => {
   // New state for API Key display
   const [showKeys, setShowKeys] = useState(false);
   const [copying, setCopying] = useState(false);
-
-  const location = useLocation();
-  const navigate = useNavigate();
 
   useEffect(() => {
     // Load saved system prompt
@@ -160,46 +155,16 @@ export const SettingsPage: React.FC = () => {
     };
     loadProfiles();
 
-    // Check Google Calendar connection status
-    const checkCalendarStatus = async () => {
-      const status = await googleCalendarService.getConnectionStatus();
-      setCalendarConnected(status.connected);
-      setCalendarConnectedAt(status.connectedAt || null);
+    // Load calendar token
+    const loadCalendarToken = async () => {
+       const profile = await userProfileService.getUserProfile();
+       if (profile?.calendar_token) {
+         setCalendarToken(profile.calendar_token);
+       }
     };
-    checkCalendarStatus();
+    loadCalendarToken();
+
   }, [userProfile]);
-
-  // Handle OAuth callback
-  useEffect(() => {
-    const handleCalendarCallback = async (code: string) => {
-      setConnectingCalendar(true);
-      try {
-        await googleCalendarService.handleOAuthCallback(code);
-        const status = await googleCalendarService.getConnectionStatus();
-        setCalendarConnected(status.connected);
-        setCalendarConnectedAt(status.connectedAt || null);
-
-        // Track successful connection
-        analytics.track('provider_connected', { provider: 'google_calendar' });
-
-        // Clean up URL
-        navigate('/settings', { replace: true });
-
-        alert('Successfully connected to Google Calendar! You can now export workouts from your training plans.');
-      } catch (error) {
-        console.error('Failed to complete Google Calendar connection:', error);
-        alert(`Failed to connect: ${(error as Error).message}`);
-      } finally {
-        setConnectingCalendar(false);
-      }
-    };
-
-    const params = new URLSearchParams(location.search);
-    const code = params.get('code');
-    if (code) {
-      handleCalendarCallback(code);
-    }
-  }, [location.search, navigate]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -277,29 +242,7 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleConnectCalendar = () => {
-    try {
-      googleCalendarService.initiateOAuthFlow();
-    } catch (error) {
-      console.error('Failed to connect to Google Calendar:', error);
-      alert(`Configuration Error: ${(error as Error).message}\n\nPlease check your environment variables.`);
-    }
-  };
-
-
-
-  const handleDisconnectCalendar = async () => {
-    if (confirm('Are you sure you want to disconnect Google Calendar? Your previously exported events will remain in your calendar.')) {
-      try {
-        await googleCalendarService.disconnect();
-        setCalendarConnected(false);
-        setCalendarConnectedAt(null);
-      } catch (error) {
-        console.error('Failed to disconnect:', error);
-        alert(`Failed to disconnect: ${(error as Error).message}`);
-      }
-    }
-  };
+  // Removed handleGenerateCalendarToken as it is now in Integrations component
 
   const handleSaveDemographics = async () => {
     setSavingDemographics(true);
@@ -484,73 +427,11 @@ export const SettingsPage: React.FC = () => {
             )}
           </div>
 
-          {/* Google Calendar Integration */}
-          <div className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 p-6">
-            <h2 className="text-xl font-semibold text-slate-100 mb-4 flex items-center">
-              <CalendarIcon className="w-5 h-5 mr-2" />
-              Google Calendar Integration
-            </h2>
-
-            <p className="text-slate-400 mb-4">
-              Connect your Google Calendar to export your workout plans. This is a one-way export -
-              workouts will be added to your calendar but won't sync back.
-            </p>
-
-            {connectingCalendar ? (
-              <div className="flex items-center space-x-2 text-slate-400">
-                <Activity className="w-5 h-5 animate-spin" />
-                <span>Connecting to Google Calendar...</span>
-              </div>
-            ) : calendarConnected ? (
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2 text-green-400">
-                  <CalendarIcon className="w-5 h-5" />
-                  <span className="font-medium">Google Calendar Connected</span>
-                </div>
-                {calendarConnectedAt && (
-                  <p className="text-sm text-slate-400">
-                    Connected on {calendarConnectedAt.toLocaleDateString()} at {calendarConnectedAt.toLocaleTimeString()}
-                  </p>
-                )}
-                <p className="text-sm text-slate-400">
-                  You can now export workouts from the Plans page. Each workout will include detailed
-                  information and a link back to this app.
-                </p>
-                <Button
-                  onClick={handleDisconnectCalendar}
-                  variant="outline"
-                  className="text-red-400 border-red-500/30 hover:bg-red-500/10"
-                >
-                  Disconnect Google Calendar
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="bg-blue-950/20 border border-blue-500/20 rounded-lg p-4">
-                  <h3 className="font-medium text-blue-200 mb-2">
-                    Why Connect Google Calendar?
-                  </h3>
-                  <ul className="text-sm text-blue-200/80 space-y-1">
-                    <li>• Export entire training weeks with one click</li>
-                    <li>• Add individual workouts to your calendar</li>
-                    <li>• Get reminders for scheduled workouts</li>
-                    <li>• Share your training schedule with coaches or friends</li>
-                    <li>• View workouts alongside other commitments</li>
-                  </ul>
-                </div>
-                <Button
-                  onClick={handleConnectCalendar}
-                  className="bg-blue-600 hover:bg-blue-700 flex items-center space-x-2 text-white"
-                >
-                  <CalendarIcon className="w-4 h-4" />
-                  <span>Connect Google Calendar</span>
-                </Button>
-                <p className="text-xs text-slate-500">
-                  You'll be redirected to Google to authorize access to your calendar.
-                </p>
-              </div>
-            )}
-          </div>
+          {/* Calendar Subscription */}
+          <Integrations 
+            calendarToken={calendarToken}
+            onTokenChange={setCalendarToken}
+          />
 
           {/* Oura Integration */}
           <div className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 p-6">

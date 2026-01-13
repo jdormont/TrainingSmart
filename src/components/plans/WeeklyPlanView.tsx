@@ -2,9 +2,8 @@ import { useMemo, useState, useEffect, useRef } from 'react';
 import { Workout, WeeklyStats } from '../../types';
 import WorkoutCard from './WorkoutCard';
 import { addDays, startOfWeek, format, isSameDay, isWithinInterval, endOfWeek } from 'date-fns';
-import { Wand2, Calendar, Plus } from 'lucide-react';
+import { Wand2, Plus } from 'lucide-react';
 import { Button } from '../common/Button';
-import { googleCalendarService } from '../../services/googleCalendarService';
 import {
   DndContext,
   DragOverlay,
@@ -31,7 +30,6 @@ interface WeeklyPlanViewProps {
   onDelete?: (workoutId: string) => void;
   onAddWorkout?: (date: Date) => void;
   onModifyWeek?: (weekIndex: number, weekWorkouts: Workout[]) => void;
-  onWorkoutsExported?: () => void;
   onMoveWorkout?: (workoutId: string, newDate: Date, strategy: 'move' | 'swap' | 'replace') => void;
   onWorkoutClick?: (workout: Workout) => void;
   weeklyStats?: WeeklyStats | null;
@@ -48,13 +46,11 @@ export default function WeeklyPlanView({
   onDelete,
   onAddWorkout,
   onModifyWeek,
-  onWorkoutsExported,
   onMoveWorkout,
   onWorkoutClick,
   weeklyStats,
   streak
 }: WeeklyPlanViewProps) {
-  const [exportingWeek, setExportingWeek] = useState<number | null>(null);
   const [activeDragItem, setActiveDragItem] = useState<Workout | null>(null);
   const [conflictModal, setConflictModal] = useState<{
     isOpen: boolean;
@@ -227,54 +223,7 @@ export default function WeeklyPlanView({
     );
   }
 
-  const handleExportWeek = async (weekIndex: number, weekWorkouts: Workout[]) => {
-    if (weekWorkouts.length === 0) {
-      alert('No workouts to export for this week');
-      return;
-    }
 
-    const isConnected = await googleCalendarService.isConnected();
-    if (!isConnected) {
-      if (confirm('Google Calendar is not connected. Would you like to go to Settings to connect it?')) {
-        window.location.href = '/settings';
-      }
-      return;
-    }
-
-    const workoutsToExport = weekWorkouts.filter(w => !w.google_calendar_event_id);
-    if (workoutsToExport.length === 0) {
-      alert('All workouts in this week have already been exported to Google Calendar.');
-      return;
-    }
-
-    const confirmed = confirm(
-      `Export ${workoutsToExport.length} workout(s) to Google Calendar?\n\n` +
-      `${workoutsToExport.length === weekWorkouts.length ? 'All workouts' : `${workoutsToExport.length} of ${weekWorkouts.length} workouts`} will be added to your calendar.`
-    );
-
-    if (!confirmed) return;
-
-    setExportingWeek(weekIndex);
-    try {
-      const results = await googleCalendarService.exportWorkoutsToCalendar(workoutsToExport);
-
-      if (results.success > 0) {
-        let message = `Successfully exported ${results.success} workout(s) to Google Calendar!`;
-        if (results.failed > 0) {
-          message += `\n\n${results.failed} workout(s) failed to export:\n` + results.errors.join('\n');
-        }
-        alert(message);
-        onWorkoutsExported?.();
-      } else {
-        alert(`Failed to export workouts:\n` + results.errors.join('\n'));
-      }
-    } catch (error) {
-      console.error('Failed to export week:', error);
-      alert(`Failed to export: ${(error as Error).message}`);
-    } finally {
-      setExportingWeek(null);
-    }
-  };
 
   return (
     <DndContext
@@ -285,8 +234,6 @@ export default function WeeklyPlanView({
       <div className="space-y-4" ref={scrollRef}>
         {weeks.map((week, weekIndex) => {
           const weekWorkouts = week.days.flatMap(day => day.workouts);
-          const alreadyExportedCount = weekWorkouts.filter(w => w.google_calendar_event_id).length;
-          const isExporting = exportingWeek === weekIndex;
           
           const today = new Date();
           let status: 'completed' | 'current' | 'upcoming' = 'upcoming';
@@ -313,23 +260,8 @@ export default function WeeklyPlanView({
                  {/* Week Actions */}
                  <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/5 pb-4">
                     <div className="text-sm text-slate-400">
-                      {alreadyExportedCount > 0 && (
-                        <span>{alreadyExportedCount}/{weekWorkouts.length} synced to calendar</span>
-                      )}
                     </div>
                     <div className="flex items-center space-x-2">
-                        {weekWorkouts.length > 0 && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => handleExportWeek(weekIndex, weekWorkouts)}
-                          loading={isExporting}
-                          className="flex items-center space-x-2 text-xs"
-                        >
-                          <Calendar className="w-3 h-3" />
-                          <span>Sync to Google</span>
-                        </Button>
-                      )}
                       {onModifyWeek && weekWorkouts.length > 0 && (
                         <Button
                           variant="secondary"

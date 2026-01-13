@@ -6,6 +6,7 @@ export interface UserProfile {
   coach_persona?: string;
   gender?: string;
   age_bucket?: string;
+  calendar_token?: string;
 }
 
 export interface ContentProfile {
@@ -62,7 +63,7 @@ export const userProfileService = {
 
     const { data, error } = await supabase
       .from('user_profiles')
-      .select('training_goal, weekly_hours, coach_persona, gender, age_bucket')
+      .select('training_goal, weekly_hours, coach_persona, gender, age_bucket, calendar_token')
       .eq('user_id', user.id)
       .maybeSingle();
 
@@ -129,5 +130,23 @@ export const userProfileService = {
 
       if (error) throw error;
     }
+  },
+
+  async regenerateCalendarToken(): Promise<string> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const newToken = crypto.randomUUID();
+
+    const { error } = await supabase
+      .from('user_profiles')
+      .update({
+        calendar_token: newToken,
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+    return newToken;
   }
 };

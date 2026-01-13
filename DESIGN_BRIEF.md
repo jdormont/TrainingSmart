@@ -121,9 +121,8 @@ visual clutter.
 
 ### 2. Simplicity Over Complexity
 
-Obvious primary actions. Complex tools (like the CSV exporter or raw JSON views)
-are tucked away. The "Golden Path"—Check Status -> Adjust Plan -> Ride—is
-frictionless.
+Obvious primary actions. Complex tools are tucked away. The "Golden Path"—Check
+Status -> Adjust Plan -> Ride—is frictionless.
 
 ### 3. User Agency
 
