@@ -5,6 +5,7 @@ import { Button } from '../common/Button';
 import { supabase } from '../../services/supabaseClient';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { ROUTES } from '../../utils/constants';
+import { SocialLoginButton } from './SocialLoginButton';
 
 interface AuthPageProps {
   onAuthSuccess?: () => void;
@@ -43,6 +44,27 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthSuccess }) => {
     }
 
     return true;
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin + '/dashboard',
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      setError(err.message || 'Error occurred during Google login');
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -133,6 +155,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onAuthSuccess }) => {
         </div>
 
         <div className="bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50 p-8">
+          <SocialLoginButton onClick={handleGoogleLogin} isLoading={loading} />
+
+          <div className="flex items-center gap-4 mb-6">
+            <div className="h-px bg-slate-700 flex-1" />
+            <span className="text-slate-500 text-xs uppercase tracking-wider">
+              ------- OR -------
+            </span>
+            <div className="h-px bg-slate-700 flex-1" />
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-6">
             {!isLogin && (
               <div>

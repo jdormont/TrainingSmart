@@ -210,6 +210,38 @@ export const MOCK_HEALTH_METRICS: HealthMetrics = {
       trend: 'stable',
       suggestion: 'Good training balance - maintain 80/20 easy/hard split'
     }
+  },
+  profile: {
+    discipline: {
+      level: 10,
+      currentValue: "6.5 days/wk",
+      nextLevelCriteria: "Max",
+      prompt: "Maximum Discipline achieved! Keep the streak alive."
+    },
+    stamina: {
+      level: 8,
+      currentValue: "4h 30m",
+      nextLevelCriteria: "5h 0m",
+      prompt: "Extend your weekend long ride by ~30 minutes to unlock the next level."
+    },
+    punch: {
+      level: 6,
+      currentValue: "10.0%",
+      nextLevelCriteria: "12.5%",
+      prompt: "You need more intensity. Try the '4x8m Threshold' workout this week."
+    },
+    capacity: {
+      level: 7,
+      currentValue: "1.15",
+      nextLevelCriteria: "1.20",
+      prompt: "Safely increase volume to ACWR 1.20 for Level 8."
+    },
+    form: {
+      level: 9,
+      currentValue: "+2.8%",
+      nextLevelCriteria: "+3.5%",
+      prompt: "Peak efficiency approaching. Focus on steady state."
+    }
   }
 } as unknown as HealthMetrics;
 

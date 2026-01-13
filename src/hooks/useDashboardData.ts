@@ -87,7 +87,7 @@ export const useDashboardData = () => {
         stravaCacheService.getActivities(false, 100)
       ]);
     } catch (error: any) {
-      if (error?.message?.includes('authenticated') || error?.response?.status === 401) {
+      if (error?.message?.includes('authenticated') || error?.message?.includes('No valid access token') || error?.response?.status === 401) {
         console.log('Strava not connected');
         // Return mostly empty data structure for disconnected state
         return {
