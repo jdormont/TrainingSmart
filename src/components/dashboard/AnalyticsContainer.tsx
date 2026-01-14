@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { BarChart2, Activity, Heart } from 'lucide-react';
 import { TrainingTrendsChart } from './TrainingTrendsChart';
 import { RiderProfileChart } from './RiderProfileChart';
@@ -28,6 +29,18 @@ export const AnalyticsContainer: React.FC<AnalyticsContainerProps> = ({
     loading = false
 }) => {
     const [activeTab, setActiveTab] = useState<TabType>('trends');
+    const location = useLocation();
+
+    // Handle hash navigation
+    useEffect(() => {
+        if (location.hash === '#recovery') {
+            setActiveTab('recovery');
+        } else if (location.hash === '#health') {
+            setActiveTab('health');
+        } else if (location.hash === '#trends') {
+            setActiveTab('trends');
+        }
+    }, [location.hash]);
 
     // Tab Definitions
     const tabs = [

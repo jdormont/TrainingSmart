@@ -404,12 +404,11 @@ Generate a JSON response with:
       const pacingStatus = this.analyzePacingStatus(activities);
 
       // Generate Matrix Insight based on the intersection
-      const matrixInsight = this.generateInsightMatrix(pacingStatus, recoveryStatus);
+      const matrixInsight = this.generateInsightMatrix(pacingStatus, recoveryStatus, recoveryStatus.daysAvailable);
 
       if (matrixInsight) {
         console.log('Generated Bio-Aware Matrix Insight:', matrixInsight);
 
-        // Cache and return the matrix insight immediately
         // Cache and return the matrix insight immediately
         const insight: WeeklyInsight = {
           ...matrixInsight,
@@ -571,7 +570,7 @@ Generate a JSON response with:
   private analyzeRecoveryStatus(
     dailyMetrics: DailyMetric[],
     ouraReadiness: OuraReadinessData[]
-  ): { status: 'Fresh' | 'Fatigued' | 'Unknown'; score: number; reason: string } {
+  ): { status: 'Fresh' | 'Fatigued' | 'Balanced' | 'Unknown'; score: number; reason: string; daysAvailable: number } {
     // We prioritize Daily Metrics (which contain HRV/RHR from Oura or Apple Health)
     // We need at least 3 days for "Current" and ideally more for "Baseline"
     if (dailyMetrics.length < 3) {
@@ -580,12 +579,13 @@ Generate a JSON response with:
         const sorted = [...ouraReadiness].sort((a, b) => new Date(b.day).getTime() - new Date(a.day).getTime());
         const score = sorted[0].score;
         return {
-          status: score >= 85 ? 'Fresh' : score <= 60 ? 'Fatigued' : 'Unknown',
+          status: score >= 85 ? 'Fresh' : score <= 60 ? 'Fatigued' : 'Balanced', // Use Balanced for middle range
           score,
-          reason: `Oura Readiness is ${score}`
+          reason: `Oura Readiness is ${score}`,
+          daysAvailable: dailyMetrics.length
         };
       }
-      return { status: 'Unknown', score: 0, reason: 'Insufficient data' };
+      return { status: 'Unknown', score: 0, reason: 'Insufficient data', daysAvailable: dailyMetrics.length };
     }
 
     // Sort metrics desc (newest first)
@@ -600,14 +600,19 @@ Generate a JSON response with:
     const baselineWindow = sorted.slice(3, 30);
     // If not enough history, use what we have, but require at least 5 days for a valid baseline
     if (baselineWindow.length < 5) {
-      return { status: 'Unknown', score: Math.round(avgCurrentHRV), reason: 'Building baseline data...' };
+      return { 
+          status: 'Unknown', 
+          score: Math.round(avgCurrentHRV), 
+          reason: 'Building baseline data...',
+          daysAvailable: dailyMetrics.length 
+      };
     }
 
     const avgBaselineHRV = baselineWindow.reduce((sum, m) => sum + m.hrv, 0) / baselineWindow.length;
     const avgBaselineRHR = baselineWindow.reduce((sum, m) => sum + m.resting_hr, 0) / baselineWindow.length;
 
     // 3. Determine Status
-    let status: 'Fresh' | 'Fatigued' | 'Unknown' = 'Unknown';
+    let status: 'Fresh' | 'Fatigued' | 'Balanced' | 'Unknown' = 'Unknown';
     const reasonParts = [];
 
     // Fatigued Conditions:
@@ -631,6 +636,7 @@ Generate a JSON response with:
       status = 'Fresh';
       reasonParts.push('Biometrics stable/improving');
     } else {
+      status = 'Balanced';
       reasonParts.push('Biometrics normal');
     }
 
@@ -640,7 +646,8 @@ Generate a JSON response with:
     return {
       status,
       score: displayScore,
-      reason: reasonParts.join(', ') || 'No significant change'
+      reason: reasonParts.join(', ') || 'No significant change',
+      daysAvailable: dailyMetrics.length
     };
   }
 
@@ -682,7 +689,8 @@ Generate a JSON response with:
 
   private generateInsightMatrix(
     pacing: { status: 'Behind' | 'Ahead' | 'OnTrack'; progress: number; reason: string },
-    recovery: { status: 'Fresh' | 'Fatigued' | 'Unknown'; score: number; reason: string }
+    recovery: { status: 'Fresh' | 'Fatigued' | 'Balanced' | 'Unknown'; score: number; reason: string },
+    daysAvailable: number = 0
   ): WeeklyInsight | null {
     const dayOfWeek = new Date().getDay();
     const isEarlyWeek = dayOfWeek >= 1 && dayOfWeek <= 2; // Mon/Tue
@@ -726,7 +734,7 @@ Generate a JSON response with:
         weekOf,
         dataPoints: [`Readiness: ${recovery.score}`, recovery.reason, pacing.reason],
         actionLabel: 'View Recovery Stats',
-        actionLink: '/dashboard',
+        actionLink: '/dashboard#recovery',
         readinessScore: recovery.score,
         pacingProgress: pacing.progress
       };
@@ -772,12 +780,13 @@ Generate a JSON response with:
     // We return this matching the Bio-Aware structure regardless of 'Unknown' status
     // to ensure the new UI always renders.
     const isUnknown = recovery.status === 'Unknown';
+    const remainingDays = Math.max(0, 8 - daysAvailable);
 
     return {
       id: isUnknown ? 'building_data' : 'balanced_status',
       title: isUnknown ? 'Gathering Recovery Data' : 'Training Balanced',
       message: isUnknown
-        ? `We're building your recovery baseline. Keep tracking to unlock personalized readiness insights.`
+        ? `We're building your recovery baseline. You need ${remainingDays} more day${remainingDays !== 1 ? 's' : ''} of collection to unlock personalized readiness insights.`
         : `You are ${pacing.status} with your training goals and your body is responding well. Keep up the momentum!`,
       type: 'consistency',
       confidence: 80,
@@ -785,7 +794,7 @@ Generate a JSON response with:
       weekOf,
       dataPoints: isUnknown ? [pacing.reason] : [`Readiness: ${recovery.score}`, recovery.reason, pacing.reason],
       actionLabel: isUnknown ? 'View Metrics' : 'View Training Details',
-      actionLink: '/dashboard',
+      actionLink: '/dashboard#recovery',
       readinessScore: recovery.score, // Might be 0 if unknown, which is fine
       pacingProgress: pacing.progress
     };
