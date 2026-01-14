@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/oura/:match*",
+      "destination": "https://api.ouraring.com/:match*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

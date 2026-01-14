@@ -15,47 +15,53 @@ export const OuraCallback: React.FC = () => {
     const handleCallback = async () => {
       try {
         setProcessing(true);
-        setDebugInfo('Processing Oura authorization...');
+        setDebugInfo('Processing Oura authorization code...');
       
-        // For client-side flow, the access token comes in the URL fragment, not query params
-        const urlFragment = window.location.hash.substring(1);
-        const fragmentParams = new URLSearchParams(urlFragment);
-        const accessToken = fragmentParams.get('access_token');
+        // For server-side flow, the code comes in query params
+        const code = searchParams.get('code');
         const error = searchParams.get('error');
         const state = searchParams.get('state');
       
         console.log('Oura auth callback received:', {
-          accessToken: accessToken ? 'present' : 'missing',
+          code: code ? 'present' : 'missing',
           error,
           state,
-          url: window.location.href,
-          fragment: urlFragment
+          url: window.location.href
         });
       
         if (error) {
           throw new Error(`Oura OAuth error: ${error}`);
         }
 
-        if (!accessToken) {
-          throw new Error('No access token received from Oura');
+        if (!code) {
+          // Fallback: Check for hash fragment just in case mixed flow or old cached code
+          const urlFragment = window.location.hash.substring(1);
+          const fragmentParams = new URLSearchParams(urlFragment);
+          const accessToken = fragmentParams.get('access_token');
+          
+          if (accessToken) {
+             console.log('Found legacy access token in hash fragment');
+             // Handle legacy flow
+             const tokens = {
+               access_token: accessToken,
+               token_type: fragmentParams.get('token_type') || 'Bearer',
+               expires_at: Date.now() + (parseInt(fragmentParams.get('expires_in') || '3600') * 1000),
+               refresh_token: '',
+             };
+             localStorage.setItem('oura_tokens', JSON.stringify(tokens));
+             finishSuccess();
+             return;
+          }
+
+          throw new Error('No authorization code received from Oura');
         }
 
-        setDebugInfo('Processing access token...');
-        // For client-side flow, we get the token directly
-        const tokens = {
-          access_token: accessToken,
-          token_type: fragmentParams.get('token_type') || 'Bearer',
-          expires_at: Date.now() + (parseInt(fragmentParams.get('expires_in') || '3600') * 1000),
-          refresh_token: '', // Client-side flow doesn't provide refresh tokens
-        };
+        setDebugInfo('Exchanging authorization code for tokens...');
         
-        // Store the tokens directly
-        localStorage.setItem('oura_tokens', JSON.stringify(tokens));
+        // Exchange code for tokens
+        await ouraApi.exchangeCodeForTokens(code);
         
-        setDebugInfo('Success! Redirecting to settings...');
-        setTimeout(() => {
-          navigate(ROUTES.SETTINGS, { replace: true });
-        }, 1000);
+        finishSuccess();
         
       } catch (err) {
         console.error('Oura auth callback error:', err);
@@ -64,6 +70,13 @@ export const OuraCallback: React.FC = () => {
       } finally {
         setProcessing(false);
       }
+    };
+
+    const finishSuccess = () => {
+        setDebugInfo('Success! Redirecting to settings...');
+        setTimeout(() => {
+          navigate(ROUTES.SETTINGS, { replace: true });
+        }, 1000);
     };
 
     handleCallback();

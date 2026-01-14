@@ -6,7 +6,8 @@ import { tokenStorageService } from './tokenStorageService';
 import type { OuraTokens, OuraSleepData, OuraReadinessData, OuraActivityData } from '../types';
 
 class OuraApiService {
-  private baseURL = import.meta.env.DEV ? '/api/oura' : OURA_CONFIG.BASE_URL;
+  // Use the proxy path for both Dev (Vite) and Prod (Vercel) to avoid CORS issues.
+  private baseURL = '/api/oura';
   private migrationChecked = false;
 
   // Get stored tokens (checks database first, falls back to localStorage for migration)
@@ -15,7 +16,9 @@ class OuraApiService {
     if (dbTokens) {
       return {
         access_token: dbTokens.access_token,
-        token_type: dbTokens.token_type
+        token_type: dbTokens.token_type,
+        refresh_token: dbTokens.refresh_token,
+        expires_at: dbTokens.expires_at
       };
     }
 
@@ -86,7 +89,7 @@ class OuraApiService {
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: redirectUri,
-      response_type: 'token',
+      response_type: 'code',
       scope: OURA_CONFIG.SCOPES,
       state: Math.random().toString(36).substring(2, 15), // CSRF protection
     });
@@ -96,7 +99,7 @@ class OuraApiService {
     console.log('Generated OAuth parameters:');
     console.log('- client_id:', clientId);
     console.log('- redirect_uri:', redirectUri);
-    console.log('- response_type: token');
+    console.log('- response_type: code');
     console.log('- scope:', OURA_CONFIG.SCOPES);
     console.log('');
     console.log('🔗 FULL OAUTH URL:');
@@ -140,7 +143,11 @@ class OuraApiService {
     };
     
     try {
-      const response = await axios.post(OURA_CONFIG.TOKEN_URL, requestData, {
+      // Use the baseURL (which is proxied in Dev) or fallback to direct URL.
+      // NOTE: In production, this requires a Vercel rewrite or backend function to avoid CORS.
+      const tokenUrl = `${this.baseURL}/oauth/token`;
+      
+      const response = await axios.post(tokenUrl, requestData, {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },

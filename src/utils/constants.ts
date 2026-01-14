@@ -10,6 +10,7 @@ export const STRAVA_CONFIG = {
 export const OURA_CONFIG = {
   BASE_URL: 'https://api.ouraring.com',
   AUTH_URL: 'https://cloud.ouraring.com/oauth/authorize',
+  TOKEN_URL: 'https://api.ouraring.com/oauth/token',
   SCOPES: 'personal daily', // Removed email scope as it might need approval
 } as const;
 
