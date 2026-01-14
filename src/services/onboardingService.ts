@@ -7,11 +7,16 @@ export const getUserOnboardingStatus = async (): Promise<boolean> => {
     if (!user) return true; // Treat unauthenticated as "no onboarding needed" for now to avoid blocking
 
     // Check if user has specific onboarding flag or profile data
-    // For now, assuming if profile exists, they are onboarded
+    // Fetch profile and check for critical onboarding fields
     const profile = await userProfileService.getUserProfile();
-    return !!profile;
+    
+    // Check if profile exists AND has key onboarding fields populated
+    // We check training_goal or coach_persona as indicators of completed wizard
+    if (!profile) return false;
+
+    return !!(profile.training_goal || profile.coach_persona);
   } catch (error) {
     console.warn('Error checking onboarding status:', error);
-    return true; // Default to onboarded to avoid blocking
+    return true; // Default to onboarded to avoid blocking on error
   }
 };
