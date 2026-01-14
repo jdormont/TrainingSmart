@@ -99,25 +99,30 @@ export const useDashboardData = () => {
        throw error;
     }
 
-    // 2. Fetch Streak & Sync if needed
+    // 2. Fetch Streak 
+    // We only need to sync from history if we barely have any streak data, or maybe on explicit request.
+    // Continually syncing from "activities list" is dangerous because it ignores "rest_checkin" events that only exist in the streak history, causing them to be wiped out.
     try {
       streakData = await streakService.getStreak(user.id);
       
-      // Sync from history if needed
-      const { data: manualWorkouts } = await supabase
-        .from('workouts')
-        .select('scheduled_date')
-        .eq('user_id', user.id)
-        .eq('completed', true);
+      // Only initial backfill if never initialized or empty
+      if (!streakData || (streakData.current_streak === 0 && streakData.streak_history.length === 0)) {
+         // Sync from history if needed
+        const { data: manualWorkouts } = await supabase
+            .from('workouts')
+            .select('scheduled_date')
+            .eq('user_id', user.id)
+            .eq('completed', true);
 
-      const historyItems = [
-        ...activitiesData.map(a => ({ date: a.start_date_local, type: 'activity' as const, source: 'strava' as const })),
-        ...(manualWorkouts || []).map(w => ({ date: w.scheduled_date, type: 'activity' as const, source: 'manual' as const }))
-      ];
+        const historyItems = [
+            ...activitiesData.map(a => ({ date: a.start_date_local, type: 'activity' as const, source: 'strava' as const })),
+            ...(manualWorkouts || []).map(w => ({ date: w.scheduled_date, type: 'activity' as const, source: 'manual' as const }))
+        ];
 
-      if (historyItems.length > 0) {
-        const syncedStreak = await streakService.syncFromHistory(user.id, historyItems);
-        if (syncedStreak) streakData = syncedStreak;
+        if (historyItems.length > 0) {
+            const syncedStreak = await streakService.syncFromHistory(user.id, historyItems);
+            if (syncedStreak) streakData = syncedStreak;
+        }
       }
     } catch (err) {
       console.warn('Failed to load streak:', err);

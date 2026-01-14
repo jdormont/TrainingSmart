@@ -14,10 +14,19 @@ interface StreakWidgetProps {
 
 export const StreakWidget: React.FC<StreakWidgetProps> = ({ streak, isRestDay, onStreakUpdate, userId }) => {
     const [loading, setLoading] = useState(false);
+    const [optimisticStreak, setOptimisticStreak] = useState<UserStreak | null>(null);
+
+    // Sync optimistic state when real data arrives from parent
+    React.useEffect(() => {
+        setOptimisticStreak(null);
+    }, [streak]);
+
+    // specific toggle for display
+    const displayStreak = optimisticStreak || streak;
 
     // Determine active state locally
     const today = format(new Date(), 'yyyy-MM-dd');
-    const isActiveToday = streak?.last_activity_date === today;
+    const isActiveToday = displayStreak?.last_activity_date === today;
 
     const handleCheckIn = async () => {
         setLoading(true);
@@ -25,6 +34,7 @@ export const StreakWidget: React.FC<StreakWidgetProps> = ({ streak, isRestDay, o
             const updated = await streakService.checkInRestDay(userId, today);
             if (updated) {
                 analytics.track('streak_checkin_completed', { date: today, type: 'active_recovery' });
+                setOptimisticStreak(updated); // Instant feedback
                 onStreakUpdate(updated);
             }
         } catch (error) {
@@ -35,7 +45,7 @@ export const StreakWidget: React.FC<StreakWidgetProps> = ({ streak, isRestDay, o
         }
     };
 
-    if (!streak) return null;
+    if (!displayStreak) return null;
 
     return (
         <div className="bg-slate-900 rounded-xl shadow-lg shadow-black/20 border border-slate-800 p-6">
@@ -51,17 +61,17 @@ export const StreakWidget: React.FC<StreakWidgetProps> = ({ streak, isRestDay, o
                 </div>
                 <div className="flex items-center space-x-1 bg-blue-500/10 border border-blue-500/20 px-2 py-1 rounded-full text-blue-400 text-sm font-medium">
                     <Snowflake className="w-3 h-3" />
-                    <span>{streak.streak_freezes}</span>
+                    <span>{displayStreak.streak_freezes}</span>
                 </div>
             </div>
 
             <div className="flex items-end space-x-3 mb-6">
-                <div className={`p-3 rounded-xl ${streak.current_streak > 0 ? 'bg-orange-500/20 text-orange-500' : 'bg-slate-800 text-slate-500'}`}>
-                    <Flame className={`w-8 h-8 ${streak.current_streak > 0 ? 'animate-pulse' : ''}`} fill={streak.current_streak > 0 ? "currentColor" : "none"} />
+                <div className={`p-3 rounded-xl ${displayStreak.current_streak > 0 ? 'bg-orange-500/20 text-orange-500' : 'bg-slate-800 text-slate-500'}`}>
+                    <Flame className={`w-8 h-8 ${displayStreak.current_streak > 0 ? 'animate-pulse' : ''}`} fill={displayStreak.current_streak > 0 ? "currentColor" : "none"} />
                 </div>
                 <div>
                     <div className="text-4xl font-bold text-slate-50 leading-none">
-                        {streak.current_streak}
+                        {displayStreak.current_streak}
                     </div>
                     <div className="text-sm text-slate-500 font-medium mt-1">
                         Days
@@ -92,7 +102,7 @@ export const StreakWidget: React.FC<StreakWidgetProps> = ({ streak, isRestDay, o
                 </div>
             )}
 
-            {streak.streak_freezes === 0 && streak.current_streak > 0 && !isActiveToday && (
+            {displayStreak.streak_freezes === 0 && displayStreak.current_streak > 0 && !isActiveToday && (
                 <p className="text-xs text-orange-500 mt-3 text-center">
                     Warning: No freezes left. Streak at risk!
                 </p>
