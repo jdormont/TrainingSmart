@@ -135,7 +135,7 @@ class StravaCacheService {
     const { error } = await supabase
       .from('strava_activities_cache')
       .upsert(rows, {
-        onConflict: 'id'
+        onConflict: 'user_id,id'
       });
 
     if (error) {

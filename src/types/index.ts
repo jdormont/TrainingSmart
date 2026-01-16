@@ -186,7 +186,8 @@ export interface WeeklyStats {
 export interface OuraTokens {
   access_token: string;
   refresh_token: string;
-  expires_at: number;
+  expires_at?: number; // Calculated timestamp
+  expires_in?: number; // Raw seconds from API
   token_type: string;
 }
 
@@ -209,6 +210,7 @@ export interface OuraSleepData {
   lowest_heart_rate: number;
   average_hrv: number;
   time_in_bed: number; // seconds
+  average_breath?: number; // average breathing rate
 }
 
 export interface OuraReadinessData {
@@ -255,7 +257,6 @@ export interface OuraActivityData {
   total_calories: number;
 }
 
-export interface DailyMetric {
   id?: string;
   user_id: string;
   date: string; // YYYY-MM-DD format
@@ -264,6 +265,15 @@ export interface DailyMetric {
   hrv: number;
   respiratory_rate?: number;
   recovery_score: number;
+  
+  // Oura Extended Fields
+  deep_sleep_minutes?: number;
+  rem_sleep_minutes?: number;
+  light_sleep_minutes?: number;
+  sleep_efficiency?: number;
+  temperature_deviation?: number;
+  source?: 'manual' | 'oura' | 'apple_health';
+
   created_at?: string;
   updated_at?: string;
 }

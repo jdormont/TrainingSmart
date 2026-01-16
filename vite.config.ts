@@ -11,6 +11,13 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/oura/, ''),
         secure: true,
+        configure: (proxy, _options) => {
+          proxy.on('proxyReq', (proxyReq, _req, _res) => {
+            // Strip cookies to prevent Oura WAF errors
+            proxyReq.removeHeader('cookie');
+            proxyReq.removeHeader('origin');
+          });
+        },
       },
     },
   },

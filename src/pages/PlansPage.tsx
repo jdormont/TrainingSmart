@@ -6,6 +6,7 @@ import { Button } from '../components/common/Button';
 import { stravaCacheService } from '../services/stravaCacheService';
 import { openaiService } from '../services/openaiApi';
 import { trainingPlansService } from '../services/trainingPlansService';
+import { healthMetricsService } from '../services/healthMetricsService'; // Import healthMetricsService
 import type { StravaActivity, StravaAthlete, TrainingPlan, Workout, WeeklyStats } from '../types';
 import { calculateWeeklyStats } from '../utils/dataProcessing';
 
@@ -14,6 +15,7 @@ import { convertMarkdownToHtml } from '../utils/markdownToHtml';
 import WeeklyPlanView from '../components/plans/WeeklyPlanView';
 import PlanModificationModal from '../components/plans/PlanModificationModal';
 import { WorkoutDetailModal } from '../components/dashboard/WorkoutDetailModal';
+import { SmartWorkoutPickerModal } from '../components/plans/SmartWorkoutPickerModal';
 import { CalendarSyncModal } from '../components/plans/CalendarSyncModal';
 import { ouraApi } from '../services/ouraApi';
 import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
@@ -22,7 +24,7 @@ import { supabase } from '../services/supabaseClient';
 
 type AiWorkout = Partial<Workout> & { dayOfWeek?: number; week?: number };
 
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { usePlanData } from '../hooks/usePlanData';
 import { PlansSkeleton } from '../components/skeletons/PlansSkeleton';
 
@@ -40,6 +42,11 @@ export const PlansPage: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
   const [streak, setStreak] = useState<UserStreak | null>(null);
+  // Smart Picker State
+  const [showSmartPicker, setShowSmartPicker] = useState(false);
+  const [pickerDate, setPickerDate] = useState<Date | null>(null);
+  const [pickerTargetPlanId, setPickerTargetPlanId] = useState<string | null>(null);
+  
   const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
   const [modificationModal, setModificationModal] = useState<{
     isOpen: boolean;
@@ -123,6 +130,49 @@ export const PlansPage: React.FC = () => {
 
     loadData();
   }, []);
+
+    // NEW: Fetch Bio-State Data for Smart Picker
+    const { data: bioData } = useQuery({
+        queryKey: ['bio-state-data'],
+        queryFn: async () => {
+             try {
+                // simple fetches
+                const [readiness, sleep] = await Promise.all([
+                     ouraApi.getRecentReadinessData(),
+                     ouraApi.getRecentSleepData()
+                ]);
+
+                // Calculate Load Ratio from existing activities if possible, 
+                // but since 'activities' state might be empty initially, we could re-fetch or depend on state.
+                // Better to rely on the service to re-calculate if needed or just use what we have.
+                // But useQuery runs independently. Let's just use defaults if calculation is complex here.
+                // OR, since we load activities in useEffect, we can use that state if we move this query?
+                // Actually, let's just fetch athlete + activities briefly to ensure freshness for the modal
+                const freshActivities = await stravaCacheService.getActivities(false, 50);
+                const freshAthlete = await stravaCacheService.getAthlete();
+                
+                let acuteLoadRatio = 1.0;
+                if (freshAthlete && freshActivities.length > 0) {
+                     const metrics = healthMetricsService.calculateHealthMetrics(freshAthlete, freshActivities);
+                     const ratioVal = metrics.details.load.components.find(c => c.name === 'A:C Ratio')?.value;
+                     if (ratioVal) acuteLoadRatio = parseFloat(String(ratioVal));
+                }
+
+                const currentReadiness = readiness && readiness.length > 0 ? readiness[readiness.length - 1].score : 
+                                         null;
+
+                return {
+                    recoveryScore: currentReadiness,
+                    acuteLoadRatio
+                };
+
+             } catch (e) {
+                 console.error("Failed to fetch bio data", e);
+                 return { recoveryScore: null, acuteLoadRatio: 1.0 };
+             }
+        },
+        enabled: showSmartPicker // Only fetch when modal opens? Or keep fresh. Let's keep fresh but with staleTime.
+    });
 
   const handleGeneratePlan = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -330,29 +380,34 @@ Additional Preferences: ${preferences || 'None'}
     }
   };
 
-  const handleAddWorkout = async (planId: string, date: Date) => {
+  // New: Smart Handler Trigger
+  const handleAddWorkoutClick = (planId: string, date: Date) => {
+    setPickerTargetPlanId(planId);
+    setPickerDate(date);
+    setShowSmartPicker(true);
+  };
+
+  // New: Smart Handler Action
+  const handleSmartWorkoutSelect = async (workout: Partial<Workout>) => {
+    if (!pickerTargetPlanId || !pickerDate) return;
+
     try {
-      const newWorkout = await trainingPlansService.addPlaceholderWorkout(planId, date);
-      
-      queryClient.setQueryData(['plan-data'], (oldData: any) => {
-          if (!oldData) return oldData;
-          return {
-              ...oldData,
-              plans: oldData.plans.map((p: TrainingPlan) =>
-                p.id === planId
-                  ? {
-                    ...p,
-                    workouts: [...p.workouts, newWorkout]
-                  }
-                  : p
-              )
-          };
+      await trainingPlansService.addWorkoutToPlan(pickerTargetPlanId, {
+        ...workout,
+        scheduled_date: pickerDate.toISOString().split('T')[0]
       });
-    } catch (err) {
-      console.error('Failed to add workout:', err);
-      setError('Failed to add new workout');
+
+      // Invalidate to refresh the view
       queryClient.invalidateQueries({ queryKey: ['plan-data'] });
+    } catch (err) {
+      console.error('Failed to add smart workout', err);
+      setError('Failed to add workout');
     }
+  };
+
+  const handleAddWorkout = async (planId: string, date: Date) => {
+    // Redirect to smart picker logic for now, or keep as fallback
+    handleAddWorkoutClick(planId, date); 
   };
 
   const toggleFocusArea = (area: string) => {
@@ -683,6 +738,21 @@ Additional Preferences: ${preferences || 'None'}
           isOpen={showCalendarModal} 
           onClose={() => setShowCalendarModal(false)} 
         />
+
+        {pickerDate && (
+           <SmartWorkoutPickerModal
+             isOpen={showSmartPicker}
+             onClose={() => {
+                 setShowSmartPicker(false);
+                 setPickerDate(null);
+                 setPickerTargetPlanId(null);
+             }}
+             date={pickerDate}
+             onSelectWorkout={handleSmartWorkoutSelect}
+             recoveryScore={bioData?.recoveryScore ?? 75} 
+             acuteLoadRatio={bioData?.acuteLoadRatio ?? 1.1} 
+           />
+        )}
 
 
 

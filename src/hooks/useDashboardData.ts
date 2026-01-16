@@ -138,77 +138,100 @@ export const useDashboardData = () => {
     const weeklyStats = calculateWeeklyStats(activitiesData);
 
     // 4. Recovery Data (Oura) & Metrics
+    // STRATEGY: 
+    // 1. Fetch from 'daily_metrics' table (Stored Data)
+    // 2. Trigger Oura Sync (Background) to ensure freshness
+    
     let sleepData: OuraSleepData | null = null;
     let readinessData: OuraReadinessData | null = null;
-    
-    if (await ouraApi.isAuthenticated()) {
-      try {
-        const [recentSleep, recentReadiness] = await Promise.all([
-          ouraApi.getRecentSleepData(),
-          ouraApi.getRecentReadinessData()
-        ]);
-        
-        if (recentSleep.length > 0) {
-           sleepData = recentSleep.reduce((latest, current) => 
-            new Date(current.day) > new Date(latest.day) ? current : latest
-          );
-        }
-        if (recentReadiness.length > 0) {
-           readinessData = recentReadiness.reduce((latest, current) => 
-            new Date(current.day) > new Date(latest.day) ? current : latest
-           );
-        }
-      } catch (err) {
-        console.warn('Failed to fetch Oura data:', err);
-      }
-    }
-
-    // 5. Daily Metrics
     let recentMetrics: DailyMetric[] = [];
     let dailyMetric: DailyMetric | null = null;
+
     try {
+      // A. Fetch stored metrics (Source of Truth)
       recentMetrics = await dailyMetricsService.getRecentMetrics(30);
       if (recentMetrics.length > 0) {
          // Sort by date desc
          const sorted = [...recentMetrics].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-         dailyMetric = sorted[0];
+         // Find the latest record that has actual data (not just empty row)
+         dailyMetric = sorted.find(m => m.sleep_minutes > 0 || m.recovery_score > 0) || sorted[0];
+         
+         // Map DailyMetric back to Oura structures for UI compatibility if needed
+         // (Or we update UI to use DailyMetric directly - Phase 2)
+         // For now, let's create synthetic Oura objects if missing, so existing UI works
+         if (dailyMetric && dailyMetric.source === 'oura') {
+             sleepData = {
+                 id: dailyMetric.id || 'db-synced',
+                 day: dailyMetric.date,
+                 total_sleep_duration: dailyMetric.sleep_minutes * 60,
+                 efficiency: dailyMetric.sleep_efficiency || 0,
+                 deep_sleep_duration: (dailyMetric.deep_sleep_minutes || 0) * 60,
+                 rem_sleep_duration: (dailyMetric.rem_sleep_minutes || 0) * 60,
+                 light_sleep_duration: (dailyMetric.light_sleep_minutes || 0) * 60,
+                 average_hrv: dailyMetric.hrv,
+                 lowest_heart_rate: dailyMetric.resting_hr,
+                 average_breath: dailyMetric.respiratory_rate,
+                 temperature_deviation: dailyMetric.temperature_deviation,
+                 // Defaults for fields we don't store yet
+                 bedtime_start: '', bedtime_end: '', latency: 0, awake_time: 0, restless_periods: 0, 
+                 sleep_score_delta: 0, average_heart_rate: 0, time_in_bed: 0
+             };
+             readinessData = {
+                 id: dailyMetric.id || 'db-synced',
+                 day: dailyMetric.date,
+                 score: dailyMetric.recovery_score,
+                 temperature_deviation: dailyMetric.temperature_deviation || 0,
+                 // Defaults
+                 temperature_trend_deviation: 0, timestamp: '', contributors: {}
+             };
+         }
       }
+
+      // B. Background Sync (If Oura Connected)
+      // We check auth inside syncOuraToDatabase anyway, but check here to avoid overhead
+      const isOuraConnected = await ouraApi.isAuthenticated();
+      if (isOuraConnected && !isDemo) {
+          // Trigger sync for last 3 days to catch any updates without blocking UI
+          // We don't await this promise so it runs in background
+          ouraApi.syncOuraToDatabase(user.id, undefined, undefined).catch(e => console.warn('Background Oura sync error:', e));
+      }
+
     } catch (e) {
-      console.error('Failed to fetch metrics', e);
+      console.error('Failed to fetch/sync recovery data', e);
     }
 
-    // 6. Insights & Health Metrics
-    // Note: We might want these to be their own queries if slow, but for now bundling is fine for "dashboard data"
+
+    // 5. Insights & Health Metrics (Remaining Logic)
     let weeklyInsight: WeeklyInsight | null = null;
     let healthMetrics: HealthMetrics | null = null;
     
-    // We generate these on the fly or fetch cached - services handle caching usually? 
-    // Actually weeklyInsightService.generateWeeklyInsight likely calls OpenAI so it might be slow.
-    // Ideally we should cache this RESULT. But useQuery handles caching of the whole blob.
-    // Getting raw data for insight generation needs Oura lists again if not passed
-    
-    // Simplification: Re-fetch arrays for insight generation (mirrors original logic)
-    /* 
-       Original logic fetched arrays for insight independently. 
-       Let's reuse what we have if possible, or just let the service handle it. 
-       The function generateWeeklyInsight takes arrays.
-    */
-    
-    let sleepArray: OuraSleepData[] = [];
-    let readinessArray: OuraReadinessData[] = [];
-    if(sleepData) {
-       // We only fetched "recent" above but didn't keep the array.
-       // Let's optimize: Fetch arrays ONCE above.
-       // Re-factoring step 4 above...
-       try {
-        if (await ouraApi.isAuthenticated()) {
-           [sleepArray, readinessArray] = await Promise.all([
-              ouraApi.getRecentSleepData(),
-              ouraApi.getRecentReadinessData()
-           ]);
-        }
-       } catch(e) { console.warn(e) }
-    }
+    // We construct arrays from dailyMetrics for calculation
+    // This allows insights to work offline using stored data
+    const sleepArray: OuraSleepData[] = recentMetrics
+        .filter(m => m.source === 'oura')
+        .map(m => ({
+            id: m.id || '',
+            day: m.date,
+            total_sleep_duration: m.sleep_minutes * 60,
+            efficiency: m.sleep_efficiency || 0,
+            average_hrv: m.hrv,
+            lowest_heart_rate: m.resting_hr,
+            // ... minimal fields needed for insights
+            bedtime_start: '', bedtime_end: '', latency: 0, awake_time: 0, light_sleep_duration: 0,
+            deep_sleep_duration: 0, rem_sleep_duration: 0, restless_periods: 0, sleep_score_delta: 0,
+            average_heart_rate: 0, time_in_bed: 0
+        }));
+
+    const readinessArray: OuraReadinessData[] = recentMetrics
+        .filter(m => m.source === 'oura')
+        .map(m => ({
+            id: m.id || '',
+            day: m.date,
+            score: m.recovery_score,
+            temperature_deviation: m.temperature_deviation || 0,
+            temperature_trend_deviation: 0, timestamp: '', contributors: {}
+        }));
+
 
     try {
       weeklyInsight = await weeklyInsightService.generateWeeklyInsight(
@@ -230,7 +253,7 @@ export const useDashboardData = () => {
     } catch(e) { console.warn('Health metrics failed', e); }
 
 
-    // 7. Next Workout
+    // 6. Next Workout
     let nextWorkout: Workout | null = null;
     try {
       nextWorkout = await trainingPlansService.getNextUpcomingWorkout();
@@ -256,9 +279,9 @@ export const useDashboardData = () => {
   };
 
   return useQuery({
-    queryKey: ['dashboard-data', isDemo ? 'demo' : 'user'], // simple key for now, userId handled inside or relies on auth state stability
+    queryKey: ['dashboard-data', isDemo ? 'demo' : 'user'], 
     queryFn: fetchDashboardData,
     staleTime: 300000, // 5 mins
-    retry: false // Don't retry auth errors
+    retry: false 
   });
 };

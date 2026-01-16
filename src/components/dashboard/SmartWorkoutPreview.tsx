@@ -12,13 +12,15 @@ interface SmartWorkoutPreviewProps {
     dailyMetrics?: DailyMetric | null; // Changed from recoveryScore number to full object for service
     onWorkoutGenerated?: (workout: Workout) => void;
     onViewDetails?: (workout: Workout) => void;
+    onOpenPicker?: () => void; // New prop for modal
 }
 
 export const SmartWorkoutPreview: React.FC<SmartWorkoutPreviewProps> = ({
     nextWorkout,
     dailyMetrics,
     onWorkoutGenerated,
-    onViewDetails
+    onViewDetails,
+    onOpenPicker
 }) => {
     const navigate = useNavigate();
     const { userProfile } = useAuth();
@@ -128,14 +130,26 @@ export const SmartWorkoutPreview: React.FC<SmartWorkoutPreviewProps> = ({
                         </div>
                     )}
 
-                    {/* Action Button */}
-                    <button
-                        onClick={() => onViewDetails ? onViewDetails(nextWorkout) : navigate(ROUTES.PLANS)}
-                        className="w-full bg-white text-gray-900 hover:bg-gray-50 active:scale-[0.98] transition-all font-bold py-3.5 px-4 rounded-xl shadow-md flex items-center justify-center space-x-2"
-                    >
-                        <span>View Session Brief</span>
-                        <Activity className="w-4 h-4 ml-1" />
-                    </button>
+                    {/* Action Buttons */}
+                    <div className="flex flex-col gap-3">
+                        <button
+                            onClick={() => onViewDetails ? onViewDetails(nextWorkout) : navigate(ROUTES.PLANS)}
+                            className="w-full bg-white text-gray-900 hover:bg-gray-50 active:scale-[0.98] transition-all font-bold py-3.5 px-4 rounded-xl shadow-md flex items-center justify-center space-x-2"
+                        >
+                            <span>View Session Brief</span>
+                            <Activity className="w-4 h-4 ml-1" />
+                        </button>
+                        
+                        {onOpenPicker && (
+                            <button
+                                onClick={onOpenPicker}
+                                className="w-full bg-white/10 hover:bg-white/20 text-white border border-white/20 active:scale-[0.98] transition-all font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center space-x-2 text-sm"
+                            >
+                                <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                                <span>Add Workout for Today</span>
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
         );
@@ -160,6 +174,12 @@ export const SmartWorkoutPreview: React.FC<SmartWorkoutPreviewProps> = ({
     }
 
     const handleGenerate = async () => {
+        // If onOpenPicker is provided, prioritize that flow (UI Modal)
+        if (onOpenPicker) {
+            onOpenPicker();
+            return;
+        }
+
         if (!userProfile || !dailyMetrics) return;
         setIsGenerating(true);
         try {
@@ -199,7 +219,7 @@ export const SmartWorkoutPreview: React.FC<SmartWorkoutPreviewProps> = ({
                         ) : (
                             <>
                                 <Sparkles className="w-4 h-4 text-yellow-300 fill-current" />
-                                <span>Generate {recommendationType}</span>
+                                <span>{onOpenPicker ? 'Smart Workout Picker' : `Generate ${recommendationType}`}</span>
                             </>
                         )}
                     </button>

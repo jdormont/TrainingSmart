@@ -687,6 +687,117 @@ class TrainingPlansService {
       return null;
     }
   }
+
+  async addWorkoutToPlan(planId: string, workout: Partial<DbWorkout>): Promise<Workout> {
+    try {
+      const userId = await this.getCurrentUserId();
+      
+      // Sanitize payload to match DB schema (snake_case) and remove camelCase
+      const dbPayload: any = {
+        plan_id: planId,
+        user_id: userId || 'local',
+        name: workout.name,
+        type: workout.type,
+        description: workout.description,
+        duration: workout.duration,
+        distance: workout.distance,
+        intensity: workout.intensity,
+        completed: false,
+        // status: workout.status || 'planned', // status column does not exist in DB
+        scheduled_date: (workout as any).scheduled_date || 
+                       ((workout as any).scheduledDate ? new Date((workout as any).scheduledDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0])
+      };
+      
+      // Remove undefined keys
+      Object.keys(dbPayload).forEach(key => dbPayload[key] === undefined && delete dbPayload[key]);
+
+      if (!userId) {
+        return this.addLocalStorageWorkout(planId, dbPayload);
+      }
+
+      const { data, error } = await supabase
+        .from('workouts')
+        .insert(dbPayload)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      await this.touchPlanUpdatedAt(data.id);
+
+      return {
+        id: data.id,
+        name: data.name,
+        type: data.type as Workout['type'],
+        description: data.description,
+        duration: data.duration,
+        distance: data.distance,
+        intensity: data.intensity as Workout['intensity'],
+        scheduledDate: new Date(data.scheduled_date),
+        completed: data.completed,
+        status: data.status as Workout['status'],
+        google_calendar_event_id: data.google_calendar_event_id
+      };
+    } catch (error) {
+      console.error('Error adding workout to plan:', error);
+      throw error;
+    }
+  }
+
+  async ensureActivePlan(forceUserId?: string): Promise<string> {
+    try {
+      const userId = forceUserId || await this.getCurrentUserId();
+      if (!userId) {
+        // Use local storage plan or create one
+        const plans = this.getLocalStoragePlans();
+        if (plans.length > 0) return plans[0].id; // Just return first plan
+        
+        // Create default local plan
+        const newPlan = await this.createLocalStoragePlan({
+           name: 'My Training Plan',
+           description: 'General training plan',
+           goal: 'Fitness',
+           startDate: new Date(),
+           endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)),
+           workouts: []
+        });
+        return newPlan.id;
+      }
+
+      // 1. Try to find the most recently created plan
+      const { data: plans } = await supabase
+        .from('training_plans')
+        .select('id')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (plans && plans.length > 0) {
+        return plans[0].id;
+      }
+
+      // 2. If no plan, create a default "General Training" plan
+      const { data: newPlan, error } = await supabase
+        .from('training_plans')
+        .insert({
+          name: 'General Training',
+          description: 'A container for your manual workouts.',
+          goal: 'General Fitness',
+          start_date: new Date().toISOString().split('T')[0],
+          end_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
+          user_id: userId
+        })
+        .select('id')
+        .single();
+
+      if (error) throw error;
+      return newPlan.id;
+
+    } catch (error) {
+      console.error('Error in ensureActivePlan:', error);
+      throw error;
+    }
+  }
 }
 
 export const trainingPlansService = new TrainingPlansService();

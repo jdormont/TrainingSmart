@@ -196,5 +196,47 @@ export const recommendationService = {
       console.error('Error adjusting workout:', error);
       throw error;
     }
+  },
+
+  getSuggestedWorkout(
+    recoveryScore: number,
+    acuteLoadRatio: number
+  ): { 
+      type: Workout['intensity'];
+      name: string;
+      description: string;
+      duration: number;
+      reason: string;
+  } {
+      // 1. High Readiness & Safe Load -> INTENSITY
+      if (recoveryScore >= 70 && acuteLoadRatio <= 1.3) {
+          return {
+              type: 'hard',
+              name: '45m Tempo Intervals',
+              description: 'Warm up 10m. 3 x 8m at Tempo (Zone 3) / Sweet Spot. 4m rest. Cool down 5m.',
+              duration: 45,
+              reason: 'High Readiness & Safe Load'
+          };
+      }
+      
+      // 2. Low Readiness OR High Load -> RECOVERY
+      if (recoveryScore < 40 || acuteLoadRatio > 1.3) {
+          return {
+              type: 'recovery',
+              name: '30m Active Recovery',
+              description: 'Very light spin. Keep HR < 60% Max. Flush out the legs.',
+              duration: 30,
+              reason: recoveryScore < 40 ? 'Low Recovery Score' : 'High Training Load'
+          };
+      }
+
+      // 3. Moderate -> ENDURANCE
+      return {
+          type: 'easy',
+          name: '60m Zone 2 Ride',
+          description: 'Steady endurance pace. Keep conversation feasible. Build base.',
+          duration: 60,
+          reason: 'Balanced State'
+      };
   }
 };

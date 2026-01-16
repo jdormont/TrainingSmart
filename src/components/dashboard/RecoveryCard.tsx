@@ -1,9 +1,10 @@
 import React from 'react';
-import { Moon, Battery, Heart, Activity, Wind, TrendingUp, TrendingDown } from 'lucide-react';
+import { Moon, Heart, Activity, Wind, Database } from 'lucide-react';
 import type { OuraSleepData, OuraReadinessData, DailyMetric } from '../../types';
 import { calculateSleepScore } from '../../utils/sleepScoreCalculator';
 import { dailyMetricsService } from '../../services/dailyMetricsService';
 import { useAuth } from '../../contexts/AuthContext';
+import { format, parseISO, isToday, isYesterday } from 'date-fns';
 
 interface RecoveryCardProps {
   sleepData: OuraSleepData | null;
@@ -11,6 +12,14 @@ interface RecoveryCardProps {
   dailyMetric: DailyMetric | null;
   loading?: boolean;
 }
+
+// Simple Oura Icon Component (Ring shape)
+const OuraIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className} title="Source: Oura">
+    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" />
+    <path d="M12 6c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z" opacity="0.5"/>
+  </svg>
+);
 
 const CircularProgress: React.FC<{ score: number; size?: number; strokeWidth?: number; label: string }> = ({
   score,
@@ -105,7 +114,22 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
 
   // --- Data preparation ---
   const hasOuraData = !!(sleepData || readinessData);
-  const usingDailyMetrics = !hasOuraData && !!dailyMetric;
+  const usingDailyMetrics = !hasOuraData && !!dailyMetric; // Could be Manual or Apple Health via CSV upload
+
+  // Determine Data Date Label
+  let dateLabel = "";
+  let dataDateString = "";
+  
+  if (sleepData?.day) dataDateString = sleepData.day;
+  else if (readinessData?.day) dataDateString = readinessData.day;
+  else if (dailyMetric?.date) dataDateString = dailyMetric.date;
+
+  if (dataDateString) {
+    const d = parseISO(dataDateString);
+    if (isToday(d)) dateLabel = "Today";
+    else if (isYesterday(d)) dateLabel = "Yesterday";
+    else dateLabel = format(d, 'MMM d');
+  }
 
   // Sleep Score
   const sleepScoreObj = sleepData ? calculateSleepScore(sleepData) : null;
@@ -115,15 +139,19 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
   } : undefined;
   const individualScores = dailyMetric ? dailyMetricsService.calculateIndividualScores(dailyMetric, demographic) : null;
 
-  const sleepVal = sleepScoreObj ? sleepScoreObj.totalScore : (individualScores?.sleepScore ?? 0);
+  const sleepScore = sleepScoreObj ? sleepScoreObj.totalScore : (individualScores?.sleepScore ?? 0);
   const sleepDuration = sleepData ? sleepData.total_sleep_duration : (dailyMetric?.sleep_minutes ? dailyMetric.sleep_minutes * 60 : 0);
 
   // HRV & RHR
+  // Priority: Oura Data -> Daily Metric -> 0
   const hrvVal = sleepData?.average_hrv ?? dailyMetric?.hrv ?? 0;
   const rhrVal = sleepData?.lowest_heart_rate ?? dailyMetric?.resting_hr ?? 0;
+  // Use Oura 'average_breath' if available, otherwise dailyMetric
+  const respVal = sleepData?.average_breath ?? dailyMetric?.respiratory_rate ?? 0;
 
   const hrvScore = individualScores?.hrvScore ?? 0;
   const rhrScore = individualScores?.rhrScore ?? 0;
+  // Don't have a specific score for Resp Rate usually, could derive or just hide score.
 
   // Overall Score
   let overallScore = 0;
@@ -132,7 +160,6 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
   if (readinessData) {
     overallScore = readinessData.score;
   } else if (usingDailyMetrics) {
-    // Calculate locally
     const scores: number[] = [];
     if (individualScores?.sleepScore) scores.push(individualScores.sleepScore);
     if (individualScores?.hrvScore) scores.push(individualScores.hrvScore);
@@ -161,94 +188,125 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
 
   // Helper for metric card colors
   const getMetricCardClass = (score: number) => {
+    // If we have no score (e.g. respiratory), default to neutral
+    if (score === 0 && !usingDailyMetrics) return "bg-slate-800/50 border-slate-700"; 
+    
     if (score >= 80) return "bg-green-500/10 border-green-500/20";
     if (score >= 50) return "bg-yellow-500/10 border-yellow-500/20";
     return "bg-red-500/10 border-red-500/20";
   };
 
   const getMetricIconClass = (score: number) => {
+    if (score === 0 && !usingDailyMetrics) return "text-slate-400";
     if (score >= 80) return "text-green-500";
     if (score >= 50) return "text-yellow-500";
     return "text-red-500";
   };
 
+  // Source Icon Helper
+  const SourceIcon = ({ isOura }: { isOura: boolean }) => {
+    if (isOura) return <OuraIcon className="w-3 h-3 text-slate-400 opacity-70" />;
+    return <Database className="w-3 h-3 text-slate-500 opacity-50" title="Source: Database" />;
+  };
+
   return (
     <div className="bg-slate-900 rounded-3xl shadow-lg shadow-black/20 border border-slate-800 overflow-hidden">
       <div className="p-6">
-        <h3 className="font-bold text-lg text-slate-50 mb-6 flex items-center">
-          Recovery & Sleep
-        </h3>
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="font-bold text-lg text-slate-50 flex items-center gap-2">
+            Recovery & Sleep
+            {hasOuraData && <span className="bg-slate-800 text-slate-300 text-[10px] px-2 py-0.5 rounded-full border border-slate-700 font-medium flex items-center gap-1"><OuraIcon className="w-3 h-3"/> Oura Synced</span>}
+          </h3>
+          {dateLabel && (
+             <span className={`text-xs font-semibold px-2 py-1 rounded-full border ${
+               dateLabel === 'Today' 
+                ? 'bg-green-500/10 text-green-500 border-green-500/20' 
+                : dateLabel === 'Yesterday'
+                  ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
+                  : 'bg-slate-800 text-slate-400 border-slate-700'
+             }`}>
+               {dateLabel}
+             </span>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* LEFT COL: HERO - Overall Recovery */}
           <div className={`col-span-1 rounded-2xl ${heroBg} p-8 flex flex-col items-center justify-center text-center relative min-h-[300px] border border-white/5`}>
-
             <CircularProgress
               score={overallScore}
               label="Overall Recovery"
             />
-
-            {/* Moved subLabel outside of CircularProgress to avoid overlap */}
             <div className="mt-6 text-sm font-semibold text-slate-300 uppercase tracking-wide">
               {statusText}
             </div>
-
           </div>
 
           {/* RIGHT COL: METRICS GRID */}
           <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
 
             {/* Sleep Card */}
-            <div className={`rounded-xl p-5 flex flex-col justify-between border ${getMetricCardClass(sleepVal)}`}>
-              <div className="flex items-center gap-2 mb-2">
-                <Moon className={`w-5 h-5 ${getMetricIconClass(sleepVal)}`} />
-                <span className="text-sm font-medium text-slate-400">Sleep Score</span>
+            <div className={`rounded-xl p-5 flex flex-col justify-between border ${getMetricCardClass(sleepScore)}`}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Moon className={`w-5 h-5 ${getMetricIconClass(sleepScore)}`} />
+                  <span className="text-sm font-medium text-slate-400">Sleep</span>
+                </div>
+                <SourceIcon isOura={!!sleepData} />
               </div>
               <div>
-                <div className="text-3xl font-bold text-slate-50">{sleepVal || '--'}</div>
-                <div className="text-sm text-slate-500 mt-1">{formatDuration(sleepDuration)}</div>
+                <div className="text-3xl font-bold text-slate-50">{formatDuration(sleepDuration)}</div>
+                <div className="text-sm text-slate-500 mt-1">Score: {Math.round(sleepScore)}</div>
               </div>
             </div>
 
             {/* HRV Card */}
             <div className={`rounded-xl p-5 flex flex-col justify-between border ${getMetricCardClass(hrvScore)}`}>
-              <div className="flex items-center gap-2 mb-2">
-                <Activity className={`w-5 h-5 ${getMetricIconClass(hrvScore)}`} />
-                <span className="text-sm font-medium text-slate-400">HRV Score</span>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Activity className={`w-5 h-5 ${getMetricIconClass(hrvScore)}`} />
+                  <span className="text-sm font-medium text-slate-400">HRV (Avg)</span>
+                </div>
+                <SourceIcon isOura={!!sleepData} />
               </div>
               <div>
-                <div className="text-3xl font-bold text-slate-50">{Math.round(hrvScore) || '--'}</div>
-                <div className="text-sm text-slate-500 mt-1">{Math.round(hrvVal)} ms</div>
+                <div className="text-3xl font-bold text-slate-50">{Math.round(hrvVal)} ms</div>
+                <div className="text-sm text-slate-500 mt-1">Score: {Math.round(hrvScore)}</div>
               </div>
             </div>
 
             {/* RHR Card */}
             <div className={`rounded-xl p-5 flex flex-col justify-between border ${getMetricCardClass(rhrScore)}`}>
-              <div className="flex items-center gap-2 mb-2">
-                <Heart className={`w-5 h-5 ${getMetricIconClass(rhrScore)}`} />
-                <span className="text-sm font-medium text-slate-400">RHR Score</span>
+              <div className="flex items-center justify-between mb-2">
+                 <div className="flex items-center gap-2">
+                  <Heart className={`w-5 h-5 ${getMetricIconClass(rhrScore)}`} />
+                  <span className="text-sm font-medium text-slate-400">Resting HR</span>
+                </div>
+                <SourceIcon isOura={!!sleepData} />
               </div>
               <div>
-                <div className="text-3xl font-bold text-slate-50">
-                  {rhrScore || '--'}
-                </div>
-                <div className="text-sm text-slate-500 mt-1">{Math.round(rhrVal)} bpm</div>
+                <div className="text-3xl font-bold text-slate-50">{Math.round(rhrVal)} bpm</div>
+                <div className="text-sm text-slate-500 mt-1">Score: {rhrScore}</div>
               </div>
             </div>
 
             {/* Respiratory Rate Card */}
-            <div className="bg-cyan-900/10 border border-cyan-500/20 rounded-xl p-5 flex flex-col justify-between">
-              <div className="flex items-center gap-2 mb-2">
-                <Wind className="w-5 h-5 text-cyan-500" />
-                <span className="text-sm font-medium text-slate-400">Respiratory Rate</span>
+            {/* Logic: If Oura data exists, card is green/neutral. If manual, blue. */}
+            <div className={`rounded-xl p-5 flex flex-col justify-between border border-cyan-500/20 bg-cyan-900/10`}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Wind className="w-5 h-5 text-cyan-500" />
+                  <span className="text-sm font-medium text-slate-400">Resp. Rate</span>
+                </div>
+                <SourceIcon isOura={!!sleepData?.average_breath} />
               </div>
               <div>
-                <div className="text-3xl font-bold text-slate-50">
-                  {dailyMetric?.respiratory_rate ?? '--'}
+                 <div className="text-3xl font-bold text-slate-50">
+                  {respVal ? respVal.toFixed(1) : '--'}
                 </div>
                 <div className="text-sm text-slate-500 mt-1">br/min</div>
-
-                {dailyMetric?.respiratory_rate && (
+                
+                {respVal > 0 && (
                   <div className="w-full bg-cyan-900/30 rounded-full h-1.5 mt-3 overflow-hidden">
                     <div className="bg-cyan-500 h-1.5 rounded-full" style={{ width: '60%' }}></div>
                   </div>

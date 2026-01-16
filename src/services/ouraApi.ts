@@ -3,7 +3,8 @@ import axios from 'axios';
 import { format, subDays } from 'date-fns';
 import { OURA_CONFIG, STORAGE_KEYS } from '../utils/constants';
 import { tokenStorageService } from './tokenStorageService';
-import type { OuraTokens, OuraSleepData, OuraReadinessData, OuraActivityData } from '../types';
+import { supabase } from './supabaseClient';
+import type { OuraTokens, OuraSleepData, OuraReadinessData, OuraActivityData, DailyMetric } from '../types';
 
 class OuraApiService {
   // Use the proxy path for both Dev (Vite) and Prod (Vercel) to avoid CORS issues.
@@ -45,13 +46,15 @@ class OuraApiService {
     try {
       await tokenStorageService.setTokens('oura', {
         access_token: tokens.access_token,
-        refresh_token: '',
-        expires_at: 0,
-        expires_in: 0,
+        refresh_token: tokens.refresh_token,
+        // If we have expires_in (seconds), calculate absolute expires_at
+        expires_at: tokens.expires_in ? Math.floor(Date.now() / 1000) + tokens.expires_in : (tokens.expires_at || 0),
+        expires_in: tokens.expires_in || 0,
         token_type: tokens.token_type || 'Bearer'
       });
     } catch (error) {
       console.error('Failed to save Oura tokens to database:', error);
+      // Fallback only if database save fails
       localStorage.setItem(STORAGE_KEYS.OURA_TOKENS, JSON.stringify(tokens));
     }
   }
@@ -61,8 +64,25 @@ class OuraApiService {
     const tokens = await this.getTokens();
     if (!tokens) return null;
 
-    // For personal access tokens, no refresh needed - they're long-lived
-    // Just return the stored token
+    // Check if simplified PAT (no expires_at)
+    if (!tokens.expires_at) {
+        return tokens.access_token;
+    }
+
+    // Check expiration (buffer of 60 seconds)
+    if (Date.now() >= (tokens.expires_at - 60) * 1000) {
+        console.log('Oura Access Token expired, refreshing...');
+        try {
+            const newTokens = await this.refreshTokens(tokens.refresh_token);
+            return newTokens.access_token;
+        } catch (error) {
+            console.error('Failed to refresh Oura token:', error);
+            // If refresh fails, we might want to clear tokens so user is forced to re-login?
+            // For now, let's keep old tokens but return null or throw. 
+            // Better to return null so the app knows we aren't auth'd.
+            return null;
+        }
+    }
 
     return tokens.access_token;
   }
@@ -223,6 +243,7 @@ class OuraApiService {
       const response = await axios.get(`${this.baseURL}/v2/usercollection/sleep`, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
+          'Accept': 'application/json',
         },
         params: {
           start_date: startDate,
@@ -264,6 +285,7 @@ class OuraApiService {
       const response = await axios.get(`${this.baseURL}/v2/usercollection/daily_readiness`, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
+          'Accept': 'application/json',
         },
         params: {
           start_date: startDate,
@@ -343,6 +365,101 @@ class OuraApiService {
     console.log('Activity data date range:', { startDate, endDate, currentDate: now.toISOString().split('T')[0] });
     
     return this.getActivityData(startDate, endDate);
+  }
+
+  // Sync Oura data to Supabase (Database Persistence)
+  async syncOuraToDatabase(userId: string, startDate?: string, endDate?: string): Promise<void> {
+      try {
+          console.log('🔄 Starting Oura -> Supabase Sync...');
+          
+          // 1. Determine Date Range (Default to last 7 days if not provided)
+          const now = new Date();
+          const end = endDate || format(now, 'yyyy-MM-dd');
+          const start = startDate || format(subDays(now, 7), 'yyyy-MM-dd');
+
+          // 2. Fetch all raw data from Oura API
+          const sleepData = await this.getSleepData(start, end);
+          const readinessData = await this.getReadinessData(start, end);
+          
+          if (!sleepData.length && !readinessData.length) {
+              console.log('No Oura data found to sync for range:', { start, end });
+              return;
+          }
+
+          console.log(`📥 Fetched ${sleepData.length} sleep records and ${readinessData.length} readiness records.`);
+
+          // 3. Map to DailyMetric objects
+          // We iterate by date to merge Sleep + Readiness into one DailyMetric
+          const metricsMap = new Map<string, Partial<DailyMetric>>();
+
+          // Process Sleep
+          sleepData.forEach(sleep => {
+              if (!metricsMap.has(sleep.day)) metricsMap.set(sleep.day, { user_id: userId, date: sleep.day, source: 'oura' });
+              const m = metricsMap.get(sleep.day)!;
+              
+              m.sleep_minutes = Math.round(sleep.total_sleep_duration / 60);
+              m.resting_hr = sleep.lowest_heart_rate;
+              m.hrv = sleep.average_hrv;
+              m.respiratory_rate = sleep.average_breath;
+              m.deep_sleep_minutes = Math.round(sleep.deep_sleep_duration / 60);
+              m.rem_sleep_minutes = Math.round(sleep.rem_sleep_duration / 60);
+              m.light_sleep_minutes = Math.round(sleep.light_sleep_duration / 60);
+              m.sleep_efficiency = sleep.efficiency;
+              m.temperature_deviation = sleep.temperature_deviation;
+          });
+
+          // Process Readiness (Merge in)
+          readinessData.forEach(readiness => {
+               if (!metricsMap.has(readiness.day)) metricsMap.set(readiness.day, { user_id: userId, date: readiness.day, source: 'oura' });
+               const m = metricsMap.get(readiness.day)!;
+               
+               m.recovery_score = readiness.score;
+               
+               // Fallback: If temperature not in sleep (v2 sometimes differs), check readiness
+               if (m.temperature_deviation === undefined) {
+                   m.temperature_deviation = readiness.temperature_deviation;
+               }
+          });
+
+          // 4. Convert to Array and Validate
+          const upsertPayload: DailyMetric[] = [];
+          metricsMap.forEach(metric => {
+              // Only push if we have at least the critical fields (Sleep OR Readiness score)
+              // Note: Types require specific fields, but upsert might handle partials if we are careful? 
+              // Actually, TS definition requires sleep_minutes etc. so we must ensure defaults if missing.
+              
+              const fullMetric: DailyMetric = {
+                  user_id: userId,
+                  date: metric.date!,
+                  source: 'oura',
+                  sleep_minutes: metric.sleep_minutes || 0,
+                  resting_hr: metric.resting_hr || 0,
+                  hrv: metric.hrv || 0,
+                  recovery_score: metric.recovery_score || 0,
+                  respiratory_rate: metric.respiratory_rate,
+                  deep_sleep_minutes: metric.deep_sleep_minutes,
+                  rem_sleep_minutes: metric.rem_sleep_minutes,
+                  light_sleep_minutes: metric.light_sleep_minutes,
+                  sleep_efficiency: metric.sleep_efficiency,
+                  temperature_deviation: metric.temperature_deviation
+              };
+              upsertPayload.push(fullMetric);
+          });
+
+          // 5. Upsert to Supabase
+          if (upsertPayload.length > 0) {
+              const { error } = await supabase
+                  .from('daily_metrics')
+                  .upsert(upsertPayload, { onConflict: 'user_id,date' }); // Match constraint
+
+              if (error) throw error;
+              console.log(`✅ Successfully synced ${upsertPayload.length} Oura records to Supabase!`);
+          }
+
+      } catch (error) {
+          console.error('❌ Failed to sync Oura data to database:', error);
+          throw error;
+      }
   }
 }
 

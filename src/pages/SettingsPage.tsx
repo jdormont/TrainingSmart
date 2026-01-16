@@ -461,6 +461,40 @@ export const SettingsPage: React.FC = () => {
                 >
                   Disconnect Oura Ring
                 </Button>
+                
+                {/* Sync Control */}
+                <div className="mt-4 pt-4 border-t border-slate-800 flex items-center justify-between">
+                    <div>
+                        <p className="text-sm font-medium text-slate-300">Manual Sync</p>
+                        <p className="text-xs text-slate-500">Pull latest 90 days of data</p>
+                    </div>
+                    <Button
+                        onClick={async () => {
+                            if (!userProfile?.user_id) return;
+                            const btn = document.getElementById('oura-sync-btn');
+                            if (btn) btn.innerText = 'Syncing...';
+                            try {
+                                await ouraApi.syncOuraToDatabase(userProfile.user_id, undefined, undefined); // Default 7 days? Plan said 90.
+                                // Let's do 90 days as user requested
+                                const end = new Date();
+                                const start = new Date(); 
+                                start.setDate(start.getDate() - 90);
+                                await ouraApi.syncOuraToDatabase(userProfile.user_id, start.toISOString().split('T')[0], end.toISOString().split('T')[0]);
+                                alert('Sync complete!');
+                            } catch (e) {
+                                alert('Sync failed: ' + (e as Error).message);
+                            } finally {
+                                if (btn) btn.innerText = 'Sync Now';
+                            }
+                        }}
+                        id="oura-sync-btn"
+                        className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"
+                        size="sm"
+                    >
+                        Sync Now
+                    </Button>
+                </div>
+
               </div>
             ) : (
               <div className="space-y-4">

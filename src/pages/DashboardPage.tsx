@@ -18,6 +18,9 @@ import {
   ChevronUp
 } from 'lucide-react';
 
+import { trainingPlansService } from '../services/trainingPlansService'; // Import service
+import { SmartWorkoutPickerModal } from '../components/plans/SmartWorkoutPickerModal'; // Import Modal
+
 import { DashboardHero } from '../components/dashboard/DashboardHero';
 import { AnalyticsContainer } from '../components/dashboard/AnalyticsContainer';
 import { ActivityCard } from '../components/dashboard/ActivityCard';
@@ -56,6 +59,34 @@ export const DashboardPage: React.FC = () => {
   // const [displayedActivities, setDisplayedActivities] = useState<StravaActivity[]>([]); // Removed state
   const [showWizard, setShowWizard] = useState(false);
   const [insightLoading, setInsightLoading] = useState(false);
+
+  // Smart Picker State for Dashboard
+  const [showSmartPicker, setShowSmartPicker] = useState(false);
+  const [pickerDate, setPickerDate] = useState<Date | null>(null);
+
+  const handleOpenPicker = () => {
+      setPickerDate(new Date()); // Today
+      setShowSmartPicker(true);
+  };
+
+  const handleSmartWorkoutSelect = async (workout: Partial<Workout>) => {
+      try {
+          // 1. Ensure we have a plan to add to
+          const targetPlanId = await trainingPlansService.ensureActivePlan(currentUserId);
+          
+          // 2. Add workout
+          await trainingPlansService.addWorkoutToPlan(targetPlanId, {
+              ...workout,
+              scheduled_date: new Date().toISOString().split('T')[0] // Always today for dashboard logic
+          });
+
+          // 3. Refresh
+          queryClient.invalidateQueries({ queryKey: ['dashboard-data'] });
+          
+      } catch (err) {
+          console.error("Failed to add dashboard workout", err);
+      }
+  };
 
   // Destructure data with defaults and null handling
   const {
@@ -383,6 +414,7 @@ export const DashboardPage: React.FC = () => {
                     refreshNextWorkout();
                   }}
                 onViewDetails={setSelectedWorkout}
+                onOpenPicker={handleOpenPicker}
                 />
                 {nextWorkout && (
                   <WorkoutAdjustmentChips
@@ -421,6 +453,7 @@ export const DashboardPage: React.FC = () => {
                   refreshNextWorkout();
                 }}
                 onViewDetails={setSelectedWorkout}
+                onOpenPicker={handleOpenPicker}
               />
               {nextWorkout && (
                 <WorkoutAdjustmentChips
@@ -525,6 +558,28 @@ export const DashboardPage: React.FC = () => {
         {/* Intake Wizard Modal */}
         {showWizard && (
           <IntakeWizard onComplete={handleWizardComplete} />
+        )}
+
+        {/* Smart Picker Modal */}
+        {pickerDate && (
+           <SmartWorkoutPickerModal
+             isOpen={showSmartPicker}
+             onClose={() => {
+                 setShowSmartPicker(false);
+                 setPickerDate(null);
+             }}
+             date={pickerDate}
+             onSelectWorkout={handleSmartWorkoutSelect}
+             // Use dashboard data or defaults
+             recoveryScore={readinessData ? readinessData.score : (dailyMetric?.recovery_score ?? 75)} 
+             acuteLoadRatio={healthMetrics?.details.load.components.find(c => c.name === 'A:C Ratio')?.value ? parseFloat(healthMetrics.details.load.components.find(c => c.name === 'A:C Ratio')?.value as string) : 1.1}
+             // Actually, healthMetrics is available from data!
+             // healthMetrics.details.load.components ... but parsing that is messy here.
+             // Let's rely on healthMetrics hook data if available, or just defaults.
+             // Given healthMetrics object structure:
+             // We can try to parse if needed, but for now defaults or simple prop drilling.
+             // Ideally we pass explicit ratio.
+           />
         )}
       </div>
     </div>
