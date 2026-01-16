@@ -232,6 +232,22 @@ export interface OuraReadinessData {
   };
 }
 
+export interface OuraDailySleepData {
+  id: string;
+  day: string;
+  score: number;
+  timestamp: string;
+  contributors: {
+      deep_sleep: number;
+      efficiency: number;
+      latency: number;
+      rem_sleep: number;
+      restfulness: number;
+      timing: number;
+      total_sleep: number;
+  };
+}
+
 export interface OuraActivityData {
   id: string;
   day: string; // YYYY-MM-DD format
@@ -257,14 +273,16 @@ export interface OuraActivityData {
   total_calories: number;
 }
 
+
+export interface DailyMetric {
   id?: string;
   user_id: string;
   date: string; // YYYY-MM-DD format
-  sleep_minutes: number;
-  resting_hr: number;
-  hrv: number;
+  sleep_minutes?: number;
+  resting_hr?: number;
+  hrv?: number;
   respiratory_rate?: number;
-  recovery_score: number;
+  recovery_score?: number;
   
   // Oura Extended Fields
   deep_sleep_minutes?: number;

@@ -1,10 +1,10 @@
 // Oura Ring API service layer
 import axios from 'axios';
-import { format, subDays } from 'date-fns';
+import { format, subDays, addDays } from 'date-fns';
 import { OURA_CONFIG, STORAGE_KEYS } from '../utils/constants';
 import { tokenStorageService } from './tokenStorageService';
 import { supabase } from './supabaseClient';
-import type { OuraTokens, OuraSleepData, OuraReadinessData, OuraActivityData, DailyMetric } from '../types';
+import type { OuraTokens, OuraSleepData, OuraReadinessData, OuraActivityData, DailyMetric, OuraDailySleepData } from '../types';
 
 class OuraApiService {
   // Use the proxy path for both Dev (Vite) and Prod (Vercel) to avoid CORS issues.
@@ -195,7 +195,10 @@ class OuraApiService {
 
   // Refresh access token
   async refreshTokens(refreshToken: string): Promise<OuraTokens> {
-    const response = await axios.post(OURA_CONFIG.TOKEN_URL, {
+    // Use proxy to handle CORS/Cookies
+    const tokenUrl = `${this.baseURL}/oauth/token`;
+    
+    const response = await axios.post(tokenUrl, {
       client_id: import.meta.env.VITE_OURA_CLIENT_ID,
       client_secret: import.meta.env.VITE_OURA_CLIENT_SECRET,
       refresh_token: refreshToken,
@@ -254,8 +257,8 @@ class OuraApiService {
       console.log('Oura sleep API response:', {
         status: response.status,
         dataCount: response.data?.data?.length || 0,
-        firstRecord: response.data?.data?.[0] || null,
-        responseStructure: Object.keys(response.data || {})
+        firstRecordDay: response.data?.data?.[0]?.day,
+        lastRecordDay: response.data?.data?.[response.data?.data?.length - 1]?.day
       });
       
       return response.data.data || [];
@@ -311,6 +314,26 @@ class OuraApiService {
         });
       }
       throw error;
+    }
+  }
+
+  // Get daily sleep summary data
+  async getDailySleepData(startDate: string, endDate: string): Promise<OuraDailySleepData[]> {
+    try {
+      const accessToken = await this.ensureValidTokens();
+      if (!accessToken) throw new Error('No valid Oura access token');
+
+      console.log('Fetching Oura daily sleep data:', { startDate, endDate });
+
+      const response = await axios.get(`${this.baseURL}/v2/usercollection/daily_sleep`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        params: { start_date: startDate, end_date: endDate },
+      });
+
+      return response.data.data || [];
+    } catch (error) {
+      console.error('Failed to fetch Oura daily sleep data:', error);
+      return [];
     }
   }
 
@@ -374,7 +397,7 @@ class OuraApiService {
           
           // 1. Determine Date Range (Default to last 7 days if not provided)
           const now = new Date();
-          const end = endDate || format(now, 'yyyy-MM-dd');
+          const end = endDate || format(addDays(now, 1), 'yyyy-MM-dd');
           const start = startDate || format(subDays(now, 7), 'yyyy-MM-dd');
 
           // 2. Fetch all raw data from Oura API
@@ -389,33 +412,65 @@ class OuraApiService {
           console.log(`📥 Fetched ${sleepData.length} sleep records and ${readinessData.length} readiness records.`);
 
           // 3. Map to DailyMetric objects
-          // We iterate by date to merge Sleep + Readiness into one DailyMetric
           const metricsMap = new Map<string, Partial<DailyMetric>>();
 
-          // Process Sleep
-          sleepData.forEach(sleep => {
-              if (!metricsMap.has(sleep.day)) metricsMap.set(sleep.day, { user_id: userId, date: sleep.day, source: 'oura' });
-              const m = metricsMap.get(sleep.day)!;
-              
-              m.sleep_minutes = Math.round(sleep.total_sleep_duration / 60);
-              m.resting_hr = sleep.lowest_heart_rate;
-              m.hrv = sleep.average_hrv;
-              m.respiratory_rate = sleep.average_breath;
-              m.deep_sleep_minutes = Math.round(sleep.deep_sleep_duration / 60);
-              m.rem_sleep_minutes = Math.round(sleep.rem_sleep_duration / 60);
-              m.light_sleep_minutes = Math.round(sleep.light_sleep_duration / 60);
-              m.sleep_efficiency = sleep.efficiency;
-              m.temperature_deviation = sleep.temperature_deviation;
+          // 3a. PRE-FILL with EXISTING DB DATA
+          const { data: existingData, error: fetchError } = await supabase
+              .from('daily_metrics')
+              .select('*')
+              .eq('user_id', userId)
+              .gte('date', start)
+              .lte('date', end);
+
+          if (!fetchError && existingData) {
+              existingData.forEach(row => {
+                  metricsMap.set(row.date, row);
+              });
+              console.log(`ℹ️ Loaded ${existingData.length} existing records from DB to merge.`);
+          }
+
+          // Processing Sleep Data (Handling Multiple Sleep Periods/Naps)
+          const sleepByDay = new Map<string, OuraSleepData[]>();
+          sleepData.forEach(s => {
+              if (!sleepByDay.has(s.day)) sleepByDay.set(s.day, []);
+              sleepByDay.get(s.day)?.push(s);
           });
 
-          // Process Readiness (Merge in)
+          sleepByDay.forEach((periods, day) => {
+              if (!metricsMap.has(day)) metricsMap.set(day, { user_id: userId, date: day, source: 'oura' });
+              const m = metricsMap.get(day)!;
+
+              // A. Find "Main Sleep" (Longest Duration)
+              const mainSleep = periods.reduce((prev, current) => 
+                  (prev.total_sleep_duration > current.total_sleep_duration) ? prev : current
+              );
+
+              // B. Aggregate Durations
+              const totalSleepSec = periods.reduce((sum, p) => sum + p.total_sleep_duration, 0);
+              const deepSleepSec = periods.reduce((sum, p) => sum + (p.deep_sleep_duration || 0), 0);
+              const remSleepSec = periods.reduce((sum, p) => sum + (p.rem_sleep_duration || 0), 0);
+              const lightSleepSec = periods.reduce((sum, p) => sum + (p.light_sleep_duration || 0), 0);
+              
+              m.sleep_minutes = Math.round(totalSleepSec / 60);
+              m.deep_sleep_minutes = Math.round(deepSleepSec / 60);
+              m.rem_sleep_minutes = Math.round(remSleepSec / 60);
+              m.light_sleep_minutes = Math.round(lightSleepSec / 60);
+
+              // C. Set Rate Metrics from Main Sleep
+              m.resting_hr = mainSleep.lowest_heart_rate;
+              m.hrv = mainSleep.average_hrv;
+              m.respiratory_rate = mainSleep.average_breath;
+              m.sleep_efficiency = mainSleep.efficiency;
+              m.temperature_deviation = mainSleep.temperature_deviation;
+              
+              console.log(`Processed Sleep for ${day}: Main Sleep Duration=${Math.round(mainSleep.total_sleep_duration/60)}m (HR: ${m.resting_hr}, HRV: ${m.hrv}), Total Sleep=${m.sleep_minutes}m. Segments:`, periods.length);
+          });
+
+          // Process Readiness
           readinessData.forEach(readiness => {
                if (!metricsMap.has(readiness.day)) metricsMap.set(readiness.day, { user_id: userId, date: readiness.day, source: 'oura' });
                const m = metricsMap.get(readiness.day)!;
-               
                m.recovery_score = readiness.score;
-               
-               // Fallback: If temperature not in sleep (v2 sometimes differs), check readiness
                if (m.temperature_deviation === undefined) {
                    m.temperature_deviation = readiness.temperature_deviation;
                }
@@ -424,18 +479,14 @@ class OuraApiService {
           // 4. Convert to Array and Validate
           const upsertPayload: DailyMetric[] = [];
           metricsMap.forEach(metric => {
-              // Only push if we have at least the critical fields (Sleep OR Readiness score)
-              // Note: Types require specific fields, but upsert might handle partials if we are careful? 
-              // Actually, TS definition requires sleep_minutes etc. so we must ensure defaults if missing.
-              
-              const fullMetric: DailyMetric = {
+              const safeMetric: DailyMetric = {
                   user_id: userId,
                   date: metric.date!,
                   source: 'oura',
-                  sleep_minutes: metric.sleep_minutes || 0,
-                  resting_hr: metric.resting_hr || 0,
-                  hrv: metric.hrv || 0,
-                  recovery_score: metric.recovery_score || 0,
+                  sleep_minutes: metric.sleep_minutes ?? 0,
+                  resting_hr: metric.resting_hr ?? 0,
+                  hrv: metric.hrv ?? 0,
+                  recovery_score: metric.recovery_score ?? 0,
                   respiratory_rate: metric.respiratory_rate,
                   deep_sleep_minutes: metric.deep_sleep_minutes,
                   rem_sleep_minutes: metric.rem_sleep_minutes,
@@ -443,17 +494,34 @@ class OuraApiService {
                   sleep_efficiency: metric.sleep_efficiency,
                   temperature_deviation: metric.temperature_deviation
               };
-              upsertPayload.push(fullMetric);
+              
+              if (metric.id) safeMetric.id = metric.id;
+
+              // VALIDATION LOGGING
+              // With relaxed DB constraints, we can now upsert partial data (e.g. only Readiness)
+              if (safeMetric.resting_hr !== undefined && safeMetric.resting_hr > 0 && safeMetric.resting_hr < 30) {
+                 console.warn(`⚠️ Warning: Oura resting_hr (${safeMetric.resting_hr}) is suspiciously low for ${safeMetric.date}, but upserting anyway.`);
+              }
+              
+              upsertPayload.push(safeMetric);
           });
+
+          console.log(`Found ${upsertPayload.length} valid records to upsert (merged with DB).`);
 
           // 5. Upsert to Supabase
           if (upsertPayload.length > 0) {
-              const { error } = await supabase
+              const { data, error } = await supabase
                   .from('daily_metrics')
-                  .upsert(upsertPayload, { onConflict: 'user_id,date' }); // Match constraint
+                  .upsert(upsertPayload, { onConflict: 'user_id,date' })
+                  .select();
 
-              if (error) throw error;
-              console.log(`✅ Successfully synced ${upsertPayload.length} Oura records to Supabase!`);
+              if (error) {
+                  console.error('SERVER DB ERROR during upsert:', error);
+                  throw error;
+              }
+              console.log(`✅ Successfully synced ${upsertPayload.length} Oura records! DB Response:`, data);
+          } else {
+             console.log('No valid complete records to sync (all filtered out).');
           }
 
       } catch (error) {

@@ -1,4 +1,3 @@
-// Health Metrics Service - Calculates holistic health scores (Dynamic, Relative Model)
 import type { StravaActivity, StravaAthlete, OuraSleepData, OuraReadinessData } from '../types';
 import { subWeeks, differenceInDays, startOfDay } from 'date-fns';
 
@@ -45,6 +44,23 @@ export interface RiderProfile {
   punch: LevelDetail;      // Intensity
   capacity: LevelDetail;   // Load (ACWR)
   form: LevelDetail;       // Efficiency
+}
+
+export interface BiologicalReadiness {
+  score: number;
+  status: 'Prime' | 'Good' | 'Strained' | 'Rest Required';
+  breakdown: {
+    hrvScore: number;
+    sleepScore: number;
+    rhrScore: number;
+    temperatureRisk: boolean;
+  };
+  details: {
+    hrv: { value: number; baseline: number; trend: 'up' | 'down' | 'stable' };
+    rhr: { value: number; baseline: number; trend: 'up' | 'down' | 'stable' };
+    temperature: { value: number; isElevated: boolean };
+    respiratory: { value: number; baseline: number; isElevated: boolean };
+  };
 }
 
 class HealthMetricsService {
@@ -120,6 +136,145 @@ class HealthMetricsService {
         form: this.calculateFormLevel(efficiency)
       }
     };
+  }
+
+  // ==========================================
+  // NEW: Biological Readiness Logic (Precision Recovery)
+  // ==========================================
+  calculateBiologicalReadiness(
+    currentSleep: OuraSleepData,
+    history: OuraSleepData[]
+  ): BiologicalReadiness {
+    // 1. Baseline Calculation (last 30 days)
+    // Filter history to last 30 days, excluding current day
+    const dayInMs = 86400000;
+    const currentDayTime = new Date(currentSleep.day).getTime();
+    const baselineWindowStart = currentDayTime - (30 * dayInMs);
+    
+    const baselineData = history.filter(d => {
+      const t = new Date(d.day).getTime();
+      return t >= baselineWindowStart && t < currentDayTime;
+    });
+
+    // Baselines
+    const baselineHRV = this.getAverage(baselineData.map(d => d.average_hrv));
+    const baselineRHR = this.getAverage(baselineData.map(d => d.lowest_heart_rate));
+    const baselineResp = this.getAverage(baselineData.map(d => d.average_breath || 0).filter(v => v > 0));
+    
+    // safe fallbacks if no history
+    const safeBaseHRV = baselineHRV || currentSleep.average_hrv;
+    const safeBaseRHR = baselineRHR || currentSleep.lowest_heart_rate;
+    const safeBaseResp = baselineResp || currentSleep.average_breath || 0;
+
+    // 2. Metrics Assessment
+    
+    // A. HRV Status (Higher is better)
+    // Score based on % deviation from baseline
+    // > Baseline = 100. < Baseline - 10% = drops.
+    // Let's use a simpler mapping: 
+    // Ratio = Current / Baseline. 
+    // > 1.05 -> 100. 0.95-1.05 -> 90. 0.85-0.95 -> 70. < 0.85 -> 50.
+    const hrvRatio = currentSleep.average_hrv / safeBaseHRV;
+    let hrvScore = 0;
+    if (hrvRatio >= 1.05) hrvScore = 100;
+    else if (hrvRatio >= 0.98) hrvScore = 95;
+    else if (hrvRatio >= 0.90) hrvScore = 80;
+    else if (hrvRatio >= 0.80) hrvScore = 60;
+    else hrvScore = 40;
+
+    // B. RHR Status (Lower is better)
+    // Ratio = Current / Baseline
+    // < 0.98 (Lower than baseline) -> 100
+    // 0.98 - 1.02 -> 90
+    // 1.02 - 1.05 -> 70
+    // > 1.05 -> 50
+    const rhrRatio = currentSleep.lowest_heart_rate / safeBaseRHR;
+    let rhrScore = 0;
+    if (rhrRatio <= 0.98) rhrScore = 100;
+    else if (rhrRatio <= 1.02) rhrScore = 95;
+    else if (rhrRatio <= 1.05) rhrScore = 80;
+    else if (rhrRatio <= 1.10) rhrScore = 60;
+    else rhrScore = 40;
+
+    // C. Sleep Performance (Use Sleep Score directly or recalculate?)
+    // Plan says "Sleep Performance (Sleep Score)"
+    // Oura provides a sleep score, but we don't have it in OuraSleepData usually? 
+    // Wait, OuraSleepData has `sleep_score_delta`? No, type says `efficiency`, `total_sleep_duration`.
+    // It does not have raw `score`. We can use `efficiency` as proxy or `calculateSleepScore` helper if it exists.
+    // In RecoveryCard.tsx, `calculateSleepScore` is imported. We should ideally reuse that logic or pass it in.
+    // For now let's assume `efficiency` is a good proxy if score missing.
+    // Actually, let's use a simple Efficiency calculation mapping for now to keep it self-contained
+    // or rely on caller to pass score?
+    // Let's calculate a simple proxy: Efficiency * 100. 
+    // Current OuraSleepData has `efficiency` (0-100).
+    const sleepScore = currentSleep.efficiency ? currentSleep.efficiency : 80; 
+
+    // 3. Sickness Tripwires
+    const tempDev = currentSleep.temperature_deviation || 0;
+    const respRate = currentSleep.average_breath || 0;
+    
+    const isFever = tempDev > 0.5;
+    const isRespElevated = (respRate > (safeBaseResp + 2));
+    
+    const sicknessTripwire = isFever || (safeBaseResp > 0 && isRespElevated);
+
+    let finalScore = 0;
+    let status: BiologicalReadiness['status'] = 'Good';
+
+    if (sicknessTripwire) {
+      finalScore = 45; // Cap at 45
+      status = 'Rest Required';
+    } else {
+      // Weighted Average
+      // HRV Status (40%)
+      // Sleep Performance (40%)
+      // RHR Status (20%)
+      finalScore = (hrvScore * 0.4) + (sleepScore * 0.4) + (rhrScore * 0.2);
+      
+      if (finalScore >= 80) status = 'Prime';
+      else if (finalScore >= 50) status = 'Good';
+      else status = 'Strained';
+    }
+
+    // Rounding
+    finalScore = Math.round(finalScore);
+
+    return {
+      score: finalScore,
+      status,
+      breakdown: {
+        hrvScore,
+        sleepScore,
+        rhrScore,
+        temperatureRisk: isFever
+      },
+      details: {
+        hrv: {
+          value: currentSleep.average_hrv,
+          baseline: safeBaseHRV,
+          trend: currentSleep.average_hrv >= safeBaseHRV ? 'up' : 'down'
+        },
+        rhr: {
+          value: currentSleep.lowest_heart_rate,
+          baseline: safeBaseRHR,
+          trend: currentSleep.lowest_heart_rate > safeBaseRHR ? 'up' : 'down' // Higher RHR is bad, but "trend up" refers to value increase
+        },
+        temperature: {
+          value: tempDev,
+          isElevated: isFever
+        },
+        respiratory: {
+          value: respRate,
+          baseline: safeBaseResp,
+          isElevated: isRespElevated
+        }
+      }
+    };
+  }
+  
+  private getAverage(values: number[]): number {
+    if (values.length === 0) return 0;
+    return values.reduce((a, b) => a + b, 0) / values.length;
   }
 
   // ==========================================

@@ -12,6 +12,7 @@ interface AnalyticsContainerProps {
     athlete: StravaAthlete | null;
     healthMetrics: HealthMetrics | null;
     sleepData: OuraSleepData | null;
+    sleepHistory: OuraSleepData[];
     readinessData: OuraReadinessData | null;
     dailyMetric: DailyMetric | null;
     loading?: boolean;
@@ -24,6 +25,7 @@ export const AnalyticsContainer: React.FC<AnalyticsContainerProps> = ({
     athlete,
     healthMetrics,
     sleepData,
+    sleepHistory = [],
     readinessData,
     dailyMetric,
     loading = false
@@ -97,6 +99,7 @@ export const AnalyticsContainer: React.FC<AnalyticsContainerProps> = ({
                 <div className={activeTab === 'recovery' ? 'block' : 'hidden'}>
                     <RecoveryCard
                         sleepData={sleepData}
+                        sleepHistory={sleepHistory}
                         readinessData={readinessData}
                         dailyMetric={dailyMetric}
                         loading={loading}
