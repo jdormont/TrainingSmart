@@ -90,21 +90,21 @@ class OuraApiService {
   // Generate Oura OAuth URL
   generateAuthUrl(): string {
     const clientId = import.meta.env.VITE_OURA_CLIENT_ID;
-    const redirectUri = import.meta.env.VITE_OURA_REDIRECT_URI;
+    // Fallback to current origin if env var is not set (works for both Dev and Prod)
+    const redirectUri = import.meta.env.VITE_OURA_REDIRECT_URI || `${window.location.origin}/auth/oura/callback`;
     
     console.log('=== OURA OAUTH DEBUG ===');
     console.log('Environment variables:');
     console.log('- VITE_OURA_CLIENT_ID:', clientId ? `${clientId.substring(0, 8)}...` : 'NOT SET');
-    console.log('- VITE_OURA_REDIRECT_URI:', redirectUri);
+    console.log('- VITE_OURA_REDIRECT_URI:', import.meta.env.VITE_OURA_REDIRECT_URI);
+    console.log('- Computed Redirect URI:', redirectUri);
     console.log('- OURA_CONFIG.AUTH_URL:', OURA_CONFIG.AUTH_URL);
     
     if (!clientId || clientId === 'your_oura_client_id') {
       throw new Error('Oura Client ID not configured. Please set VITE_OURA_CLIENT_ID in your .env file.');
     }
     
-    if (!redirectUri) {
-      throw new Error('Oura Redirect URI not configured. Please set VITE_OURA_REDIRECT_URI in your .env file.');
-    }
+    // Config check removed since we have a reliable fallback
 
     const params = new URLSearchParams({
       client_id: clientId,
@@ -135,7 +135,7 @@ class OuraApiService {
   async exchangeCodeForTokens(code: string): Promise<OuraTokens> {
     const clientId = import.meta.env.VITE_OURA_CLIENT_ID;
     const clientSecret = import.meta.env.VITE_OURA_CLIENT_SECRET;
-    const redirectUri = import.meta.env.VITE_OURA_REDIRECT_URI;
+    const redirectUri = import.meta.env.VITE_OURA_REDIRECT_URI || `${window.location.origin}/auth/oura/callback`;
     
     // Security warning for production
     if (import.meta.env.PROD) {
