@@ -206,6 +206,12 @@ class OuraApiService {
     });
 
     const tokens: OuraTokens = response.data;
+    
+    // If Oura doesn't return a new refresh token, keep the old one to prevent data loss
+    if (!tokens.refresh_token) {
+      tokens.refresh_token = refreshToken;
+    }
+
     this.setTokens(tokens);
     return tokens;
   }
