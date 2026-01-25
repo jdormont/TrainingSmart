@@ -2,7 +2,6 @@ import React from 'react';
 import { Moon, Heart, Activity, Wind, AlertCircle, CheckCircle2, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { OuraSleepData, OuraReadinessData, DailyMetric } from '../../types';
 import { healthMetricsService } from '../../services/healthMetricsService';
-import { parseISO, isToday, isYesterday, format } from 'date-fns';
 
 
 interface RecoveryCardProps {
@@ -15,7 +14,8 @@ interface RecoveryCardProps {
 
 // Reuse OuraIcon
 const OuraIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className={className} title="Source: Oura">
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+     <title>Source: Oura</title>
      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" />
      <path d="M12 6c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z" opacity="0.5"/>
   </svg>
@@ -82,6 +82,7 @@ const CircularProgress: React.FC<{ score: number; size?: number; strokeWidth?: n
 export const RecoveryCard: React.FC<RecoveryCardProps> = ({
   sleepData,
   sleepHistory,
+  readinessData,
   dailyMetric,
   loading = false
 }) => {
@@ -122,16 +123,42 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
 
   // Fallback for non-Oura (e.g. Manual/Apple Watch)
   const isOura = !!sleepData;
-  const score = biologicalReadiness ? biologicalReadiness.score : (dailyMetric?.recovery_score || 0);
-  const status = biologicalReadiness ? biologicalReadiness.status : (score >= 80 ? 'Prime' : score >= 50 ? 'Good' : 'Rest Required');
+  
+  // PRIMARY SCORE LOGIC:
+  // 1. Use Oura Readiness Score if available (User Expectation)
+  // 2. Use Calculated Biological Readiness (Custom Logic)
+  // 3. Fallback to raw DailyMetric score
+  let score = dailyMetric?.recovery_score || 0;
+  
+  if (readinessData?.score && readinessData.score > 0) {
+      score = readinessData.score;
+  } else if (biologicalReadiness) {
+      score = biologicalReadiness.score;
+  }
+
+  // STATUS LOGIC:
+  // Map score to status label.
+  // >= 80: Prime (Green)
+  // 50-79: Good (Yellow)
+  // < 50: Rest Required (Red)
+  // Override status if Biological Readiness detected a specific 'Rest Required' tripwire (e.g. fever)
+  let status = score >= 80 ? 'Prime' : score >= 50 ? 'Good' : 'Rest Required';
+  
+  if (biologicalReadiness?.status === 'Rest Required') {
+      // Respect the sickness tripwire even if score is high
+      status = 'Rest Required'; 
+  }
   
   // Status Message
   let statusMessage = "Recover well to perform better.";
-  if (biologicalReadiness) {
-      if (biologicalReadiness.details.temperature.isElevated) statusMessage = "Elevated Temp detected (+0.8°C). Focus on rest.";
-      else if (biologicalReadiness.status === 'Prime') statusMessage = "CNS is primed. Green light for intensity.";
-      else if (biologicalReadiness.status === 'Rest Required') statusMessage = "Biological stress detected. prioritize sleep.";
-      else statusMessage = "All systems stable. Train as planned.";
+  if (biologicalReadiness?.details.temperature.isElevated) {
+      statusMessage = "Elevated Temp detected (+0.8°C). Focus on rest.";
+  } else if (status === 'Prime') {
+      statusMessage = "CNS is primed. Green light for intensity.";
+  } else if (status === 'Rest Required') {
+      statusMessage = "Biological stress detected. Prioritize sleep.";
+  } else {
+      statusMessage = "All systems stable. Train as planned.";
   }
 
   // Row 2: Sleep Architecture Data
@@ -236,11 +263,10 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
 
        <div className="h-px bg-slate-800 w-full"></div>
 
-      {/* ROW 3: BIOMETRICS GRID */}
+       {/* ROW 3: BIOMETRICS GRID */}
       <div className="p-6 bg-slate-800/20 flex-1">
            <div className="grid grid-cols-2 gap-4">
                {/* 1. HRV */}
-                {/* 1. HRV */}
                <BiometricCell 
                   label="HRV" 
                   value={
@@ -251,6 +277,7 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
                   unit="ms"
                   trend={biologicalReadiness?.details.hrv.trend}
                   status={getScoreColor((biologicalReadiness?.breakdown.hrvScore || 0))}
+                  statusLabel={getScoreLabel(biologicalReadiness?.breakdown.hrvScore || 0, 'low-bad')}
                   icon={Activity}
                />
                
@@ -263,12 +290,10 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
                       : '--'
                   }
                   unit="bpm"
-                  // For RHR, "trend up" is technically bad if we just look at raw values, but the service handles "status". 
-                  // Trend arrow logic: Service says 'up' if current > baseline.
-                  // Visually: Up arrow for RHR is usually bad (red).
                   trend={biologicalReadiness?.details.rhr.trend} 
                   inverseTrend // Up is bad
                   status={getScoreColor((biologicalReadiness?.breakdown.rhrScore || 0))}
+                  statusLabel={getScoreLabel(biologicalReadiness?.breakdown.rhrScore || 0, 'high-bad')}
                   icon={Heart}
                />
 
@@ -283,6 +308,7 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
                   unit="°C"
                   isAlert={biologicalReadiness?.details.temperature.isElevated}
                   status={biologicalReadiness?.details.temperature.isElevated ? 'red' : 'green'}
+                  statusLabel={biologicalReadiness?.details.temperature.isElevated ? 'Elevated' : 'Normal'}
                   customIcon={biologicalReadiness?.details.temperature.isElevated ? <AlertCircle className="w-4 h-4 text-red-500"/> : <CheckCircle2 className="w-4 h-4 text-green-500"/>}
                />
 
@@ -297,6 +323,7 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
                   unit="/min"
                   isAlert={biologicalReadiness?.details.respiratory.isElevated}
                   status={biologicalReadiness?.details.respiratory.isElevated ? 'yellow' : 'blue'}
+                  statusLabel={biologicalReadiness?.details.respiratory.isElevated ? 'Elevated' : 'Stable'}
                   icon={Wind}
                />
            </div>
@@ -307,11 +334,11 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
 
 // Helper Sub-Components
 const BiometricCell = ({ 
-    label, value, unit, trend, inverseTrend, status, icon: Icon, customIcon, isAlert 
+    label, value, unit, trend, inverseTrend, status, statusLabel, icon: Icon, customIcon, isAlert 
 }: { 
     label: string, value: string, unit: string, 
     trend?: 'up' | 'down' | 'stable', inverseTrend?: boolean,
-    status: string, icon?: any, customIcon?: any, isAlert?: boolean 
+    status: string, statusLabel?: string, icon?: any, customIcon?: any, isAlert?: boolean 
 }) => {
     
     // Status colors
@@ -339,7 +366,14 @@ const BiometricCell = ({
     return (
         <div className={`rounded-xl p-3 border border-slate-800 bg-slate-900/50 flex flex-col justify-between transition-colors hover:bg-slate-800 ${isAlert ? 'border-red-500/30 bg-red-900/5' : ''}`}>
              <div className="flex items-center justify-between mb-1">
-                 <span className="text-xs font-medium text-slate-500">{label}</span>
+                 <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-slate-500">{label}</span>
+                    {statusLabel && (
+                        <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded-sm ${activeColor.replace('border-', 'border-opacity-0 ').replace('bg-', 'bg-opacity-20 ')}`}>
+                            {statusLabel}
+                        </span>
+                    )}
+                 </div>
                  {customIcon ? customIcon : (Icon && <Icon className={`w-3 h-3 ${activeColor.split(' ')[0]}`} />)}
              </div>
              <div className="flex items-end gap-2">
@@ -358,4 +392,13 @@ const getScoreColor = (score: number) => {
     if (score >= 80) return 'green';
     if (score >= 50) return 'yellow';
     return 'red';
+}
+
+const getScoreLabel = (score: number, mode: 'low-bad' | 'high-bad' = 'low-bad') => {
+    if (score >= 80) return 'Optimal';
+    if (score >= 50) return 'Good';
+    
+    // Low score (< 50) label depends on context
+    if (mode === 'low-bad') return 'Low'; // for HRV
+    return 'Elevated'; // for RHR
 }

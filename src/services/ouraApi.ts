@@ -9,12 +9,31 @@ import type { OuraTokens, OuraSleepData, OuraReadinessData, OuraActivityData, Da
 class OuraApiService {
   // Use the proxy path for both Dev (Vite) and Prod (Vercel) to avoid CORS issues.
   private baseURL = '/api/oura';
-  private migrationChecked = false;
 
-  // Get stored tokens (checks database first, falls back to localStorage for migration)
+  // Get stored tokens (checks database AND localStorage, prefers freshest)
   private async getTokens(): Promise<OuraTokens | null> {
     const dbTokens = await tokenStorageService.getTokens('oura');
-    if (dbTokens) {
+    
+    // Check localStorage for potentially fresher tokens
+    let localTokens: OuraTokens | null = null;
+    const stored = localStorage.getItem(STORAGE_KEYS.OURA_TOKENS);
+    if (stored) {
+      try {
+        localTokens = JSON.parse(stored);
+      } catch (error) {
+        console.error('Failed to parse local Oura tokens:', error);
+      }
+    }
+
+    // Decision Logic: Use the source with the most futuristic expiration
+    // If we only have one source, use it.
+    if (!dbTokens && localTokens) {
+      console.log('Using local tokens (no DB tokens found), attempting to backfill DB...');
+      await this.setTokens(localTokens); // Heal the DB
+      return localTokens;
+    }
+
+    if (dbTokens && !localTokens) {
       return {
         access_token: dbTokens.access_token,
         token_type: dbTokens.token_type,
@@ -23,19 +42,29 @@ class OuraApiService {
       };
     }
 
-    if (!this.migrationChecked) {
-      this.migrationChecked = true;
-      const stored = localStorage.getItem(STORAGE_KEYS.OURA_TOKENS);
-      if (stored) {
-        try {
-          const tokens = JSON.parse(stored);
-          await this.setTokens(tokens);
-          localStorage.removeItem(STORAGE_KEYS.OURA_TOKENS);
-          return tokens;
-        } catch (error) {
-          console.error('Failed to migrate Oura localStorage tokens to database:', error);
-        }
+    if (dbTokens && localTokens) {
+      // Compare expiration dates
+      const dbExpires = dbTokens.expires_at || 0;
+      const localExpires = localTokens.expires_at || 0;
+
+      // If local tokens are significantly newer (> 1 minute difference), trust local
+      // This handles the case where DB save failed after a refresh
+      if (localExpires > dbExpires + 60) {
+        console.warn('Local Oura tokens are fresher than DB tokens! Using local and repairing DB.', {
+          dbExpires: new Date(dbExpires * 1000).toISOString(),
+          localExpires: new Date(localExpires * 1000).toISOString()
+        });
+        await this.setTokens(localTokens); // Heal the DB
+        return localTokens;
       }
+      
+      // Default to DB
+      return {
+        access_token: dbTokens.access_token,
+        token_type: dbTokens.token_type,
+        refresh_token: dbTokens.refresh_token,
+        expires_at: dbTokens.expires_at
+      };
     }
 
     return null;
@@ -43,6 +72,9 @@ class OuraApiService {
 
   // Store tokens
   private async setTokens(tokens: OuraTokens): Promise<void> {
+    // ALWAYS save to localStorage first as a fail-safe
+    localStorage.setItem(STORAGE_KEYS.OURA_TOKENS, JSON.stringify(tokens));
+
     try {
       await tokenStorageService.setTokens('oura', {
         access_token: tokens.access_token,
@@ -53,9 +85,9 @@ class OuraApiService {
         token_type: tokens.token_type || 'Bearer'
       });
     } catch (error) {
-      console.error('Failed to save Oura tokens to database:', error);
-      // Fallback only if database save fails
-      localStorage.setItem(STORAGE_KEYS.OURA_TOKENS, JSON.stringify(tokens));
+      console.error('Failed to save Oura tokens to database (preserved in localStorage):', error);
+      // We don't throw here because we successfully saved to localStorage, 
+      // so the app can continue functioning.
     }
   }
 
@@ -178,7 +210,7 @@ class OuraApiService {
       }
 
       const tokens: OuraTokens = response.data;
-      this.setTokens(tokens);
+      await this.setTokens(tokens);
       console.log('Successfully obtained Oura tokens');
       return tokens;
     } catch (error) {
@@ -198,22 +230,42 @@ class OuraApiService {
     // Use proxy to handle CORS/Cookies
     const tokenUrl = `${this.baseURL}/oauth/token`;
 
-    const response = await axios.post(tokenUrl, {
-      client_id: import.meta.env.VITE_OURA_CLIENT_ID,
-      client_secret: import.meta.env.VITE_OURA_CLIENT_SECRET,
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token',
-    });
+    try {
+      console.log('Attempting Oura token refresh...');
+      const response = await axios.post(tokenUrl, {
+        client_id: import.meta.env.VITE_OURA_CLIENT_ID,
+        client_secret: import.meta.env.VITE_OURA_CLIENT_SECRET,
+        refresh_token: refreshToken,
+        grant_type: 'refresh_token',
+      }, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        }
+      });
 
-    const tokens: OuraTokens = response.data;
-    
-    // If Oura doesn't return a new refresh token, keep the old one to prevent data loss
-    if (!tokens.refresh_token) {
-      tokens.refresh_token = refreshToken;
+      const tokens: OuraTokens = response.data;
+      
+      // Calculate absolute expiry if not present (usually returned as expires_in)
+      if (!tokens.expires_at && tokens.expires_in) {
+        tokens.expires_at = Math.floor(Date.now() / 1000) + tokens.expires_in;
+      }
+
+      // If Oura doesn't return a new refresh token, keep the old one to prevent data loss
+      // NOTE: Oura documentation implies new refresh tokens ARE returned.
+      if (!tokens.refresh_token) {
+        console.warn('Oura did not return a new refresh token! Re-using old one.');
+        tokens.refresh_token = refreshToken;
+      }
+
+      // CRITICAL: Save immediately to prevent "token used once" errors if DB save fails
+      await this.setTokens(tokens);
+      
+      console.log('Successfully refreshed Oura tokens');
+      return tokens;
+    } catch (error) {
+      console.error('Oura token refresh failed:', error);
+      throw error;
     }
-
-    this.setTokens(tokens);
-    return tokens;
   }
 
   // Clear stored tokens

@@ -41,6 +41,11 @@ class TokenStorageService {
         ? new Date(tokens.expires_at * 1000).toISOString()
         : null;
 
+      console.log(`Saving ${provider} tokens to DB...`, { 
+        expires_at: expiresAt, 
+        has_refresh: !!tokens.refresh_token 
+      });
+
       const { error } = await supabase
         .from('user_tokens')
         .upsert({
@@ -55,7 +60,12 @@ class TokenStorageService {
           onConflict: 'user_id,provider'
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error(`DB Upsert Error for ${provider}:`, error);
+        throw error;
+      }
+      
+      console.log(`Successfully saved ${provider} tokens to DB`);
     } catch (error) {
       console.error(`Failed to save ${provider} tokens to database:`, error);
       throw error;
