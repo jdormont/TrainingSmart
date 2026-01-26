@@ -370,7 +370,7 @@ class StravaApiService {
   }
 
   // Get activity streams (watts, etc.)
-  async getActivityStreams(activityId: number, types: string[]): Promise<any[]> {
+  async getActivityStreams(activityId: number, types: string[]): Promise<any> {
     const accessToken = await this.ensureValidTokens();
     if (!accessToken) {
       throw new Error('No valid access token');

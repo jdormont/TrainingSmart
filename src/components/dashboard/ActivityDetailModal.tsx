@@ -60,9 +60,15 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
                 const streams = await stravaApi.getActivityStreams(activity.id, ['watts']);
                 if (!isMounted) return;
 
+                // Handle both array (legacy) and object (key_by_type=true) responses
+                let wattsStream;
                 if (Array.isArray(streams)) {
-                    const wattsStream = streams.find(s => s.type === 'watts');
-                    if (wattsStream && wattsStream.data && wattsStream.data.length > 0) {
+                    wattsStream = streams.find(s => s.type === 'watts');
+                } else if (streams && typeof streams === 'object') {
+                    wattsStream = streams.watts;
+                }
+
+                if (wattsStream && wattsStream.data && wattsStream.data.length > 0) {
                         // Perform calculation immediately
                         const powerData = wattsStream.data as number[];
                         const ftp = userProfile.ftp;
@@ -101,7 +107,6 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
                         calculatedCustom = true;
                     }
                 }
-             }
            } catch (err) {
              console.error('Error fetching stream for calculation:', err);
            }
@@ -383,7 +388,9 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
                     <Zap className="w-5 h-5 mr-2 text-violet-500" />
                     Power Zones
                 </div>
-                {userFtp && <span className="text-xs text-slate-500 font-normal">Based on FTP: {userFtp}w</span>}
+                {userFtp && powerZones[0].name !== 'Z1' && (
+                    <span className="text-xs text-slate-500 font-normal">Based on FTP: {userFtp}w</span>
+                )}
               </h3>
               <div className="space-y-4">
                 {powerZones.map((zone) => (
