@@ -7,8 +7,8 @@ export interface UserProfile {
   gender?: string;
   age_bucket?: string;
   calendar_token?: string;
+  ftp?: number;
 }
-
 export interface ContentProfile {
   interests: string[];
   skill_level: 'beginner' | 'intermediate' | 'advanced' | 'pro';
@@ -63,7 +63,7 @@ export const userProfileService = {
 
     const { data, error } = await supabase
       .from('user_profiles')
-      .select('training_goal, weekly_hours, coach_persona, gender, age_bucket, calendar_token')
+      .select('training_goal, weekly_hours, coach_persona, gender, age_bucket, calendar_token, ftp')
       .eq('user_id', user.id)
       .maybeSingle();
 

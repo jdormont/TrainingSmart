@@ -1,7 +1,9 @@
 import React from 'react';
 import { X, Calendar, Clock, MapPin, TrendingUp, Heart, Zap, Mountain, Trophy, Users, ThumbsUp } from 'lucide-react';
-import type { StravaActivity } from '../../types';
+import type { StravaActivity, StravaZone } from '../../types';
 import { formatDistance, formatDuration, formatPace, formatDate, formatTime, getActivityIcon } from '../../utils/formatters';
+import { stravaApi } from '../../services/stravaApi';
+import { userProfileService } from '../../services/userProfileService';
 
 interface ActivityDetailModalProps {
   activity: StravaActivity;
@@ -23,14 +25,153 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
   similarActivities,
   onClose
 }) => {
-  // Calculate HR zones (standard 5-zone model)
-  const calculateHRZones = (avgHR: number): HRZone[] => {
-    if (!avgHR || avgHR === 0) return [];
+  const [zones, setZones] = React.useState<StravaZone[]>([]);
+  // Store the FINAL calculated power zones to display, avoiding layout shift/logic races
+  const [calculatedPowerZones, setCalculatedPowerZones] = React.useState<HRZone[]>([]);
+  const [loadingZones, setLoadingZones] = React.useState(false);
+  const [userFtp, setUserFtp] = React.useState<number | null>(null);
 
+  React.useEffect(() => {
+    let isMounted = true;
+
+    const fetchData = async () => {
+      setLoadingZones(true);
+      // Don't clear state immediately to prevent white flash if re-fetching same activity, 
+      // but do clear if ID changed (handled by effect dependency)
+      
+      try {
+        const [zonesData, userProfile] = await Promise.all([
+          stravaApi.getActivityZones(activity.id),
+          userProfileService.getUserProfile()
+        ]);
+        
+        if (!isMounted) return;
+
+        setZones(zonesData);
+        let finalPowerZones: HRZone[] = [];
+
+        // 1. Try to calculate Custom Zones (TrainerRoad Model) if FTP + Streams available
+        let calculatedCustom = false;
+        if (userProfile?.ftp) {
+           setUserFtp(userProfile.ftp);
+           try {
+             // Fetch streams
+             if (activity.device_watts || activity.average_watts) {
+                const streams = await stravaApi.getActivityStreams(activity.id, ['watts']);
+                if (!isMounted) return;
+
+                if (Array.isArray(streams)) {
+                    const wattsStream = streams.find(s => s.type === 'watts');
+                    if (wattsStream && wattsStream.data && wattsStream.data.length > 0) {
+                        // Perform calculation immediately
+                        const powerData = wattsStream.data as number[];
+                        const ftp = userProfile.ftp;
+                        const totalPoints = powerData.length;
+                        const zoneCounts = [0, 0, 0, 0, 0, 0, 0];
+
+                        powerData.forEach(watts => {
+                            const pct = watts / ftp;
+                            if (pct < 0.55) zoneCounts[0]++;
+                            else if (pct <= 0.75) zoneCounts[1]++;
+                            else if (pct <= 0.87) zoneCounts[2]++;
+                            else if (pct <= 0.94) zoneCounts[3]++;
+                            else if (pct <= 1.05) zoneCounts[4]++;
+                            else if (pct <= 1.20) zoneCounts[5]++;
+                            else zoneCounts[6]++;
+                        });
+
+                        const zoneDefinitions = [
+                            { name: 'Active Recovery', min: 0, max: Math.round(ftp * 0.55), color: '#7dd3fc' },
+                            { name: 'Endurance', min: Math.round(ftp * 0.55), max: Math.round(ftp * 0.75), color: '#3b82f6' },
+                            { name: 'Tempo', min: Math.round(ftp * 0.76), max: Math.round(ftp * 0.87), color: '#4ade80' },
+                            { name: 'Sweet Spot', min: Math.round(ftp * 0.88), max: Math.round(ftp * 0.94), color: '#facc15' },
+                            { name: 'Threshold', min: Math.round(ftp * 0.95), max: Math.round(ftp * 1.05), color: '#fb923c' },
+                            { name: 'VO2 Max', min: Math.round(ftp * 1.06), max: Math.round(ftp * 1.20), color: '#f87171' },
+                            { name: 'Anaerobic', min: Math.round(ftp * 1.21), max: -1, color: '#f43f5e' }
+                        ];
+
+                        finalPowerZones = zoneDefinitions.map((def, i) => ({
+                            zone: i + 1,
+                            name: def.name,
+                            min: def.min,
+                            max: def.max,
+                            color: def.color,
+                            percentage: totalPoints > 0 ? Math.round((zoneCounts[i] / totalPoints) * 100) : 0
+                        }));
+                        calculatedCustom = true;
+                    }
+                }
+             }
+           } catch (err) {
+             console.error('Error fetching stream for calculation:', err);
+           }
+        }
+
+        // 2. Fallback to Strava Zones if custom calculation failed or wasn't possible
+        if (!calculatedCustom) {
+            const powerZoneData = zonesData.find(z => z.type === 'power');
+            if (powerZoneData) {
+                const colors = ['#8B5CF6', '#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#B91C1C', '#111827']; 
+                const totalTime = powerZoneData.distribution_buckets.reduce((acc, b) => acc + b.time, 0);
+                finalPowerZones = powerZoneData.distribution_buckets.map((b, i) => ({
+                    zone: i + 1,
+                    name: `Z${i + 1}`,
+                    min: b.min,
+                    max: b.max,
+                    color: colors[i] || '#6B7280',
+                    percentage: totalTime > 0 ? Math.round((b.time / totalTime) * 100) : 0
+                }));
+            }
+        }
+
+        if (isMounted) {
+            setCalculatedPowerZones(finalPowerZones);
+        }
+
+      } catch (error) {
+        console.error('Failed to fetch activity data:', error);
+      } finally {
+        if (isMounted) setLoadingZones(false);
+      }
+    };
+
+    if (activity.average_heartrate || activity.average_watts) {
+      if (isMounted) {
+        setCalculatedPowerZones([]); // Reset on new activity load
+        fetchData();
+      }
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activity.id]); // Stable dependency
+
+  // Calculate HR zones only (Power is now handled in state)
+  const getHeartRateZones = (): HRZone[] => {
+    const hrZoneData = zones.find(z => z.type === 'heartrate');
+    
+    // If we have real Strava zones, use them
+    if (hrZoneData && hrZoneData.distribution_buckets.length > 0) {
+       const totalTime = hrZoneData.distribution_buckets.reduce((acc, b) => acc + b.time, 0);
+       return hrZoneData.distribution_buckets.map((b, i) => ({
+          zone: i + 1,
+          name: i === 0 ? 'Zone 1' : `Zone ${i + 1}`, // Strava doesn't give names, but we can map if we want or just use numbers
+          min: b.min,
+          max: b.max,
+          color: ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6'][i] || '#6B7280',
+          percentage: totalTime > 0 ? Math.round((b.time / totalTime) * 100) : 0
+       }));
+    }
+
+    // Fallback to estimation if no zones returned but we have avg HR
+    const avgHR = activity.average_heartrate;
+    if (!avgHR || avgHR === 0) return [];
+    
     // Estimate max HR (220 - age, but we'll use 190 as reasonable default)
     const estimatedMaxHR = 190;
 
-    const zones: HRZone[] = [
+    const zonesList: HRZone[] = [
       { zone: 1, name: 'Recovery', min: 0.5, max: 0.6, color: '#10B981', percentage: 0 },
       { zone: 2, name: 'Aerobic', min: 0.6, max: 0.7, color: '#3B82F6', percentage: 0 },
       { zone: 3, name: 'Tempo', min: 0.7, max: 0.8, color: '#F59E0B', percentage: 0 },
@@ -39,24 +180,23 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
     ];
 
     // Simple estimation: assume normal distribution around average HR
-    const currentZone = zones.find(z =>
+    const currentZone = zonesList.find(z =>
       avgHR >= (z.min * estimatedMaxHR) && avgHR <= (z.max * estimatedMaxHR)
     );
 
     if (currentZone) {
-      // Simulate time distribution (in real app, this would come from detailed HR data)
-      zones.forEach(zone => {
+      zonesList.forEach(zone => {
         if (zone.zone === currentZone.zone) {
-          zone.percentage = 60; // Most time in current zone
+          zone.percentage = 60; 
         } else if (Math.abs(zone.zone - currentZone.zone) === 1) {
-          zone.percentage = 20; // Some time in adjacent zones
+          zone.percentage = 20; 
         } else {
           zone.percentage = 0;
         }
       });
     }
 
-    return zones.map(zone => ({
+    return zonesList.map(zone => ({
       ...zone,
       min: Math.round(zone.min * estimatedMaxHR),
       max: Math.round(zone.max * estimatedMaxHR)
@@ -118,7 +258,8 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
     };
   };
 
-  const hrZones = activity.average_heartrate ? calculateHRZones(activity.average_heartrate) : [];
+  const hrZones = getHeartRateZones();
+  const powerZones = calculatedPowerZones; // Use the stabilized state
   const personalRecords = findPRs();
   const comparisons = calculateComparisons();
 
@@ -209,32 +350,50 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
               </div>
             )}
 
+            {activity.average_watts && (
+              <div className="bg-violet-500/10 border border-violet-500/20 rounded-xl p-4 text-center">
+                <Zap className="w-6 h-6 text-violet-400 mx-auto mb-2" />
+                <div className="text-2xl font-bold text-slate-50">{Math.round(activity.average_watts)}w</div>
+                <div className="text-sm text-slate-400">Avg Power</div>
+              </div>
+            )}
+
+            {activity.max_watts && (
+              <div className="bg-fuchsia-500/10 border border-fuchsia-500/20 rounded-xl p-4 text-center">
+                <Zap className="w-6 h-6 text-fuchsia-400 mx-auto mb-2" />
+                <div className="text-2xl font-bold text-slate-50">{Math.round(activity.max_watts)}w</div>
+                <div className="text-sm text-slate-400">Max Power</div>
+              </div>
+            )}
+
             {activity.max_speed && (
               <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 text-center">
-                <Zap className="w-6 h-6 text-yellow-400 mx-auto mb-2" />
+                <TrendingUp className="w-6 h-6 text-yellow-400 mx-auto mb-2" />
                 <div className="text-2xl font-bold text-slate-50">{formatPace(activity.max_speed, activity.type)}</div>
                 <div className="text-sm text-slate-400">Max Speed</div>
               </div>
             )}
           </div>
 
-          {/* Heart Rate Zones */}
-          {hrZones.length > 0 && (
+          {/* Power Zones */}
+          {powerZones.length > 0 && (
             <div className="bg-slate-800/50 border border-slate-800 rounded-xl p-5">
-              <h3 className="font-semibold text-slate-200 mb-4 flex items-center">
-                <Heart className="w-5 h-5 mr-2 text-red-500" />
-                Heart Rate Zones
+              <h3 className="font-semibold text-slate-200 mb-4 flex items-center justify-between">
+                <div className="flex items-center">
+                    <Zap className="w-5 h-5 mr-2 text-violet-500" />
+                    Power Zones
+                </div>
+                {userFtp && <span className="text-xs text-slate-500 font-normal">Based on FTP: {userFtp}w</span>}
               </h3>
               <div className="space-y-4">
-                {hrZones.map((zone) => (
+                {powerZones.map((zone) => (
                   <div key={zone.zone} className="flex items-center space-x-3">
                     <div className="w-16 text-sm font-medium text-slate-400">
-                      Zone {zone.zone}
+                      {zone.name}
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs text-slate-500 uppercase tracking-wider">{zone.name}</span>
-                        <span className="text-xs text-slate-400 font-mono">{zone.min}-{zone.max} bpm</span>
+                         <span className="text-xs text-slate-400 font-mono">{zone.min}-{zone.max === -1 ? '∞' : zone.max} w</span>
                       </div>
                       <div className="w-full bg-slate-700 rounded-full h-2">
                         <div
@@ -256,6 +415,51 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Heart Rate Zones */}
+          {(hrZones.length > 0 || loadingZones) && (
+            <div className="bg-slate-800/50 border border-slate-800 rounded-xl p-5">
+              <h3 className="font-semibold text-slate-200 mb-4 flex items-center">
+                <Heart className="w-5 h-5 mr-2 text-red-500" />
+                Heart Rate Zones {loadingZones && <span className="ml-2 text-xs text-slate-500 animate-pulse">(Loading...)</span>}
+              </h3>
+              {hrZones.length > 0 ? (
+              <div className="space-y-4">
+                {hrZones.map((zone) => (
+                  <div key={zone.zone} className="flex items-center space-x-3">
+                    <div className="w-16 text-sm font-medium text-slate-400">
+                      {zone.name.replace('Zone ', 'Z')}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-slate-500 uppercase tracking-wider hidden sm:inline">{zone.name}</span>
+                        <span className="text-xs text-slate-400 font-mono">{zone.min}-{zone.max === -1 ? '∞' : zone.max} bpm</span>
+                      </div>
+                      <div className="w-full bg-slate-700 rounded-full h-2">
+                        <div
+                          className="h-2 rounded-full transition-all duration-300 relative"
+                          style={{
+                            width: `${zone.percentage}%`,
+                            backgroundColor: zone.color
+                          }}
+                        >
+                          {zone.percentage > 5 && (
+                             <div className="absolute -right-1 -top-1 w-2 h-2 rounded-full bg-white/20"></div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="w-12 text-sm text-slate-300 text-right font-medium">
+                      {zone.percentage}%
+                    </div>
+                  </div>
+                ))}
+              </div>
+              ) : (
+                <div className="text-center text-slate-500 py-4">No heart rate data available</div>
+              )}
             </div>
           )}
 

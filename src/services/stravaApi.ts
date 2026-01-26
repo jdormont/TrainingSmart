@@ -2,7 +2,7 @@
 import axios from 'axios';
 import { STRAVA_CONFIG, STORAGE_KEYS } from '../utils/constants';
 import { tokenStorageService } from './tokenStorageService';
-import type { StravaAthlete, StravaActivity, StravaStats, AuthTokens } from '../types';
+import type { StravaAthlete, StravaActivity, StravaStats, AuthTokens, StravaZone } from '../types';
 
 class StravaApiService {
   private baseURL = STRAVA_CONFIG.BASE_URL;
@@ -340,6 +340,56 @@ class StravaApiService {
         throw new Error(`Strava API rate limit exceeded. Please wait ${retryAfter} and try again. Strava limits: 100 requests per 15 minutes, 1000 per day.`);
       }
       throw error;
+    }
+  }
+
+  // Get activity zones
+  async getActivityZones(activityId: number): Promise<StravaZone[]> {
+    const accessToken = await this.ensureValidTokens();
+    if (!accessToken) {
+      throw new Error('No valid access token');
+    }
+
+    try {
+      const response = await axios.get(`${this.baseURL}/activities/${activityId}/zones`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 429) {
+        const retryAfter = error.response.headers['retry-after'] || '15 minutes';
+        throw new Error(`Strava API rate limit exceeded. Please wait ${retryAfter} and try again.`);
+      }
+      // Zones might not exist for all activities (e.g. manual entry without HR/Power)
+      console.warn(`Could not fetch zones for activity ${activityId}`, error);
+      return [];
+    }
+  }
+
+  // Get activity streams (watts, etc.)
+  async getActivityStreams(activityId: number, types: string[]): Promise<any[]> {
+    const accessToken = await this.ensureValidTokens();
+    if (!accessToken) {
+      throw new Error('No valid access token');
+    }
+
+    try {
+      const response = await axios.get(`${this.baseURL}/activities/${activityId}/streams`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        params: {
+          keys: types.join(','),
+          key_by_type: true
+        }
+      });
+
+      return response.data;
+    } catch (error) {
+       console.warn(`Could not fetch streams for activity ${activityId}`, error);
+       // Return empty object/array on failure so we gracefully fallback
+       return [];
     }
   }
 }

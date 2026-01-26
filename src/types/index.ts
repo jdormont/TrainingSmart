@@ -30,7 +30,9 @@ export interface StravaActivity {
   average_heartrate?: number;
   max_heartrate?: number;
   average_watts?: number;
+  max_watts?: number;
   weighted_average_watts?: number;
+  device_watts?: boolean;
   elev_high?: number;
   elev_low?: number;
   kudos_count: number;
@@ -42,6 +44,23 @@ export interface StravaActivity {
     summary_polyline: string;
     resource_state: number;
   };
+}
+
+export interface StravaZoneBucket {
+  min: number;
+  max: number;
+  time: number; // seconds
+}
+
+export interface StravaZone {
+  score?: number;
+  distribution_buckets: StravaZoneBucket[];
+  type: 'heartrate' | 'power';
+  resource_state: number;
+  sensor_based: boolean;
+  points?: number;
+  custom_zones?: boolean;
+  max?: number;
 }
 
 export interface StravaStats {

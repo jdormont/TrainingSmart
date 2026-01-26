@@ -32,6 +32,7 @@ interface TrainingContext {
     training_goal?: string;
     coach_persona?: string;
     weekly_hours?: number;
+    ftp?: number;
   };
 }
 
@@ -100,6 +101,13 @@ RESPONSE GUIDELINES:
         .replace('{{USER_TRAINING_GOAL}}', trainingGoal)
         .replace('{{USER_COACH_STYLE}}', coachPersona)
         .replace('{{USER_WEEKLY_HOURS}}', weeklyHours.toString());
+      
+      // Inject FTP if available (search for placeholder or append)
+      // Since the prompt template is fixed constant above, we append it to the context section.
+      if (context.userProfile.ftp) {
+        basePrompt = basePrompt.replace('CURRENT USER CONTEXT:', `CURRENT USER CONTEXT:\n- **FTP:** ${context.userProfile.ftp}w`);
+      }
+
     } else {
       basePrompt = basePrompt
         .replace('{{USER_TRAINING_GOAL}}', 'Not specified')
@@ -190,6 +198,8 @@ ${streakContext}
       if (a.total_elevation_gain > 0) parts.push(`${Math.round(a.total_elevation_gain * 3.28084)}ft elev`);
       if (a.average_heartrate) parts.push(`${Math.round(a.average_heartrate)}bpm avg HR`);
       if (a.average_watts) parts.push(`${Math.round(a.average_watts)}w avg pwr`);
+      if (a.max_watts) parts.push(`${Math.round(a.max_watts)}w max pwr`);
+      if (a.device_watts === false) parts.push(`(estimated pwr)`);
       return parts.join(', ');
     }).join('\n  ')}${recoveryContext}
 

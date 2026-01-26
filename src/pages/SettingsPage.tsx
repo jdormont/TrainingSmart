@@ -78,6 +78,7 @@ export const SettingsPage: React.FC = () => {
 
   const [trainingGoal, setTrainingGoal] = useState<string>('');
   const [weeklyHours, setWeeklyHours] = useState<number>(0);
+  const [ftp, setFtp] = useState<number | ''>('');
   const [coachPersona, setCoachPersona] = useState<string>('');
   const [skillLevel, setSkillLevel] = useState<'beginner' | 'intermediate' | 'advanced' | 'pro'>('beginner');
   const [interests, setInterests] = useState<string[]>([]);
@@ -142,6 +143,7 @@ export const SettingsPage: React.FC = () => {
         if (trainingProfile) {
           setTrainingGoal(trainingProfile.training_goal || '');
           setWeeklyHours(trainingProfile.weekly_hours || 0);
+          setFtp(trainingProfile.ftp || '');
           setCoachPersona(trainingProfile.coach_persona || '');
         }
 
@@ -278,6 +280,7 @@ export const SettingsPage: React.FC = () => {
         userProfileService.updateUserProfile({
           training_goal: trainingGoal || undefined,
           weekly_hours: weeklyHours || undefined,
+          ftp: ftp ? Number(ftp) : undefined,
           coach_persona: coachPersona || undefined
         }),
         userProfileService.updateContentProfile({
@@ -759,6 +762,41 @@ export const SettingsPage: React.FC = () => {
                     </div>
                     <p className="text-xs text-slate-500 mt-1">
                       How many hours per week can you dedicate to training?
+                    </p>
+                  </div>
+
+                  {/* FTP */}
+                  <div>
+                    <label htmlFor="ftp" className="block text-sm font-medium text-slate-400 mb-2">
+                       Functional Threshold Power (FTP)
+                    </label>
+                    <div className="flex items-center space-x-4">
+                      <input
+                        type="range"
+                        id="ftp-slider"
+                        min="100"
+                        max="400"
+                        step="5"
+                        value={ftp || 200}
+                        onChange={(e) => setFtp(Number(e.target.value))}
+                        className="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                      />
+                      <div className="w-20 text-center">
+                        <input
+                          type="number"
+                          id="ftp"
+                          min="0"
+                          max="600"
+                          value={ftp}
+                          onChange={(e) => setFtp(Number(e.target.value))}
+                          placeholder="200"
+                          className="w-full px-2 py-1 bg-slate-800 border border-slate-700 text-slate-200 rounded-md text-center focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        />
+                      </div>
+                      <span className="text-sm text-slate-400 w-12">watts</span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Your current or estimated FTP. Used for power zone calculations.
                     </p>
                   </div>
 
