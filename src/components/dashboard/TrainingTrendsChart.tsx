@@ -1,7 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { LineChart as LineChartIcon, RefreshCw } from 'lucide-react';
-import { Button } from '../common/Button';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import type { StravaActivity, StravaAthlete, DailyMetric, OuraReadinessData } from '../../types';
 import { startOfWeek, format, addWeeks, subDays, isSameWeek } from 'date-fns';
 import { trainingMetricsService } from '../../services/trainingMetricsService';
@@ -235,35 +233,108 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
     });
   };
 
-  // Helper to calculate trend for a metric
-  const getMetricStats = (key: string) => {
-      if (weeklyTrends.length < 2) return { value: 0, trend: 0, trendValue: 0 };
-      
-      const current = weeklyTrends[weeklyTrends.length - 1];
-      const previous = weeklyTrends[weeklyTrends.length - 2];
-      
-      const currVal = current[key as keyof WeeklyTrend] as number || 0;
-      const prevVal = previous[key as keyof WeeklyTrend] as number || 0;
+  // Calculate previous 4-week totals for trend comparison
+  const previousTotals = useMemo(() => {
+     const now = new Date();
+     // Calculate the 4-week block BEFORE the current 4-week block
+     // Current block: i=3..0 (approx 4 weeks ago to now)
+     // Previous block: i=7..4 (approx 8 weeks ago to 4 weeks ago)
+     
+     let prevDistance = 0;
+     let prevLoad = 0;
 
+     // Calculate start/end for the entire previous 4-week block
+     const prevBlockStart = startOfWeek(addWeeks(now, -7), { weekStartsOn: 1 });
+     const prevBlockEnd = startOfWeek(addWeeks(now, -3), { weekStartsOn: 1 }); // Exclusive
+
+     const previousActivities = activities.filter(activity => {
+         // Strip Z to force local time parsing
+         const dateStr = activity.start_date_local.endsWith('Z') 
+            ? activity.start_date_local.slice(0, -1) 
+            : activity.start_date_local;
+         const activityDate = new Date(dateStr);
+         return activityDate >= prevBlockStart && activityDate < prevBlockEnd;
+     });
+
+     previousActivities.forEach(activity => {
+         prevDistance += activity.distance * 0.000621371; // Convert to miles
+         
+         const timeHours = activity.moving_time / 3600;
+         const intensityFactor = activity.average_speed > 0 ? 
+            Math.min(activity.average_speed / 3, 2) : 1;
+         prevLoad += (timeHours * intensityFactor);
+     });
+
+     return {
+         distance: Math.round(prevDistance * 10) / 10,
+         load: Math.round(prevLoad * 10) / 10
+     };
+  }, [activities]);
+
+  // Helper to calculate trend for a metric
+  const getMetricStats = (key: string, aggregation: 'sum' | 'latest' | 'average' = 'latest') => {
+      if (weeklyTrends.length === 0) return { value: 0, trend: 0, trendValue: 0 };
+      
+      let value = 0;
       let trendPercent = 0;
-      if (prevVal > 0) {
-          trendPercent = Math.round(((currVal - prevVal) / prevVal) * 100);
-      } else if (currVal > 0) {
-          trendPercent = 100; // New activity
+      let trendValue = 0;
+
+      if (aggregation === 'sum') {
+          // Sum over all displayed weeks (up to 4)
+          value = weeklyTrends.reduce((sum, week) => sum + (week[key as keyof WeeklyTrend] as number || 0), 0);
+          
+          // Compare against PREVIOUS 4-week block totals
+          let prevVal = 0;
+          if (key === 'allDistance') prevVal = previousTotals.distance;
+          if (key === 'allTrainingLoad') prevVal = previousTotals.load;
+
+          if (prevVal > 0) {
+              trendPercent = Math.round(((value - prevVal) / prevVal) * 100);
+          } else if (value > 0) {
+              trendPercent = 100; // New activity
+          }
+          trendValue = value - prevVal;
+
+      } else {
+          // Latest behavior (compare last week to previous week)
+          if (weeklyTrends.length < 2) {
+             const current = weeklyTrends[weeklyTrends.length - 1];
+             value = current[key as keyof WeeklyTrend] as number || 0;
+          } else {
+             const current = weeklyTrends[weeklyTrends.length - 1];
+             const previous = weeklyTrends[weeklyTrends.length - 2];
+             
+             value = current[key as keyof WeeklyTrend] as number || 0;
+             const prevVal = previous[key as keyof WeeklyTrend] as number || 0;
+
+             if (prevVal > 0) {
+                 trendPercent = Math.round(((value - prevVal) / prevVal) * 100);
+             } else if (value > 0) {
+                 trendPercent = 100; // New activity
+             }
+             trendValue = value - prevVal;
+          }
+      }
+
+      // Rounding for display
+      if (key === 'allDistance' || key === 'allTrainingLoad') {
+          value = Math.round(value * 10) / 10;
+      } else {
+          value = Math.round(value);
       }
 
       return {
-          value: currVal,
+          value,
           trend: trendPercent,
-          trendValue: currVal - prevVal
+          trendValue
       };
   };
 
   const metricConfigs = [
-    { id: 'distance', label: 'Distance', color: '#3b82f6', unit: 'mi', key: 'allDistance', description: 'Total weekly mileage across all activities.' },
-    { id: 'load', label: 'Load', color: '#22c55e', unit: '', key: 'allTrainingLoad', description: 'Cumulative stress score based on duration and intensity.' },
-    { id: 'performance', label: 'Fitness', color: '#8b5cf6', unit: '', key: 'overallPerformance', description: 'Weighted score of your physical capacity.' },
-    { id: 'recovery', label: 'Recovery', color: '#ec4899', unit: '%', key: 'recoveryCalculated', description: 'Holistic recharge score from sleep & resting HR.' },
+    { id: 'distance', label: 'Distance', color: '#3b82f6', unit: 'mi', key: 'allDistance', description: 'Total mileage over the last 4 weeks.', aggregation: 'sum' as const },
+    { id: 'load', label: 'Load', color: '#22c55e', unit: '', key: 'allTrainingLoad', description: 'Cumulative stress score over the last 4 weeks.', aggregation: 'sum' as const },
+    { id: 'performance', label: 'Fitness', color: '#8b5cf6', unit: '', key: 'overallPerformance', description: 'Weighted score of your physical capacity.', aggregation: 'latest' as const },
+    { id: 'recovery', label: 'Recovery', color: '#ec4899', unit: '%', key: 'recoveryCalculated', description: 'Holistic recharge score from sleep & resting HR.', aggregation: 'latest' as const },
   ];
 
   interface CustomTooltipProps {
@@ -330,7 +401,7 @@ export const TrainingTrendsChart: React.FC<TrainingTrendsChartProps> = ({ activi
       {/* Interactive Stat Rows (Metric Toggle Cards) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {metricConfigs.map((metric) => {
-           const stats = getMetricStats(metric.key);
+           const stats = getMetricStats(metric.key, metric.aggregation);
            const isActive = selectedMetrics.has(metric.id);
            
            return (
