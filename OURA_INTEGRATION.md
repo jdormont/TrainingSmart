@@ -10,41 +10,30 @@ The integration uses the **Oura API V2** to retrieve Sleep, Readiness, and Activ
 - **Data Consumer**: [`src/hooks/useDashboardData.ts`](src/hooks/useDashboardData.ts)
 
 ## Data Freshness & Fetching Strategy
+ 
+To ensure the Recovery Score reflects the user's current state while maintaining performance, the system employs a **Hybrid Persistence** strategy.
 
-To ensure the Recovery Score reflects the user's current state, the system employs a "Zero-Config" fetching strategy that prioritizes the **latest available data**.
+### 1. Persistence Layer (`daily_metrics`)
 
-### 1. The 7-Day Window
+We now mirror Oura data into our own Supabase table `daily_metrics`. This allows:
+- **Instant Loading**: Validation data is available immediately without waiting for Oura API.
+- **Offline Support**: The dashboard works even if the Oura API is unreachable.
+- **Historical Analysis**: We can query trends without rate-limit concerns.
 
-When the dashboard loads, the app requests data for the **last 7 days**:
+### 2. Synchronization Flow
 
-```typescript
-// src/services/ouraApi.ts
-const endDate = format(now, 'yyyy-MM-dd');
-const startDate = format(subDays(now, 7), 'yyyy-MM-dd');
-```
-
-### 2. Latest Record Selection
-
-The API returns a list of daily summaries for that window. The application iterates through this list and selects the record with the **most recent date**:
-
-```typescript
-// src/hooks/useDashboardData.ts
-if (recentSleep.length > 0) {
-    sleepData = recentSleep.reduce((latest, current) => 
-        new Date(current.day) > new Date(latest.day) ? current : latest
-    );
-}
-```
+1. **On Load**: The dashboard immediately renders using the latest data from `daily_metrics`.
+2. **Background Sync**: A background process checks the Oura API for new data.
+3. **Update**: If new data is found (e.g., this morning's sleep), it is upserted to `daily_metrics` and the UI updates automatically.
+4. **Client-Side UUIDs**: We use client-generated UUIDs to ensure idempotent inserts.
 
 ### Implications for "Stale" Data
 
-This logic means the dashboard **always displays data**, even if today's data is missing.
-
-- **Scenario A (Normal):** User wakes up, syncs ring to Oura App. Oura Cloud updates. Dashboard fetches today's data. **Status: Fresh.**
-- **Scenario B (Not Synced):** User wakes up but *has not* synced ring to Oura App yet. Oura Cloud has no data for today. Dashboard fetches last 7 days, finds *Yesterday* as the latest record. **Status: Stale (Yesterday's Data).**
+- **Scenario A (Normal)**: User syncs ring to Oura App. Our background sync picks it up. Dashboard updates to "Today".
+- **Scenario B (Not Synced)**: If the ring hasn't synced to Oura Cloud, we display the most recent persisted record (usually "Yesterday") with a clear date label.
 
 > [!NOTE]
-> There is currently no UI indicator if the displayed data is from "Today" or "Yesterday". A mismatch might occur if the user checks the dashboard before syncing their ring.
+> The dashboard will dynamically check if the displayed data is from "Today" or older.
 
 ## API Endpoints Used
 

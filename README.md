@@ -16,9 +16,8 @@ Instead of generic "one-size-fits-all" plans, TrainingSmart AI adapts to _you_.
 - **🤖 AI Coach Chat**: Ask questions like "I'm feeling tired today, what should
   I do?" or "How do I improve my hill climbing?" and get answers based on your
   real data.
-- **📊 Smart Dashboard**: See your weekly progress, fatigue levels, and
-  personalized tips at a glance.
-  [Read about our Health Metrics](./HEALTH_METRICS.md).
+- **📊 Smart Dashboard**: See your weekly progress, fatigue levels, power distribution, and
+  personalized tips at a glance. [Read about our Health Metrics](./HEALTH_METRICS.md).
 - **📅 Custom Training Plans**: Generate a training plan for your specific goal
   (e.g., "Prepare for a Century Ride in 8 weeks") that fits your schedule.
 - **🕵️‍♀️ Demo Mode**: Want to try it out? Add `?demo=true` to the URL to explore
@@ -49,7 +48,9 @@ The mission control for your training.
   and **Resting Heart Rate**. See `HEALTH_METRICS.md` for full calculation
   details.
 - **Training Trends**: Refactor interactive chart with toggle cards to analyze
-  volume and intensity (8-week or 4-week views).
+  volume and intensity (4-week and 8-week views).
+- **[NEW] Power Analysis**: Active Recovery to Neuromuscular power distribution
+  based on your manual or estimated FTP.
 - **Intent Chips**: Feeling "Short on Time" or "Need Rest"? Use the new intent
   chips to instantly adjust today's recommended workout.
 - **Recent Activities**: Quick access to your latest Strava rides with detailed
@@ -90,6 +91,8 @@ Customize your experience.
 
 - **Integrations**: Connect or disconnect your **Strava**, **Oura Ring**, and
   **Google Calendar** accounts.
+- **Manual FTP**: Set your Functional Threshold Power manually to ensure accurate
+  training zones, independent of Strava's estimates.
 - **Apple Watch Sync**: Sync your Sleep and HRV data directly from Apple Health
   using our iOS Shortcut helper.
 - **AI Personality**: You can customize the "System Prompt" of your coach. Want

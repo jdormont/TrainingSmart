@@ -108,6 +108,8 @@ const dataPoints = {
   Rate)
 - ✅ **COMPLETED** - Handles loading states gracefully
 - ✅ **COMPLETED** - Beautiful activity cards with hover effects
+- ✅ **COMPLETED** - **[NEW]** Multi-zone Power Analysis (7-zone Coggan model)
+- ✅ **COMPLETED** - **[NEW]** Manual FTP configuration
 
 ### 3. AI Training Chat Interface
 
@@ -213,6 +215,7 @@ const eventCreation = {
 - ✅ **COMPLETED** - Detailed event descriptions with workout info
 - ✅ **COMPLETED** - Default workout times by type
 - ✅ **COMPLETED** - Link back to app in calendar events
+- ✅ **COMPLETED** - **[NEW]** ICS Calendar Subscription (One-way sync to generic calendars)
 
 ---
 
@@ -358,7 +361,8 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ### 📊 **Dashboard & Data Visualization**
 
 - **[NEW]** **Refactored Training Trends**: Consolidated controls, interactive
-  metric toggle cards (`TrainingTrendsChart`).
+  metric toggle cards (`TrainingTrendsChart`) with 4-week and 8-week views.
+- **[NEW]** **Power Analysis**: Detailed 7-zone power distribution breakdown for activities (Active Recovery to Neuromuscular Power).
 - **[NEW]** **Intent Chips**: Quick-adjust "Need Rest", "Short on Time", "Feel
   Fresh" chips for daily workout modification.
 - **[NEW]** **Guest/Demo Mode**: Dashboard access via `?demo=true` with mock
@@ -403,7 +407,8 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 - **Matrix-Based Analysis**: Analyzes intersection of _Pacing_ (Volume vs Goal)
   and _Recovery_.
 - **Readiness Score**: Aggregates data from multiple sources to determine
-  "Fresh" vs "Fatigued" state.
+  "Fresh", "Fatigued", or "Balanced" state.
+- **[NEW]** **Oura Persistence**: Data is now cached in Supabase (`daily_metrics`) for instant loading and offline support.
 
 ### 📋 **Interactive Training Planner**
 
@@ -430,6 +435,7 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
   entire application.
 - **Onboarding**: 3-step Intake Wizard (Goal, Availability, Persona).
 - **Personalized Content**: Hybrid interest-based content feed.
+- **[NEW]** **Quick Add**: "Quick Workout" button for rapid manual entry.
 
 ---
 
