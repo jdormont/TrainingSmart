@@ -148,6 +148,7 @@ export interface TrainingPlan {
   createdAt: Date;
   sourceChatSessionId?: string;
   chatContextSnapshot?: ChatContextSnapshot;
+  reasoning?: PlanReasoning;
 }
 
 export interface Workout {
@@ -324,4 +325,26 @@ export interface UserProfile {
   ingest_key?: string;
   created_at: string;
   updated_at: string;
+}
+export interface PlanReasoning {
+  athleteAssessment: {
+    fitnessLevel: string;
+    constraints: string;
+    strengths: string[];
+    limiters: string[];
+  };
+  macroCycle: {
+    strategy: string;
+    phases: Array<{
+      weeks: string;
+      name: string;
+      goal: string;
+    }>;
+  };
+  weeklyLogic: Array<{
+    week: number;
+    focus: string;
+    targetTSS: number;
+    keyWorkoutLogic: string;
+  }>;
 }

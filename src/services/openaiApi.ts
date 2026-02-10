@@ -1,6 +1,6 @@
 // OpenAI API service for training advice
 import axios from 'axios';
-import type { StravaActivity, StravaAthlete, StravaStats, ChatMessage, OuraSleepData, OuraReadinessData, Workout, DailyMetric } from '../types';
+import type { StravaActivity, StravaAthlete, StravaStats, ChatMessage, OuraSleepData, OuraReadinessData, Workout, DailyMetric, PlanReasoning } from '../types';
 import { UserStreak } from './streakService';
 import { STORAGE_KEYS } from '../utils/constants';
 
@@ -267,7 +267,7 @@ Use the coaching style and personality defined above, while incorporating this r
     riderProfile: any, // { stamina: { level: number, ... }, discipline: ... }
     preferences: string,
     dailyAvailability?: Record<string, string>
-  ): Promise<{ description: string; workouts: (Partial<Workout> & { dayOfWeek?: number; week?: number; phase?: string })[] }> {
+  ): Promise<{ description: string; reasoning?: PlanReasoning; workouts: (Partial<Workout> & { dayOfWeek?: number; week?: number; phase?: string })[] }> {
     if (!this.supabaseUrl || !this.supabaseAnonKey) {
       throw new Error('Supabase configuration not found. Please check your environment variables.');
     }

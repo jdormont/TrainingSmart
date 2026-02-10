@@ -42,6 +42,29 @@ interface TrainingPlanRequest {
   }>;
 }
 
+interface PlanReasoning {
+  athleteAssessment: {
+    fitnessLevel: string;
+    constraints: string;
+    strengths: string[];
+    limiters: string[];
+  };
+  macroCycle: {
+    strategy: string;
+    phases: Array<{
+      weeks: string;
+      name: string;
+      goal: string;
+    }>;
+  };
+  weeklyLogic: Array<{
+    week: number;
+    focus: string;
+    targetTSS: number;
+    keyWorkoutLogic: string;
+  }>;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -148,21 +171,47 @@ CRITICAL SCHEDULING CONSTRAINTS (HIGHEST PRIORITY):
 6. **For the starting week, calibrate intensity based on Rider Profile: Stamina ${riderProfile.stamina}, Discipline ${riderProfile.discipline}.**
 
 RESPONSE FORMAT:
-You must respond with a valid JSON object containing exactly two fields:
-1. "overview": A markdown-formatted string with the plan philosophy, progression strategy, and key focus areas.
-2. "workouts": An array of workout objects.
+You must output a JSON object with two root keys: "reasoning" and "workouts".
+CRITICAL: You must generate the "reasoning" object FIRST. This ensures your workout generation is grounded in the strategy you define.
 
-WORKOUT OBJECT STRUCTURE:
+Structure the "reasoning" object to explain your decisions:
+1. Assess the athlete's starting point based on the provided Rider Profile.
+2. Explain the "Macro Cycle" (how you fit the goal into the time remaining).
+3. For each week, define a specific "Focus" and "Rationale".
+
+SCHEMA:
 {
-  "week": number, // The week number this workout belongs to, starting at 1
-  "dayOfWeek": number, // 0=Monday through 6=Sunday
-  "name": "Short descriptive name",
-  "type": "bike" | "run" | "swim" | "strength", // DO NOT USE "rest"
-  "phase": "Base" | "Build" | "Peak" | "Taper", // The phase this workout belongs to
-  "description": "Detailed instructions with YouTube links. Format: [Video Title](URL) by Channel Name",
-  "duration": number (minutes),
-  "distance": number (miles, optional, required for rides/runs),
-  "intensity": "easy" | "moderate" | "hard" | "recovery"
+  "reasoning": {
+    "athleteAssessment": {
+      "fitnessLevel": "string",
+      "constraints": "string",
+      "strengths": ["string"],
+      "limiters": ["string"]
+    },
+    "macroCycle": {
+      "strategy": "string",
+      "phases": [{ "weeks": "string", "name": "string", "goal": "string" }]
+    },
+    "weeklyLogic": [{
+      "week": number,
+      "focus": "string",
+      "targetTSS": number,
+      "keyWorkoutLogic": "string"
+    }]
+  },
+  "workouts": [
+    {
+      "week": number, // 1-based
+      "dayOfWeek": number, // 0=Monday through 6=Sunday
+      "name": "string",
+      "type": "bike" | "run" | "swim" | "strength",
+      "phase": "Base" | "Build" | "Peak" | "Taper",
+      "description": "string (with YouTube links)",
+      "duration": number, // minutes
+      "distance": number, // miles (optional)
+      "intensity": "easy" | "moderate" | "hard" | "recovery"
+    }
+  ]
 }
 
 Create ${numWorkouts} days of plan (workouts + rest days) with a balanced weekly structure, defaulting to rest days where appropriate by omitting workouts.`;
@@ -230,8 +279,14 @@ Prioritize: GCN, TrainerRoad, Dylan Johnson, Cam Nicholls.`,
       }
     }
 
-    const { overview, workouts } = result;
-    const description = overview || "No overview provided.";
+    const { reasoning, workouts } = result;
+    
+    // BACKWARD COMPATIBILITY: Construct a description from the reasoning
+    let description = "No overview provided.";
+    if (reasoning) {
+        const { athleteAssessment, macroCycle } = reasoning as PlanReasoning;
+        description = `**Strategy:** ${macroCycle.strategy}\n\n**Assessment:** ${athleteAssessment.fitnessLevel}\n\n**Phases:**\n${macroCycle.phases.map((p: any) => `- ${p.name} (${p.weeks}): ${p.goal}`).join('\n')}`;
+    }
 
     if (!Array.isArray(workouts) || workouts.length === 0) {
       throw new Error("AI did not return any workouts in the expected format.");
@@ -240,7 +295,7 @@ Prioritize: GCN, TrainerRoad, Dylan Johnson, Cam Nicholls.`,
     console.log(`Successfully parsed ${workouts.length} workouts`);
 
     return new Response(
-      JSON.stringify({ description, workouts }),
+      JSON.stringify({ description, reasoning, workouts }),
       {
         headers: {
           ...corsHeaders,

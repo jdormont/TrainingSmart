@@ -13,6 +13,7 @@ interface DbTrainingPlan {
   source_chat_session_id?: string;
   chat_context_snapshot?: Record<string, unknown>;
   user_id: string;
+  meta_data?: any;
 }
 
 interface DbWorkout {
@@ -120,6 +121,10 @@ class TrainingPlansService {
       } as any; // Cast to satisfy TrainingPlan type which expects ChatContextSnapshot
     }
 
+    if (dbPlan.meta_data && dbPlan.meta_data.reasoning) {
+      plan.reasoning = dbPlan.meta_data.reasoning;
+    }
+
     return plan;
   }
 
@@ -209,6 +214,10 @@ class TrainingPlansService {
 
       if (plan.chatContextSnapshot) {
         insertData.chat_context_snapshot = plan.chatContextSnapshot as unknown as Record<string, unknown>;
+      }
+
+      if (plan.reasoning) {
+        insertData.meta_data = { reasoning: plan.reasoning };
       }
 
       const { data: newPlan, error: planError } = await supabase
@@ -797,6 +806,18 @@ class TrainingPlansService {
       console.error('Error in ensureActivePlan:', error);
       throw error;
     }
+    }
+
+  checkPlanCompliance(plan: TrainingPlan): { score: number; status: 'Green' | 'Yellow' | 'Red' } {
+    return { score: 100, status: 'Green' };
+  }
+
+  async shiftPlanSchedule(planId: string): Promise<void> {
+    console.log('[Mock] Shift plan schedule not implemented yet');
+  }
+
+  async reduceWeekIntensity(planId: string, weekStart: Date): Promise<void> {
+    console.log('[Mock] Reduce week intensity not implemented yet');
   }
 }
 

@@ -21,6 +21,8 @@ import { ouraApi } from '../services/ouraApi';
 import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
 import { streakService, UserStreak } from '../services/streakService';
 import { supabase } from '../services/supabaseClient';
+import { LightBulbIcon } from '@heroicons/react/24/outline';
+import PlanLogicViewer from '../components/plans/PlanLogicViewer';
 
 type AiWorkout = Partial<Workout> & { dayOfWeek?: number; week?: number; phase?: string };
 
@@ -38,6 +40,7 @@ export const PlansPage: React.FC = () => {
   
   const [loading, setLoading] = useState(true); // Keep for Strava data loading
   const [generating, setGenerating] = useState(false);
+  const [isLogicViewerOpen, setIsLogicViewerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
@@ -276,7 +279,7 @@ Focus Areas: ${focusAreas.join(', ') || 'General fitness'}
 Additional Preferences: ${preferences || 'None'}
       `.trim();
 
-      const { description, workouts: aiWorkouts } = await openaiService.generateTrainingPlan(
+      const { description, workouts: aiWorkouts, reasoning } = await openaiService.generateTrainingPlan(
         trainingContext,
         goal,
         eventDate, // Pass event date
@@ -285,6 +288,10 @@ Additional Preferences: ${preferences || 'None'}
         planDescription,
         dailyAvailability // Pass structured availability
       );
+
+      if (reasoning) {
+        console.log("🧠 [Admin Debug] Plan Reasoning:", reasoning);
+      }
 
       const planStartDate = startOfWeek(new Date(), { weekStartsOn: 1 }); // Always start on Monday
       const planEndDate = new Date(eventDate);
@@ -1150,6 +1157,11 @@ Additional Preferences: ${preferences || 'None'}
                         onWorkoutClick={setSelectedWorkout}
                         weeklyStats={weeklyStats}
                         streak={streak}
+                        weeklyFocus={plan.reasoning?.weeklyLogic.map(w => ({
+                          week: w.week,
+                          focus: w.focus,
+                          rationale: w.keyWorkoutLogic
+                        }))}
                     />
                  </div>
               </div>
@@ -1198,6 +1210,11 @@ Additional Preferences: ${preferences || 'None'}
           onClose={() => setSelectedWorkout(null)}
         />
       )}
+      <PlanLogicViewer
+        isOpen={isLogicViewerOpen}
+        onClose={() => setIsLogicViewerOpen(false)}
+        reasoning={savedPlans.find(p => p.id === expandedPlan)?.reasoning}
+      />
     </div>
   );
 };

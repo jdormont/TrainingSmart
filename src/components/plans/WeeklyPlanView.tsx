@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useRef } from 'react';
 import { Workout, WeeklyStats } from '../../types';
 import WorkoutCard from './WorkoutCard';
 import { addDays, startOfWeek, format, isSameDay, isWithinInterval, endOfWeek } from 'date-fns';
-import { Wand2, Plus } from 'lucide-react';
+import { Wand2, Plus, Target } from 'lucide-react';
 import { Button } from '../common/Button';
 import {
   DndContext,
@@ -34,6 +34,7 @@ interface WeeklyPlanViewProps {
   onWorkoutClick?: (workout: Workout) => void;
   weeklyStats?: WeeklyStats | null;
   streak?: UserStreak | null;
+  weeklyFocus?: Array<{ week: number; focus: string; rationale: string }>;
 }
 
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -49,7 +50,8 @@ export default function WeeklyPlanView({
   onMoveWorkout,
   onWorkoutClick,
   weeklyStats,
-  streak
+  streak,
+  weeklyFocus
 }: WeeklyPlanViewProps) {
   const [activeDragItem, setActiveDragItem] = useState<Workout | null>(null);
   const [conflictModal, setConflictModal] = useState<{
@@ -260,6 +262,13 @@ export default function WeeklyPlanView({
                  {/* Week Actions */}
                  <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/5 pb-4">
                     <div className="text-sm text-slate-400">
+                      {weeklyFocus && weeklyFocus[weekIndex] && (
+                        <div className="flex items-center gap-2 bg-blue-900/20 px-3 py-1.5 rounded-lg border border-blue-500/10">
+                          <Target className="w-4 h-4 text-blue-400" />
+                          <span className="font-medium text-blue-200">Focus: {weeklyFocus[weekIndex].focus}</span>
+                          <span className="text-slate-400 hidden md:inline">• {weeklyFocus[weekIndex].rationale}</span>
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center space-x-2">
                       {onModifyWeek && weekWorkouts.length > 0 && (
