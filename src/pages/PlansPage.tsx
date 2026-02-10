@@ -1,9 +1,13 @@
+
 import React, { useState, useEffect } from 'react';
 import { addDays, isSameDay, startOfWeek, format } from 'date-fns';
 import { Target, Plus, Trash2, MessageCircle, ChevronDown, Calendar as CalendarIcon, AlertTriangle } from 'lucide-react';
 
 import { Button } from '../components/common/Button';
 import { stravaCacheService } from '../services/stravaCacheService';
+
+import { riderProfileService } from '../services/riderProfileService'; // Import direct service
+import { calculateLoad, calculateConsistency } from '../utils/profileHelpers'; // Import helpers
 import { openaiService } from '../services/openaiApi';
 import { trainingPlansService } from '../services/trainingPlansService';
 import { healthMetricsService } from '../services/healthMetricsService'; // Import healthMetricsService
@@ -162,7 +166,7 @@ export const PlansPage: React.FC = () => {
         setLoading(true);
         const [athleteData, activitiesData] = await Promise.all([
           stravaCacheService.getAthlete(),
-          stravaCacheService.getActivities(false, 50) // More activities for better context
+          stravaCacheService.getActivities(false, 100) // More activities for better context
         ]);
 
         setAthlete(athleteData);
@@ -254,8 +258,18 @@ export const PlansPage: React.FC = () => {
       const cyclingActivities = activities.filter((a: StravaActivity) => a.type === 'Ride');
 
       // Calculate Rider Profile
-      const metrics = healthMetricsService.calculateHealthMetrics(athlete, activities);
-      const riderProfile = metrics.profile;
+      // Calculate Rider Profile (Standalone)
+      // We calculate inputs manually to avoid full HealthMetrics dependency
+      const loadDetail = calculateLoad(activities);
+      const consistencyDetail = calculateConsistency(activities);
+      const ftp = (athlete as any).ftp || 250; 
+      
+      const riderProfile = riderProfileService.calculateProfile(
+          activities, 
+          loadDetail, 
+          consistencyDetail, 
+          ftp
+      );
 
       const trainingContext = {
         athlete,
@@ -289,9 +303,7 @@ Additional Preferences: ${preferences || 'None'}
         dailyAvailability // Pass structured availability
       );
 
-      if (reasoning) {
-        console.log("🧠 [Admin Debug] Plan Reasoning:", reasoning);
-      }
+
 
       const planStartDate = startOfWeek(new Date(), { weekStartsOn: 1 }); // Always start on Monday
       const planEndDate = new Date(eventDate);
@@ -324,7 +336,8 @@ Additional Preferences: ${preferences || 'None'}
         startDate: planStartDate,
         endDate: planEndDate,
         goal: planDescription,
-        workouts: structuredWorkouts as Workout[]
+        workouts: structuredWorkouts as Workout[],
+        reasoning: reasoning // Pass reasoning to service
       };
       const newPlan = await trainingPlansService.createPlan(planToCreate);
       
@@ -1053,6 +1066,18 @@ Additional Preferences: ${preferences || 'None'}
                              </div>
 
                              <div className="flex items-center gap-2 border-l border-white/10 pl-4">
+                                {plan.reasoning && (
+                                   <button
+                                     onClick={() => {
+                                       setExpandedPlan(plan.id);
+                                       setIsLogicViewerOpen(true);
+                                     }}
+                                     className="p-2 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-full transition-colors"
+                                     title="View Logic"
+                                   >
+                                     <LightBulbIcon className="w-5 h-5" />
+                                   </button>
+                                )}
                                 <button
                                     onClick={() => deletePlan(plan.id)}
                                     className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-full transition-colors"

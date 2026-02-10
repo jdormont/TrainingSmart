@@ -307,3 +307,5 @@ export class RiderProfileService {
         return `${m}m`;
     }
 }
+
+export const riderProfileService = new RiderProfileService();

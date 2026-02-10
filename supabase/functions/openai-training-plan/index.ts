@@ -95,9 +95,19 @@ Deno.serve(async (req: Request) => {
       ? Math.round(recentActivities.reduce((sum, a) => sum + a.distance, 0) / recentActivities.length / 1000)
       : 0;
 
-    const avgSpeed = recentActivities.length > 0
-      ? Math.round(recentActivities.reduce((sum, a) => sum + a.average_speed * 3.6, 0) / recentActivities.length)
-      : 0;
+    // Calculate Average Speed (Weighted by Distance/Time)
+    let totalDist = 0;
+    let totalTime = 0;
+    recentActivities.forEach(a => {
+        totalDist += a.distance;
+        if (a.average_speed > 0) {
+            totalTime += a.distance / a.average_speed;
+        }
+    });
+
+    const avgSpeed = totalTime > 0 
+        ? Math.round((totalDist / totalTime) * 3.6) 
+        : 0;
 
     // Calculate duration in weeks
     const start = new Date(startDate);
@@ -105,6 +115,9 @@ Deno.serve(async (req: Request) => {
     const diffTime = Math.abs(event.getTime() - start.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     const weeksAvailable = Math.max(1, Math.floor(diffDays / 7));
+
+    // Force strict adherence to weeksAvailable in prompt
+    const durationConstraint = `Total Duration: EXACTLY ${weeksAvailable} weeks. Do not generate more or less.`;
 
     // Phase Calculation Logic
     let periodizationStructure = "";
@@ -139,13 +152,20 @@ Deno.serve(async (req: Request) => {
             .join("\n");
     }
 
+    // Convert to Imperial for Prompt
+    const weeklyVolMiles = ((weeklyVolume.distance / 1000) * 0.621371).toFixed(1);
+    const avgDistMiles = Math.round(avgDistance * 0.621371);
+    const avgSpeedMph = Math.round(avgSpeed * 0.621371);
+
     const prompt = `Based on ${athleteName}'s CYCLING training data, create a detailed ${weeksAvailable}-week CYCLING training plan for their goal: "${goal}", ending on ${eventDate}.
 
+${durationConstraint}
+
 CURRENT FITNESS LEVEL:
-- Recent weekly cycling volume: ${(weeklyVolume.distance / 1000).toFixed(1)}km
+- Recent weekly cycling volume: ${weeklyVolMiles} miles
 - Recent cycling activities: ${recentActivities.length} rides
-- Average ride distance: ${avgDistance}km
-- Average ride speed: ${avgSpeed}km/h
+- Average ride distance: ${avgDistMiles} miles
+- Average ride speed: ${avgSpeedMph} mph
 - Training consistency: ${recentActivities.length} activities in recent data
 - Rider Profile: Stamina (${riderProfile.stamina}), Discipline (${riderProfile.discipline})
 
@@ -159,8 +179,9 @@ ${scheduleConstraints || "No specific day-by-day constraints provided."}
 
 CRITICAL SCHEDULING CONSTRAINTS (HIGHEST PRIORITY):
 1. **Adhere strictly to the WEEKLY SCHEDULE CONSTRAINTS above.**
-   - If a day is marked as "Rest Day", DO NOT schedule a workout (omit it).
-   - If a day has a time limit (e.g., "1 hour"), the workout duration MUST NOT exceed this limit.
+   - **STRICT PENALTY:** If a day is marked as "Rest", "0:00", or "Unavailable", YOU MUST NOT schedule a workout (omit it).
+   - **STRICT PENALTY:** If a day has a time limit (e.g., "1 hour"), the workout duration MUST NOT exceed this limit.
+   - Map days correctly: Monday=0, Tuesday=1, etc.
 2. **CONFLICT RESOLUTION (Weekly vs Daily):**
    - If "Weekly Time Available" is low (e.g. 5-6 hours) but the user has high "Daily Availability" on specific days (e.g. 3-4 hours on Weekend), **YOU MUST UTILIZE THE HIGH AVAILABILITY DAYS for key workouts.**
    - Do NOT skip a long ride on a high-availability day just to stay under the weekly average. It is better to exceed the weekly preference slightly than to miss a key structural workout (Long Ride).
