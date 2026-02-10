@@ -25,7 +25,12 @@ const corsHeaders = {
 interface TrainingPlanRequest {
   athleteName: string;
   goal: string;
-  timeframe: string;
+  eventDate: string; // ISO format
+  startDate: string; // ISO format
+  riderProfile: {
+    stamina: string;
+    discipline: string;
+  };
   preferences: string;
   weeklyVolume: {
     distance: number;
@@ -54,11 +59,14 @@ Deno.serve(async (req: Request) => {
     const {
       athleteName,
       goal,
-      timeframe,
+      eventDate,
+      startDate,
+      riderProfile,
       preferences,
       weeklyVolume,
       recentActivities,
-    }: TrainingPlanRequest = await req.json();
+      dailyAvailability,
+    }: TrainingPlanRequest & { dailyAvailability?: Record<string, string> } = await req.json();
 
     const avgDistance = recentActivities.length > 0
       ? Math.round(recentActivities.reduce((sum, a) => sum + a.distance, 0) / recentActivities.length / 1000)
@@ -68,23 +76,76 @@ Deno.serve(async (req: Request) => {
       ? Math.round(recentActivities.reduce((sum, a) => sum + a.average_speed * 3.6, 0) / recentActivities.length)
       : 0;
 
-    const numWorkouts = timeframe === "1 week" ? 7 : timeframe === "2 weeks" ? 14 : timeframe === "4 weeks" ? 28 : 56;
+    // Calculate duration in weeks
+    const start = new Date(startDate);
+    const event = new Date(eventDate);
+    const diffTime = Math.abs(event.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const weeksAvailable = Math.max(1, Math.floor(diffDays / 7));
 
-    const prompt = `Based on ${athleteName}'s CYCLING training data, create a detailed ${timeframe} CYCLING training plan for their goal: "${goal}".
+    // Phase Calculation Logic
+    let periodizationStructure = "";
+    if (weeksAvailable < 4) {
+      periodizationStructure = "Ride safely within limits volume-wise. Focus on freshness. Final week must be Taper.";
+    } else if (weeksAvailable <= 8) {
+      // 4-8 weeks: Build -> Peak -> Taper
+      // If 8 weeks: 4 Build, 3 Peak, 1 Taper
+      const taperWeeks = 1;
+      const peakWeeks = Math.min(3, Math.max(1, weeksAvailable - taperWeeks - 2)); // Ensure at least 2 weeks build
+      const buildWeeks = weeksAvailable - taperWeeks - peakWeeks;
+      periodizationStructure = `Weeks 1-${buildWeeks}: Build. Weeks ${buildWeeks + 1}-${buildWeeks + peakWeeks}: Peak. Week ${weeksAvailable}: Taper.`;
+    } else {
+      // 9+ weeks (Treating 12+ as full cycle, 9-11 as compressed)
+      // If 12+ weeks: X Base, Y Build, 3 Peak, 2 Taper
+      const taperWeeks = weeksAvailable >= 12 ? 2 : 1;
+      const peakWeeks = 3;
+      const remainingWeeks = weeksAvailable - taperWeeks - peakWeeks;
+      const buildWeeks = Math.floor(remainingWeeks / 2); // Split remaining between Base/Build
+      const baseWeeks = remainingWeeks - buildWeeks;
+
+      periodizationStructure = `Weeks 1-${baseWeeks}: Base. Weeks ${baseWeeks + 1}-${baseWeeks + buildWeeks}: Build. Weeks ${baseWeeks + buildWeeks + 1}-${weeksAvailable - taperWeeks}: Peak. Weeks ${weeksAvailable - taperWeeks + 1}-${weeksAvailable}: Taper.`;
+    }
+    
+    const numWorkouts = weeksAvailable * 7;
+
+    // Build Daily Schedule Context
+    let scheduleConstraints = "";
+    if (dailyAvailability) {
+        scheduleConstraints = Object.entries(dailyAvailability)
+            .map(([day, time]) => `- ${day}: ${time} max duration`)
+            .join("\n");
+    }
+
+    const prompt = `Based on ${athleteName}'s CYCLING training data, create a detailed ${weeksAvailable}-week CYCLING training plan for their goal: "${goal}", ending on ${eventDate}.
 
 CURRENT FITNESS LEVEL:
-- Recent weekly cycling volume: ${weeklyVolume.distance / 1000}km
+- Recent weekly cycling volume: ${(weeklyVolume.distance / 1000).toFixed(1)}km
 - Recent cycling activities: ${recentActivities.length} rides
 - Average ride distance: ${avgDistance}km
 - Average ride speed: ${avgSpeed}km/h
 - Training consistency: ${recentActivities.length} activities in recent data
+- Rider Profile: Stamina (${riderProfile.stamina}), Discipline (${riderProfile.discipline})
 
 PREFERENCES: ${preferences}
 
+PERIODIZATION SCHEDULE:
+${periodizationStructure}
+
+WEEKLY SCHEDULE CONSTRAINTS (STRICT):
+${scheduleConstraints || "No specific day-by-day constraints provided."}
+
 CRITICAL SCHEDULING CONSTRAINTS (HIGHEST PRIORITY):
-1. **Adhere strictly to the user's PREFERENCES above.** If they ask for "Long rides on Tuesday", you MUST schedule a long ride on Tuesday, overriding any default logic.
-2. **Maximum 1 workout per day** unless the user explicitly asks for "double days" or "two-a-days".
-3. **DO NOT generate workout objects for "Rest Days".** If a day is a rest day, simply do not include a workout object for that day in the array. The UI handles empty days as rest days.
+1. **Adhere strictly to the WEEKLY SCHEDULE CONSTRAINTS above.**
+   - If a day is marked as "Rest Day", DO NOT schedule a workout (omit it).
+   - If a day has a time limit (e.g., "1 hour"), the workout duration MUST NOT exceed this limit.
+2. **CONFLICT RESOLUTION (Weekly vs Daily):**
+   - If "Weekly Time Available" is low (e.g. 5-6 hours) but the user has high "Daily Availability" on specific days (e.g. 3-4 hours on Weekend), **YOU MUST UTILIZE THE HIGH AVAILABILITY DAYS for key workouts.**
+   - Do NOT skip a long ride on a high-availability day just to stay under the weekly average. It is better to exceed the weekly preference slightly than to miss a key structural workout (Long Ride).
+   - Reduce duration on other days to compensate if needed.
+3. **Maximum 1 workout per day** unless the user explicitly asks for "double days" or "two-a-days".
+4. **DO NOT generate workout objects for "Rest Days".** If a day is a rest day, simply do not include a workout object for that day in the array.
+5. **For the final week (Week ${weeksAvailable}), ensure volume drops by 50% (Taper).**
+6. **For the starting week, calibrate intensity based on Rider Profile: Stamina ${riderProfile.stamina}, Discipline ${riderProfile.discipline}.**
 
 RESPONSE FORMAT:
 You must respond with a valid JSON object containing exactly two fields:
@@ -97,13 +158,14 @@ WORKOUT OBJECT STRUCTURE:
   "dayOfWeek": number, // 0=Monday through 6=Sunday
   "name": "Short descriptive name",
   "type": "bike" | "run" | "swim" | "strength", // DO NOT USE "rest"
+  "phase": "Base" | "Build" | "Peak" | "Taper", // The phase this workout belongs to
   "description": "Detailed instructions with YouTube links. Format: [Video Title](URL) by Channel Name",
   "duration": number (minutes),
   "distance": number (miles, optional, required for rides/runs),
   "intensity": "easy" | "moderate" | "hard" | "recovery"
 }
 
-Create ${numWorkouts} workouts with a balanced weekly structure, defaulting to rest days where appropriate by omitting workouts.`;
+Create ${numWorkouts} days of plan (workouts + rest days) with a balanced weekly structure, defaulting to rest days where appropriate by omitting workouts.`;
 
     console.log("Generating training plan with OpenAI (JSON Mode)...");
 

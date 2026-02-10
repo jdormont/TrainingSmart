@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { addDays, isSameDay, startOfWeek, format } from 'date-fns';
-import { Target, Plus, Trash2, MessageCircle, ChevronDown, Calendar as CalendarIcon } from 'lucide-react';
+import { Target, Plus, Trash2, MessageCircle, ChevronDown, Calendar as CalendarIcon, AlertTriangle } from 'lucide-react';
 
 import { Button } from '../components/common/Button';
 import { stravaCacheService } from '../services/stravaCacheService';
@@ -22,7 +22,7 @@ import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
 import { streakService, UserStreak } from '../services/streakService';
 import { supabase } from '../services/supabaseClient';
 
-type AiWorkout = Partial<Workout> & { dayOfWeek?: number; week?: number };
+type AiWorkout = Partial<Workout> & { dayOfWeek?: number; week?: number; phase?: string };
 
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { usePlanData } from '../hooks/usePlanData';
@@ -62,10 +62,64 @@ export const PlansPage: React.FC = () => {
   // ... (keep existing form state)
   const [goal, setGoal] = useState('');
   const [goalType, setGoalType] = useState<'distance' | 'event' | 'fitness'>('event');
-  const [timeframe, setTimeframe] = useState('12 weeks');
+  const [eventDate, setEventDate] = useState('');
   const [weeklyHours, setWeeklyHours] = useState('6-8 hours');
   const [preferences, setPreferences] = useState('');
   const [focusAreas, setFocusAreas] = useState<string[]>([]);
+  const [dailyAvailability, setDailyAvailability] = useState<Record<string, string>>({
+    Monday: '1 hour',
+    Tuesday: '1 hour',
+    Wednesday: '1 hour',
+    Thursday: '1 hour',
+    Friday: '1 hour',
+    Saturday: '2 hours',
+    Sunday: '2 hours',
+  });
+
+  const availabilityOptions = [
+    'Rest Day',
+    '30 mins',
+    '45 mins',
+    '1 hour',
+    '1.5 hours',
+    '2 hours',
+    '2.5 hours',
+    '3 hours',
+    '4+ hours'
+  ];
+
+
+  // Plan Health State
+  const [planHealth, setPlanHealth] = useState<Record<string, { score: number; status: 'Green' | 'Yellow' | 'Red' }>>({});
+
+  useEffect(() => {
+    if (savedPlans.length > 0) {
+      const health: Record<string, { score: number; status: 'Green' | 'Yellow' | 'Red' }> = {};
+      savedPlans.forEach((plan: TrainingPlan) => {
+        health[plan.id] = trainingPlansService.checkPlanCompliance(plan);
+      });
+      setPlanHealth(health);
+    }
+  }, [savedPlans]);
+
+  const handleAdaptPlan = async (planId: string, action: 'shift' | 'reduce') => {
+      try {
+          if (action === 'shift') {
+              await trainingPlansService.shiftPlanSchedule(planId);
+          } else {
+               // weak assumption: "this week" is the week containing today
+               const today = new Date();
+               const weekStart = startOfWeek(today, { weekStartsOn: 1 });
+               await trainingPlansService.reduceWeekIntensity(planId, weekStart);
+          }
+          // Refresh
+          await queryClient.invalidateQueries({ queryKey: ['plan-data'] });
+          // Recalculate health optimistically or wait for refetch? Refetch should trigger effect.
+      } catch (e) {
+          console.error("Failed to adapt plan", e);
+          setError("Failed to adapt plan");
+      }
+  };
 
   const refreshStreak = async (currentActivities?: StravaActivity[]) => {
     try {
@@ -174,9 +228,20 @@ export const PlansPage: React.FC = () => {
         enabled: showSmartPicker // Only fetch when modal opens? Or keep fresh. Let's keep fresh but with staleTime.
     });
 
-  const handleGeneratePlan = async (e: React.FormEvent) => {
+    const handleGeneratePlan = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!athlete || !goal.trim()) return;
+    if (!athlete || !goal.trim() || !eventDate) return;
+
+    // Validate Date (Must be >= 4 weeks)
+    const start = new Date();
+    const target = new Date(eventDate);
+    const diffTime = target.getTime() - start.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 28) {
+        setError("Event date must be at least 4 weeks in the future to allow for a proper training cycle.");
+        return;
+    }
 
     setGenerating(true);
     setError(null);
@@ -184,6 +249,10 @@ export const PlansPage: React.FC = () => {
     try {
       const weeklyStats = calculateWeeklyStats(activities);
       const cyclingActivities = activities.filter((a: StravaActivity) => a.type === 'Ride');
+
+      // Calculate Rider Profile
+      const metrics = healthMetricsService.calculateHealthMetrics(athlete, activities);
+      const riderProfile = metrics.profile;
 
       const trainingContext = {
         athlete,
@@ -199,8 +268,10 @@ export const PlansPage: React.FC = () => {
       const planDescription = `
 Goal: ${goal}
 Type: ${goalType}
-Timeframe: ${timeframe}
+Target Event: ${eventDate}
 Weekly Time Available: ${weeklyHours}
+Daily Schedule Availability:
+${Object.entries(dailyAvailability).map(([day, time]) => `- ${day}: ${time}`).join('\n')}
 Focus Areas: ${focusAreas.join(', ') || 'General fitness'}
 Additional Preferences: ${preferences || 'None'}
       `.trim();
@@ -208,13 +279,15 @@ Additional Preferences: ${preferences || 'None'}
       const { description, workouts: aiWorkouts } = await openaiService.generateTrainingPlan(
         trainingContext,
         goal,
-        timeframe,
-        planDescription
+        eventDate, // Pass event date
+        new Date().toISOString(), // Pass start date
+        riderProfile, // Pass calculated profile
+        planDescription,
+        dailyAvailability // Pass structured availability
       );
 
       const planStartDate = startOfWeek(new Date(), { weekStartsOn: 1 }); // Always start on Monday
-      const weeks = parseInt(timeframe.split(' ')[0]);
-      const planEndDate = addDays(planStartDate, weeks * 7);
+      const planEndDate = new Date(eventDate);
 
       const structuredWorkouts: Omit<Workout, 'id'>[] = aiWorkouts.map((w: AiWorkout, index: number) => {
         // Use explicit week if available (1-based to 0-based), otherwise fallback to index math
@@ -231,6 +304,7 @@ Additional Preferences: ${preferences || 'None'}
           duration: w.duration || 60,
           distance: w.distance ? w.distance * 1609.34 : undefined,
           intensity: w.intensity || 'moderate',
+          phase: w.phase || 'Build', // New field
           scheduledDate: workoutDate,
           completed: false,
           status: 'planned'
@@ -261,6 +335,7 @@ Additional Preferences: ${preferences || 'None'}
       setGoal('');
       setPreferences('');
       setFocusAreas([]);
+      setEventDate('');
     } catch (err) {
       console.error('Failed to generate plan:', err);
       setError((err as Error).message);
@@ -806,25 +881,26 @@ Additional Preferences: ${preferences || 'None'}
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-2">
-                    Timeframe
+                    Target Event Date
                   </label>
-                  <select
-                    value={timeframe}
-                    onChange={(e) => setTimeframe(e.target.value)}
+                  <input
+                    type="date"
+                    value={eventDate}
+                    onChange={(e) => setEventDate(e.target.value)}
+                    min={new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]} // Min 4 weeks
                     className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-50"
-                  >
-                    <option value="4 weeks">4 weeks</option>
-                    <option value="8 weeks">8 weeks</option>
-                    <option value="12 weeks">12 weeks</option>
-                    <option value="16 weeks">16 weeks</option>
-                    <option value="20 weeks">20 weeks</option>
-                  </select>
+                    required
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Must be at least 4 weeks from today for periodization.
+                  </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label htmlFor="weekly_hours" className="block text-sm font-medium text-slate-300 mb-2">
                     Weekly Time Available
                   </label>
                   <select
+                    id="weekly_hours"
                     value={weeklyHours}
                     onChange={(e) => setWeeklyHours(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-50"
@@ -835,6 +911,30 @@ Additional Preferences: ${preferences || 'None'}
                     <option value="8-10 hours">8-10 hours</option>
                     <option value="10+ hours">10+ hours</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Daily Availability */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Daily Workout Availability
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {Object.keys(dailyAvailability).map((day) => (
+                    <div key={day} className="flex flex-col">
+                      <span className="text-xs text-slate-400 mb-1">{day}</span>
+                      <select
+                        aria-label={`Availability for ${day}`}
+                        value={dailyAvailability[day]}
+                        onChange={(e) => setDailyAvailability(prev => ({ ...prev, [day]: e.target.value }))}
+                        className="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-orange-500 text-slate-50"
+                      >
+                        {availabilityOptions.map(opt => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -1002,6 +1102,39 @@ Additional Preferences: ${preferences || 'None'}
                          </div>
                     </div>
                  </div>
+
+                 {/* Coach's Alert */}
+                 {planHealth[plan.id] && planHealth[plan.id].status !== 'Green' && (
+                     <div className={`mb-6 p-4 rounded-lg border flex items-start gap-4 mx-4 md:mx-0 ${
+                         planHealth[plan.id].status === 'Red' 
+                         ? 'bg-red-500/10 border-red-500/20 text-red-200' 
+                         : 'bg-yellow-500/10 border-yellow-500/20 text-yellow-200'
+                     }`}>
+                         <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                         <div className="flex-1">
+                             <h4 className="font-semibold mb-1">
+                                 {planHealth[plan.id].status === 'Red' 
+                                     ? 'Plan At Risk: Significant volume missed' 
+                                     : 'Plan Deviation: Falling slightly behind'}
+                             </h4>
+                             <p className="text-sm opacity-90 mb-3">
+                                 {planHealth[plan.id].status === 'Red'
+                                     ? `Compliance Score: ${(planHealth[plan.id].score * 100).toFixed(0)}%. We recommend shifting your schedule.`
+                                     : `Compliance Score: ${(planHealth[plan.id].score * 100).toFixed(0)}%. Consider reducing intensity to recover.`}
+                             </p>
+                             <div className="flex gap-2">
+                                <button 
+                                    onClick={() => handleAdaptPlan(plan.id, planHealth[plan.id].status === 'Red' ? 'shift' : 'reduce')}
+                                    className={`px-3 py-1.5 text-sm font-medium rounded-md border border-current hover:bg-white/10 transition-colors ${
+                                        planHealth[plan.id].status === 'Red' ? 'text-red-200' : 'text-yellow-200'
+                                    }`}
+                                >
+                                    {planHealth[plan.id].status === 'Red' ? 'Shift Schedule (+1 Week)' : 'Reduce Intensity (10%)'}
+                                </button>
+                             </div>
+                         </div>
+                     </div>
+                 )}
 
                  {/* Main Content Area */}
                  <div className="relative z-0">

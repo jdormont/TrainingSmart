@@ -143,7 +143,7 @@ RESPONSE GUIDELINES:
       // 2. Fallback to Daily Metric (Apple Health / Manual)
       else if (recovery.dailyMetric) {
         const dm = recovery.dailyMetric;
-        const sleepHours = Math.round((dm.sleep_minutes / 60) * 10) / 10;
+        const sleepHours = dm.sleep_minutes ? Math.round((dm.sleep_minutes / 60) * 10) / 10 : 0;
 
         recoveryContext += `
 - Last night's sleep (Health Data): ${sleepHours}h total
@@ -262,9 +262,12 @@ Use the coaching style and personality defined above, while incorporating this r
   async generateTrainingPlan(
     context: TrainingContext,
     goal: string,
-    timeframe: string,
-    preferences: string
-  ): Promise<{ description: string; workouts: (Partial<Workout> & { dayOfWeek?: number; week?: number })[] }> {
+    eventDate: string,
+    startDate: string,
+    riderProfile: any, // { stamina: { level: number, ... }, discipline: ... }
+    preferences: string,
+    dailyAvailability?: Record<string, string>
+  ): Promise<{ description: string; workouts: (Partial<Workout> & { dayOfWeek?: number; week?: number; phase?: string })[] }> {
     if (!this.supabaseUrl || !this.supabaseAnonKey) {
       throw new Error('Supabase configuration not found. Please check your environment variables.');
     }
@@ -276,8 +279,14 @@ Use the coaching style and personality defined above, while incorporating this r
         {
           athleteName: context.athlete.firstname,
           goal,
-          timeframe,
+          eventDate,
+          startDate,
+          riderProfile: {
+            stamina: riderProfile.stamina.level, // Passing just the level or description
+            discipline: riderProfile.discipline.level
+          },
           preferences,
+          dailyAvailability, // Pass structured data
           weeklyVolume: context.weeklyVolume,
           recentActivities: context.recentActivities,
         },
