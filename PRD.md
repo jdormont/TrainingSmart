@@ -170,12 +170,15 @@ my data and goals.
 
 **Acceptance Criteria**:
 
-- ✅ **COMPLETED** - Basic AI plan generation function exists in openaiService
-- ✅ **COMPLETED** - Goal-setting form UI (Intake Wizard)
-- ✅ **COMPLETED** - Generated plan display interface (PlansPage)
-- ✅ **COMPLETED** - Plan persistence and management (Supabase)
-- ✅ **COMPLETED** - Individual workout detail cards
-- ✅ **COMPLETED** - Chat-to-Plan Integration (`ChatContextModal`)
+- [x] **COMPLETED** - Basic AI plan generation function exists in openaiService
+- [x] **COMPLETED** - Goal-setting form UI (Intake Wizard)
+- [x] **COMPLETED** - Generated plan display interface (PlansPage)
+- [x] **COMPLETED** - Plan persistence and management (Supabase)
+- [x] **COMPLETED** - Individual workout detail cards
+- [x] **COMPLETED** - Chat-to-Plan Integration (`ChatContextModal`)
+- [x] **COMPLETED** - **[NEW]** Plan Logic & Reasoning Viewer ("Brain" icon transparency)
+- [x] **COMPLETED** - **[NEW]** Rider Profile Integration (Stamina/Discipline scores)
+- [x] **COMPLETED** - **[NEW]** Strict Duration & Imperial Unit Support
 
 ### 5. Calendar Integration
 
@@ -337,6 +340,7 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 - [x] **COMPLETED** - Training plan persistence
 - [x] **COMPLETED** - Goal setting and tracking (Intake Wizard)
 - [x] **COMPLETED** - **Training Streaks & Habit Tracking**
+- [x] **COMPLETED** - **AI Logic Transparency & Logic Viewer**
 
 ### Phase 3: Polish & Deploy
 
@@ -415,6 +419,8 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 - **[NEW]** **Focus Mode**: Sticky header and "Current Week" auto-expansion for
   better usability.
 - **Chat-to-Plan**: Automatic detection and generation of plans.
+- **[NEW]** **Plan Logic & Transparency**: "Brain" icon reveals AI reasoning, Season Strategy, and Weekly Focus breakdown.
+- **[NEW]** **Rider Profile Integration**: Plans are personalized using calculated Stamina and Discipline scores from 2 months of history.
 - **Plan Management**:
   - Drag-and-drop workout rescheduling (`@dnd-kit`).
   - **Strava Reconciliation**: Link actual activities to planned workouts.
@@ -436,6 +442,7 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 - **Onboarding**: 3-step Intake Wizard (Goal, Availability, Persona).
 - **Personalized Content**: Hybrid interest-based content feed.
 - **[NEW]** **Quick Add**: "Quick Workout" button for rapid manual entry.
+- **[NEW]** **Logic Viewer UI**: Premium slide-over component for inspecting plan details.
 
 ---
 

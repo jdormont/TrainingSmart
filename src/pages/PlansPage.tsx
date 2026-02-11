@@ -198,17 +198,13 @@ export const PlansPage: React.FC = () => {
         queryFn: async () => {
              try {
                 // simple fetches
-                const [readiness, sleep] = await Promise.all([
+                const [readiness] = await Promise.all([
                      ouraApi.getRecentReadinessData(),
                      ouraApi.getRecentSleepData()
                 ]);
 
-                // Calculate Load Ratio from existing activities if possible, 
-                // but since 'activities' state might be empty initially, we could re-fetch or depend on state.
-                // Better to rely on the service to re-calculate if needed or just use what we have.
-                // But useQuery runs independently. Let's just use defaults if calculation is complex here.
-                // OR, since we load activities in useEffect, we can use that state if we move this query?
-                // Actually, let's just fetch athlete + activities briefly to ensure freshness for the modal
+                // ... check and load activities ...
+
                 const freshActivities = await stravaCacheService.getActivities(false, 50);
                 const freshAthlete = await stravaCacheService.getAthlete();
                 
@@ -232,7 +228,7 @@ export const PlansPage: React.FC = () => {
                  return { recoveryScore: null, acuteLoadRatio: 1.0 };
              }
         },
-        enabled: showSmartPicker // Only fetch when modal opens? Or keep fresh. Let's keep fresh but with staleTime.
+        enabled: showSmartPicker 
     });
 
     const handleGeneratePlan = async (e: React.FormEvent) => {
@@ -254,12 +250,19 @@ export const PlansPage: React.FC = () => {
     setError(null);
 
     try {
-      const weeklyStats = calculateWeeklyStats(activities);
+      // Removed weeklyStats calculation as we now calculate 4-week average dynamically below
       const cyclingActivities = activities.filter((a: StravaActivity) => a.type === 'Ride');
+      
+      // Calculate true weekly average based on date range of activities
+      let weeksSpan = 1;
+      if (cyclingActivities.length > 0) {
+          const earliest = new Date(cyclingActivities[cyclingActivities.length - 1].start_date);
+          const latest = new Date();
+          weeksSpan = Math.max(1, Math.ceil((latest.getTime() - earliest.getTime()) / (1000 * 60 * 60 * 24 * 7)));
+      }
 
       // Calculate Rider Profile
-      // Calculate Rider Profile (Standalone)
-      // We calculate inputs manually to avoid full HealthMetrics dependency
+      // ... same as before ...
       const loadDetail = calculateLoad(activities);
       const consistencyDetail = calculateConsistency(activities);
       const ftp = (athlete as any).ftp || 250; 
@@ -276,9 +279,13 @@ export const PlansPage: React.FC = () => {
         recentActivities: cyclingActivities,
         stats: undefined,
         weeklyVolume: {
-          distance: weeklyStats.totalDistance,
-          time: weeklyStats.totalTime,
-          activities: weeklyStats.activityCount
+          distance: cyclingActivities.length > 0 
+            ? (cyclingActivities.reduce((acc: number, curr: StravaActivity) => acc + curr.distance, 0) / weeksSpan)
+            : 0,
+          time: cyclingActivities.length > 0 
+            ? (cyclingActivities.reduce((acc: number, curr: StravaActivity) => acc + curr.moving_time, 0) / weeksSpan)
+            : 0,
+          activities: Math.round(cyclingActivities.length / weeksSpan)
         }
       };
 

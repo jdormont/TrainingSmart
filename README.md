@@ -78,6 +78,7 @@ Structured paths to hit your goals.
 - **AI Plan Generator**: Tell the app your goal (e.g., "Gran Fondo next month"),
   your available time (e.g., "6 hours/week"), and your focus areas. It will
   build a full schedule for you.
+- **Plan Logic & Reasoning**: Click the "Brain" icon to see exactly *why* the AI built your plan this way, including your calculated fitness assessment and weekly focus breakdown.
 - **Drag-and-Drop Management**: Need to move a workout? Just drag it to a new
   day. The plan automatically updates.
 - **Strava Reconciliation**: The app links your _actual_ rides to your _planned_
