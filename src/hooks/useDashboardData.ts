@@ -42,6 +42,7 @@ interface DashboardData {
 
 export const useDashboardData = () => {
   const [searchParams] = useSearchParams();
+  const queryClient = useQueryClient();
   const isDemo = searchParams.get('demo') === 'true';
 
   const fetchDashboardData = async (): Promise<DashboardData> => {
@@ -83,10 +84,22 @@ export const useDashboardData = () => {
     let streakData: UserStreak | null = null;
 
     try {
-      [athleteData, activitiesData] = await Promise.all([
+      // Split Fetch: 5 full + 90 stats
+      const [athlete, recentActivities, historyStats] = await Promise.all([
         stravaCacheService.getAthlete(),
-        stravaCacheService.getActivities(false, 100)
+        stravaCacheService.getActivities(false, 5),
+        stravaCacheService.getActivitiesForStats(90)
       ]);
+      
+      athleteData = athlete;
+
+      // Merge: Recent ones take precedence
+      const recentIds = new Set(recentActivities.map(a => a.id));
+      activitiesData = [
+        ...recentActivities,
+        ...historyStats.filter(a => !recentIds.has(a.id))
+      ].sort((a, b) => new Date(b.start_date_local).getTime() - new Date(a.start_date_local).getTime());
+
     } catch (error: any) {
       if (error?.message?.includes('authenticated') || error?.message?.includes('No valid access token') || error?.response?.status === 401) {
         console.log('Strava not connected');
@@ -101,28 +114,30 @@ export const useDashboardData = () => {
     }
 
     // 2. Fetch Streak 
-    // We only need to sync from history if we barely have any streak data, or maybe on explicit request.
-    // Continually syncing from "activities list" is dangerous because it ignores "rest_checkin" events that only exist in the streak history, causing them to be wiped out.
     try {
       streakData = await streakService.getStreak(user.id);
       
       // Only initial backfill if never initialized or empty
       if (!streakData || (streakData.current_streak === 0 && streakData.streak_history.length === 0)) {
-         // Sync from history if needed
+         
+        // Fetch manual workouts
         const { data: manualWorkouts } = await supabase
             .from('workouts')
             .select('scheduled_date')
             .eq('user_id', user.id)
             .eq('completed', true);
 
-        const historyItems = [
+        // Merge Strava activities and manual workouts for streak calculation
+        const streakActivities = [
             ...activitiesData.map(a => ({ date: a.start_date_local, type: 'activity' as const, source: 'strava' as const })),
             ...(manualWorkouts || []).map(w => ({ date: w.scheduled_date, type: 'activity' as const, source: 'manual' as const }))
         ];
 
-        if (historyItems.length > 0) {
-            const syncedStreak = await streakService.syncFromHistory(user.id, historyItems);
-            if (syncedStreak) streakData = syncedStreak;
+        try {
+            const streak = await streakService.syncFromHistory(user.id, streakActivities);
+            if (streak) streakData = streak;
+        } catch (err) {
+             console.warn('Failed to calculate streak:', err);
         }
       }
     } catch (err) {
@@ -138,15 +153,15 @@ export const useDashboardData = () => {
     // 3. Derived Stats
     const weeklyStats = calculateWeeklyStats(activitiesData);
 
-    // 4. Recovery Data (Oura) & Metrics
+    // 5. Recovery Data (Oura) & Metrics
     // STRATEGY: 
     // 1. Fetch from 'daily_metrics' table (Stored Data)
     // 2. Trigger Oura Sync (Background) to ensure freshness
     
     let sleepData: OuraSleepData | null = null;
     let readinessData: OuraReadinessData | null = null;
-    let recentMetrics: DailyMetric[] = [];
     let dailyMetric: DailyMetric | null = null;
+    let recentMetrics: DailyMetric[] = []; // Initialize here
 
     try {
       // A. Fetch stored metrics (Source of Truth)
@@ -160,20 +175,20 @@ export const useDashboardData = () => {
           const hasTodayData = recentMetrics.some(m => m.date === today && m.source === 'oura');
 
           if (!hasTodayData) {
-              console.log('⏳ No Oura data for today in DB. performing blocking sync...');
-              try {
-                  // Await sync to ensure user sees fresh data immediately
-                  await ouraApi.syncOuraToDatabase(user.id, undefined, undefined);
-                  
-                  // Refetch Supabase data after sync
-                  recentMetrics = await dailyMetricsService.getRecentMetrics(30);
-              } catch (e) {
-                  console.warn('Blocking Oura sync failed:', e);
-              }
-          } else {
-              // Background update
-              ouraApi.syncOuraToDatabase(user.id, undefined, undefined).catch(e => console.warn('Background Oura sync error:', e));
+             console.log('⏳ Triggering background Oura sync...');
+             // NON-BLOCKING Sync
+             ouraApi.syncOuraToDatabase(user.id, undefined, undefined)
+                .then(() => {
+                    console.log('✅ Background Oura sync complete. Invalidating queries.');
+                    queryClient.invalidateQueries({ queryKey: ['dashboard-data'] });
+                })
+                .catch(e => console.warn('Background Oura sync failed:', e));
           }
+          
+          // Fetch existing data immediately from DB
+          // This will be used to populate sleepData/readinessData and the sleepArray/readinessArray
+          // If the background sync completes, the query will be invalidated and refetched with fresh data.
+          recentMetrics = await dailyMetricsService.getRecentMetrics(30);
       }
 
       if (recentMetrics.length > 0) {

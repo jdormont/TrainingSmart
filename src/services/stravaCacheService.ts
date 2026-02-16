@@ -200,6 +200,62 @@ class StravaCacheService {
       return { athleteCached: false, activitiesCount: 0 };
     }
   }
+  async getActivitiesForStats(lookbackDays = 90): Promise<StravaActivity[]> {
+    const userId = await this.getCurrentUserId();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - lookbackDays);
+
+    const { data, error } = await supabase
+      .from('strava_activities_cache')
+      .select(`
+        id,
+        start_date,
+        activity_type,
+        distance,
+        moving_time,
+        activity_data->name,
+        activity_data->total_elevation_gain,
+        activity_data->average_speed,
+        activity_data->average_heartrate,
+        activity_data->max_heartrate,
+        activity_data->average_watts,
+        activity_data->weighted_average_watts,
+        activity_data->max_watts,
+        activity_data->kilojoules,
+        activity_data->kudos_count
+      `)
+      .eq('user_id', userId)
+      .gte('start_date', startDate.toISOString())
+      .order('start_date', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching activity stats:', error);
+      return [];
+    }
+
+    // Map to partial StravaActivity objects
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      name: row.name || 'Untitled Activity',
+      type: row.activity_type,
+      start_date_local: row.start_date,
+      distance: row.distance,
+      moving_time: row.moving_time,
+      total_elevation_gain: row.total_elevation_gain || 0,
+      average_speed: row.average_speed || 0,
+      average_heartrate: row.average_heartrate,
+      max_heartrate: row.max_heartrate,
+      average_watts: row.average_watts,
+      weighted_average_watts: row.weighted_average_watts,
+      max_watts: row.max_watts,
+      kilojoules: row.kilojoules,
+      kudos_count: row.kudos_count || 0,
+      // Minimal required fields to satisfy type, though they might be missing in 'lite' objects
+      map: { id: '', summary_polyline: '', resource_state: 2 }, 
+      athlete: { id: parseInt(userId) || 0, resource_state: 1 }
+    } as unknown as StravaActivity));
+  }
 }
 
 export const stravaCacheService = new StravaCacheService();
+
