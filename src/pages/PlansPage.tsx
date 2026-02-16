@@ -166,7 +166,7 @@ export const PlansPage: React.FC = () => {
         setLoading(true);
         const [athleteData, activitiesData] = await Promise.all([
           stravaCacheService.getAthlete(),
-          stravaCacheService.getActivities(false, 100) // More activities for better context
+          stravaCacheService.getActivitiesForStats(90) // Optimized lite fetch
         ]);
 
         setAthlete(athleteData);

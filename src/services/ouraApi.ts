@@ -449,7 +449,7 @@ class OuraApiService {
   }
 
   // Sync Oura data to Supabase (Database Persistence)
-  async syncOuraToDatabase(userId: string, startDate?: string, endDate?: string): Promise<void> {
+  async syncOuraToDatabase(userId: string, startDate?: string, endDate?: string): Promise<boolean> {
     try {
       console.log('🔄 Starting Oura -> Supabase Sync...');
 
@@ -464,7 +464,7 @@ class OuraApiService {
 
       if (!sleepData.length && !readinessData.length) {
         console.log('No Oura data found to sync for range:', { start, end });
-        return;
+        return false;
       }
 
       console.log(`📥 Fetched ${sleepData.length} sleep records and ${readinessData.length} readiness records.`);
@@ -578,8 +578,10 @@ class OuraApiService {
           throw error;
         }
         console.log(`✅ Successfully synced ${upsertPayload.length} Oura records! DB Response:`, data);
+        return true;
       } else {
         console.log('No valid complete records to sync (all filtered out).');
+        return false;
       }
 
     } catch (error) {

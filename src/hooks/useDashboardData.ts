@@ -170,20 +170,49 @@ export const useDashboardData = () => {
       // B. Background/Blocking Sync (If Oura Connected)
       // We check auth inside syncOuraToDatabase anyway, but check here to avoid overhead
       const isOuraConnected = await ouraApi.isAuthenticated();
+      // Ref to track if we've already attempted background sync this session
+      // This prevents infinite loops if Oura API returns data but not for "today"
       if (isOuraConnected && !isDemo) {
           const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
           const hasTodayData = recentMetrics.some(m => m.date === today && m.source === 'oura');
 
-          if (!hasTodayData) {
+          // We use a window-level variable or query data check to avoid re-triggering on every render
+          // Since this is inside a queryFn, it runs every time the query invalidates.
+          // We need to be careful. The queryFn logic itself is stateless between runs unless we use external state.
+          // HOWEVER, invalidateQueries re-runs this function.
+          
+          // Better approach: Check if we just synced. 
+          // But simpler: If we are missing today's data, we sync. 
+          // To fix the loop: valid Oura sync usually brings today's data. 
+          // If it DOESN'T, we shouldn't keep retrying instantly.
+          
+          // Let's stick to the boolean return AND check if 'today' was actually in the synced data?
+          // No, 'didSync' is generic.
+          
+          // Let's use a session storage key to rate limit the auto-sync?
+          const lastSyncKey = `oura-sync-${user.id}-${today}`;
+          const lastSync = sessionStorage.getItem(lastSyncKey);
+          
+          if (!hasTodayData && !lastSync) {
              console.log('⏳ Triggering background Oura sync...');
+             sessionStorage.setItem(lastSyncKey, 'true'); // Mark as attempted immediately
+             
              // NON-BLOCKING Sync
              ouraApi.syncOuraToDatabase(user.id, undefined, undefined)
-                .then(() => {
-                    console.log('✅ Background Oura sync complete. Invalidating queries.');
-                    queryClient.invalidateQueries({ queryKey: ['dashboard-data'] });
+                .then((didSync) => {
+                    if (didSync) {
+                      console.log('✅ Background Oura sync complete. Invalidating queries.');
+                      queryClient.invalidateQueries({ queryKey: ['dashboard-data'] });
+                    } else {
+                      console.log('ℹ️ Oura sync finished (no new data). No invalidation.');
+                    }
                 })
-                .catch(e => console.warn('Background Oura sync failed:', e));
+                .catch(e => {
+                    console.warn('Background Oura sync failed:', e);
+                    sessionStorage.removeItem(lastSyncKey); // Allow retry on error
+                });
           }
+
           
           // Fetch existing data immediately from DB
           // This will be used to populate sleepData/readinessData and the sleepArray/readinessArray
