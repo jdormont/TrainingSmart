@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Sparkles, Activity, Clock, Heart, Dumbbell, Zap } from 'lucide-react';
+import React from 'react';
+import { X, Sparkles, Activity, Heart, Dumbbell, Zap } from 'lucide-react';
 import { Workout } from '../../types';
 import { recommendationService } from '../../services/recommendationService';
 
@@ -33,7 +33,8 @@ export const SmartWorkoutPickerModal: React.FC<SmartWorkoutPickerModalProps> = (
       type: 'recovery' as Workout['intensity'],
       duration: 30,
       icon: Heart,
-      color: 'bg-teal-50 text-teal-600 border-teal-200'
+      color: 'bg-teal-50 text-teal-600 border-teal-200',
+      workoutType: 'bike' as Workout['type']
     },
     {
       name: 'Endurance Ride',
@@ -41,7 +42,8 @@ export const SmartWorkoutPickerModal: React.FC<SmartWorkoutPickerModalProps> = (
       type: 'easy' as Workout['intensity'],
       duration: 60,
       icon: Activity,
-      color: 'bg-blue-50 text-blue-600 border-blue-200'
+      color: 'bg-blue-50 text-blue-600 border-blue-200',
+      workoutType: 'bike' as Workout['type']
     },
     {
       name: 'Tempo Intervals',
@@ -49,26 +51,52 @@ export const SmartWorkoutPickerModal: React.FC<SmartWorkoutPickerModalProps> = (
       type: 'moderate' as Workout['intensity'],
       duration: 45,
       icon: Zap,
-      color: 'bg-orange-50 text-orange-600 border-orange-200'
+      color: 'bg-orange-50 text-orange-600 border-orange-200',
+      workoutType: 'bike' as Workout['type']
     },
     {
         name: 'Yoga / Mobility',
         description: '30m Flexibility',
-        type: 'recovery' as Workout['intensity'], // Use recovery for yoga
+        type: 'recovery' as Workout['intensity'],
         duration: 30,
-        icon: Dumbbell, // Placeholder icon
-        color: 'bg-purple-50 text-purple-600 border-purple-200'
+        icon: Dumbbell,
+        color: 'bg-purple-50 text-purple-600 border-purple-200',
+        workoutType: 'strength' as Workout['type']
+    },
+    {
+        name: 'Core & Stability',
+        description: '30m Core Focus',
+        type: 'moderate' as Workout['intensity'],
+        duration: 30,
+        icon: Dumbbell,
+        color: 'bg-indigo-50 text-indigo-600 border-indigo-200',
+        workoutType: 'strength' as Workout['type']
+    },
+    {
+        name: 'Full Body Strength',
+        description: '45m Circuit',
+        type: 'hard' as Workout['intensity'],
+        duration: 45,
+        icon: Dumbbell,
+        color: 'bg-rose-50 text-rose-600 border-rose-200',
+        workoutType: 'strength' as Workout['type']
     }
   ];
 
-  const handleSelect = (option: typeof suggestion) => {
+  const handleSelect = (option: { 
+      name: string; 
+      description: string; 
+      duration: number; 
+      type: Workout['intensity']; 
+      workoutType?: Workout['type'];
+  }) => {
       onSelectWorkout({
           name: option.name,
           description: option.description,
           duration: option.duration,
           intensity: option.type,
           scheduledDate: date,
-          type: 'bike', // Default or parse from suggestion if needed
+          type: option.workoutType || 'bike', 
           completed: false,
           status: 'planned'
       });
