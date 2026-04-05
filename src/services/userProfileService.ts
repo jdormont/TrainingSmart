@@ -153,6 +153,18 @@ export const userProfileService = {
     }
   },
 
+  async updateFitnessMode(mode: FitnessMode): Promise<void> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { error } = await supabase
+      .from('user_profiles')
+      .update({ fitness_mode: mode, updated_at: new Date().toISOString() })
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+  },
+
   async updateCoachSpecialization(specialization: CoachSpecialization): Promise<void> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');

@@ -11,7 +11,7 @@ import { STORAGE_KEYS } from '../utils/constants';
 import { supabase } from '../services/supabaseClient';
 import { Integrations } from '../components/settings/Integrations';
 import { CoachSpecializationSelector } from '../components/settings/CoachSpecializationSelector';
-import type { CoachSpecialization } from '../types';
+import type { CoachSpecialization, FitnessMode } from '../types';
 import {
   userProfileService,
   COACH_PERSONAS,
@@ -64,10 +64,15 @@ RESPONSE GUIDELINES:
 - End with a specific question to keep the user engaged (e.g., "Ready to try those intervals tomorrow?" or "How did your legs feel on that climb?").`;
 
 export const SettingsPage: React.FC = () => {
-  const { userProfile } = useAuth();
+  const { userProfile, reloadProfile } = useAuth();
   const [coachSpecialization, setCoachSpecialization] = useState<CoachSpecialization | undefined>(
     userProfile?.coach_specialization as CoachSpecialization | undefined
   );
+  const [fitnessMode, setFitnessMode] = useState<FitnessMode>(
+    (userProfile?.fitness_mode as FitnessMode) ?? 'performance'
+  );
+  const [savingFitnessMode, setSavingFitnessMode] = useState(false);
+  const [fitnessModeError, setFitnessModeError] = useState<string | null>(null);
   const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -343,6 +348,55 @@ export const SettingsPage: React.FC = () => {
               current={coachSpecialization}
               onUpdate={setCoachSpecialization}
             />
+
+            {/* Fitness Mode toggle */}
+            <div className="mt-6 pt-6 border-t border-slate-800">
+              <h3 className="text-slate-200 font-medium mb-1">Fitness Mode</h3>
+              <p className="text-slate-400 text-sm mb-4">
+                Controls your dashboard layout and how your coach frames plans and feedback.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                {([
+                  { value: 'performance', label: 'Performance', emoji: '📈', description: 'Full analytics, power zones, advanced metrics.' },
+                  { value: 're_engager', label: 'Re-Engager', emoji: '🌱', description: 'Consistency focus, streak tracking, simplified view.' },
+                ] as const).map(opt => (
+                  <button
+                    type="button"
+                    key={opt.value}
+                    onClick={async () => {
+                      if (opt.value === fitnessMode) return;
+                      setSavingFitnessMode(true);
+                      setFitnessModeError(null);
+                      try {
+                        await userProfileService.updateFitnessMode(opt.value);
+                        setFitnessMode(opt.value);
+                        await reloadProfile();
+                      } catch {
+                        setFitnessModeError('Failed to save. Please try again.');
+                      } finally {
+                        setSavingFitnessMode(false);
+                      }
+                    }}
+                    className={`text-left px-4 py-4 rounded-xl border transition-all ${
+                      fitnessMode === opt.value
+                        ? 'border-orange-500 bg-orange-500/10 text-white'
+                        : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xl">{opt.emoji}</span>
+                      <span className="font-semibold text-sm">{opt.label}</span>
+                      {fitnessMode === opt.value && (
+                        <span className="ml-auto text-xs text-orange-400">active</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-400 leading-relaxed">{opt.description}</p>
+                  </button>
+                ))}
+              </div>
+              {fitnessModeError && <p className="text-red-400 text-sm mt-2">{fitnessModeError}</p>}
+              {savingFitnessMode && <p className="text-slate-400 text-sm mt-2">Saving…</p>}
+            </div>
           </div>
 
           {/* Strava Connection */}

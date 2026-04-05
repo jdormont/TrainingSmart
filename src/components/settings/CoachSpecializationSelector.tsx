@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { CoachSpecialization } from '../../types';
 import { userProfileService } from '../../services/userProfileService';
+import { useAuth } from '../../contexts/AuthContext';
 
 const SPECIALIZATIONS: {
   value: CoachSpecialization;
@@ -40,6 +41,7 @@ interface Props {
 }
 
 export const CoachSpecializationSelector: React.FC<Props> = ({ current, onUpdate }) => {
+  const { reloadProfile } = useAuth();
   const [selected, setSelected] = useState<CoachSpecialization | undefined>(current);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -54,6 +56,7 @@ export const CoachSpecializationSelector: React.FC<Props> = ({ current, onUpdate
     try {
       await userProfileService.updateCoachSpecialization(selected);
       onUpdate(selected);
+      await reloadProfile();
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch {
