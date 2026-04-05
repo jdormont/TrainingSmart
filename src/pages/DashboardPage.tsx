@@ -31,6 +31,8 @@ import { getUserOnboardingStatus } from '../services/onboardingService';
 import { useAuth } from '../contexts/AuthContext';
 import type { CoachSpecialization, FitnessMode } from '../types';
 import { SmartWorkoutPreview } from '../components/dashboard/SmartWorkoutPreview';
+import { TodaysFocusCard } from '../components/dashboard/TodaysFocusCard';
+import { ConsistencyHeatmap } from '../components/dashboard/ConsistencyHeatmap';
 import { DashboardSkeleton } from '../components/skeletons/DashboardSkeleton';
 import { ROUTES } from '../utils/constants';
 import { analytics } from '../lib/analytics';
@@ -456,6 +458,11 @@ export const DashboardPage: React.FC = () => {
                 onViewDetails={setSelectedWorkout}
                 onOpenPicker={handleOpenPicker}
               />
+              <TodaysFocusCard 
+                dailyMetric={dailyMetric}
+                coachSpecialization={coachSpecialization}
+                isDemoMode={isDemoMode}
+              />
               {nextWorkout && (
                 <WorkoutAdjustmentChips
                   workout={nextWorkout}
@@ -488,6 +495,11 @@ export const DashboardPage: React.FC = () => {
                 ) : (
                   <p className="text-slate-500 text-sm">No activities logged yet this week.</p>
                 )}
+              </div>
+
+              {/* Consistency Heatmap */}
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                <ConsistencyHeatmap isDemoMode={isDemoMode} />
               </div>
             </div>
 
@@ -539,6 +551,11 @@ export const DashboardPage: React.FC = () => {
                 onViewDetails={setSelectedWorkout}
                 onOpenPicker={handleOpenPicker}
                 />
+                <TodaysFocusCard 
+                  dailyMetric={dailyMetric}
+                  coachSpecialization={coachSpecialization}
+                  isDemoMode={isDemoMode}
+                />
                 {nextWorkout && (
                   <WorkoutAdjustmentChips
                     workout={nextWorkout}
@@ -577,6 +594,11 @@ export const DashboardPage: React.FC = () => {
                 }}
                 onViewDetails={setSelectedWorkout}
                 onOpenPicker={handleOpenPicker}
+              />
+              <TodaysFocusCard 
+                dailyMetric={dailyMetric}
+                coachSpecialization={coachSpecialization}
+                isDemoMode={isDemoMode}
               />
               {nextWorkout && (
                 <WorkoutAdjustmentChips
