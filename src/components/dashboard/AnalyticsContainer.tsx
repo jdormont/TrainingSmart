@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { BarChart2, Activity, Heart } from 'lucide-react';
+import { BarChart2, Activity, Heart, Grid } from 'lucide-react';
 import { TrainingTrendsChart } from './TrainingTrendsChart';
 import { RiderProfileChart } from './RiderProfileChart';
 import { RecoveryCard } from './RecoveryCard';
+import { ConsistencyHeatmap } from './ConsistencyHeatmap';
 import type { StravaActivity, StravaAthlete, OuraSleepData, OuraReadinessData, DailyMetric } from '../../types';
 import type { HealthMetrics } from '../../services/weeklyInsightService';
 
@@ -18,7 +19,7 @@ interface AnalyticsContainerProps {
     loading?: boolean;
 }
 
-type TabType = 'trends' | 'health' | 'recovery';
+type TabType = 'trends' | 'health' | 'recovery' | 'consistency';
 
 export const AnalyticsContainer: React.FC<AnalyticsContainerProps> = ({
     activities,
@@ -33,7 +34,6 @@ export const AnalyticsContainer: React.FC<AnalyticsContainerProps> = ({
     const [activeTab, setActiveTab] = useState<TabType>('trends');
     const location = useLocation();
 
-    // Handle hash navigation
     useEffect(() => {
         if (location.hash === '#recovery') {
             setActiveTab('recovery');
@@ -41,6 +41,8 @@ export const AnalyticsContainer: React.FC<AnalyticsContainerProps> = ({
             setActiveTab('health');
         } else if (location.hash === '#trends') {
             setActiveTab('trends');
+        } else if (location.hash === '#consistency') {
+            setActiveTab('consistency');
         }
     }, [location.hash]);
 
@@ -49,6 +51,7 @@ export const AnalyticsContainer: React.FC<AnalyticsContainerProps> = ({
         { id: 'trends', label: 'Training Trends', icon: BarChart2 },
         { id: 'health', label: 'Rider Profile', icon: Activity },
         { id: 'recovery', label: 'Recovery', icon: Heart },
+        { id: 'consistency', label: 'Consistency', icon: Grid },
     ];
 
     return (
@@ -103,6 +106,13 @@ export const AnalyticsContainer: React.FC<AnalyticsContainerProps> = ({
                         readinessData={readinessData}
                         dailyMetric={dailyMetric}
                         loading={loading}
+                    />
+                </div>
+
+                {/* TAB 4: Consistency */}
+                <div className={activeTab === 'consistency' ? 'block' : 'hidden'}>
+                    <ConsistencyHeatmap
+                        isDemoMode={new URLSearchParams(location.search).get('demo') === 'true'}
                     />
                 </div>
             </div>
