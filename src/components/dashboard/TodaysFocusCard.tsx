@@ -14,12 +14,16 @@ interface TodaysFocusCardProps {
   dailyMetric: DailyMetric | null;
   coachSpecialization?: CoachSpecialization;
   isDemoMode?: boolean;
+  nextWorkout?: Workout | null;
+  onOpenPicker?: () => void;
 }
 
 export const TodaysFocusCard: React.FC<TodaysFocusCardProps> = ({
   dailyMetric,
   coachSpecialization,
-  isDemoMode = false
+  isDemoMode = false,
+  nextWorkout,
+  onOpenPicker
 }) => {
   const { userProfile } = useAuth();
   const [recentWorkout, setRecentWorkout] = useState<Workout | null>(null);
@@ -165,14 +169,26 @@ export const TodaysFocusCard: React.FC<TodaysFocusCardProps> = ({
         </div>
       </div>
       
-      <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50 flex items-center justify-between">
-        <div>
-          <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold block mb-0.5">Suggested</span>
-          <span className="text-slate-300 font-medium text-sm">{suggestion}</span>
+      <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50 flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+            <div>
+              <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold block mb-0.5">Suggested</span>
+              <span className="text-slate-300 font-medium text-sm">{suggestion}</span>
+            </div>
+            <div className="text-xs text-slate-500 text-right max-w-[120px] leading-tight flex items-center">
+              Based on your recovery + recent activity
+            </div>
         </div>
-        <div className="text-xs text-slate-500 text-right max-w-[120px] leading-tight flex items-center">
-          Based on your recovery + recent activity
-        </div>
+
+        {!nextWorkout && onOpenPicker && (
+            <button
+              onClick={onOpenPicker}
+              className="w-full flex items-center justify-center px-4 py-2 mt-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg transition-colors font-medium border border-slate-600 shadow-sm text-sm"
+            >
+              <Sparkles className="w-4 h-4 mr-2 text-yellow-400" />
+              Smart Workout Picker
+            </button>
+        )}
       </div>
     </div>
   );

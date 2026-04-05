@@ -436,32 +436,22 @@ export const DashboardPage: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main column */}
             <div className="lg:col-span-2 space-y-6">
-              {/* Streak front-and-center */}
-              <StreakWidget
-                streak={userStreak}
-                isRestDay={(() => {
-                  if (!nextWorkout) return true;
-                  const todayStr = new Date().toLocaleDateString('en-CA');
-                  const workoutDateStr = nextWorkout.scheduledDate.toISOString().split('T')[0];
-                  if (workoutDateStr !== todayStr) return true;
-                  return nextWorkout.intensity === 'recovery' || nextWorkout.type === 'rest';
-                })()}
-                onStreakUpdate={() => queryClient.invalidateQueries({ queryKey: ['dashboard-data'] })}
-                userId={currentUserId || 'demo'}
-              />
-
               {/* Today's workout */}
-              <SmartWorkoutPreview
-                nextWorkout={nextWorkout}
-                dailyMetrics={dailyMetric}
-                onWorkoutGenerated={() => refreshNextWorkout()}
-                onViewDetails={setSelectedWorkout}
-                onOpenPicker={handleOpenPicker}
-              />
+              {nextWorkout && (
+                <SmartWorkoutPreview
+                  nextWorkout={nextWorkout}
+                  dailyMetrics={dailyMetric}
+                  onWorkoutGenerated={() => refreshNextWorkout()}
+                  onViewDetails={setSelectedWorkout}
+                  onOpenPicker={handleOpenPicker}
+                />
+              )}
               <TodaysFocusCard 
                 dailyMetric={dailyMetric}
                 coachSpecialization={coachSpecialization}
                 isDemoMode={isDemoMode}
+                nextWorkout={nextWorkout}
+                onOpenPicker={handleOpenPicker}
               />
               {nextWorkout && (
                 <WorkoutAdjustmentChips
@@ -470,36 +460,21 @@ export const DashboardPage: React.FC = () => {
                 />
               )}
 
-              {/* Gentle weekly summary */}
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-                <h3 className="text-slate-200 font-semibold mb-3">This week</h3>
-                {weeklyStats ? (
-                  <div className="grid grid-cols-3 gap-4 text-center">
-                    <div>
-                      <p className="text-2xl font-bold text-orange-400">{weeklyStats.activityCount}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">sessions</p>
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-orange-400">
-                        {Math.round((weeklyStats.totalTime / 60))}
-                      </p>
-                      <p className="text-xs text-slate-400 mt-0.5">minutes</p>
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-orange-400">
-                        {(weeklyStats.totalDistance / 1000).toFixed(1)}
-                      </p>
-                      <p className="text-xs text-slate-400 mt-0.5">km</p>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-slate-500 text-sm">No activities logged yet this week.</p>
-                )}
-              </div>
-
               {/* Consistency Heatmap */}
               <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-                <ConsistencyHeatmap isDemoMode={isDemoMode} />
+                <ConsistencyHeatmap 
+                  isDemoMode={isDemoMode}
+                  streak={userStreak}
+                  isRestDay={(() => {
+                    if (!nextWorkout) return true;
+                    const todayStr = new Date().toLocaleDateString('en-CA');
+                    const workoutDateStr = nextWorkout.scheduledDate.toISOString().split('T')[0];
+                    if (workoutDateStr !== todayStr) return true;
+                    return nextWorkout.intensity === 'recovery' || nextWorkout.type === 'rest';
+                  })()}
+                  onStreakUpdate={() => queryClient.invalidateQueries({ queryKey: ['dashboard-data'] })}
+                  userId={currentUserId || 'demo'}
+                />
               </div>
             </div>
 
@@ -541,20 +516,23 @@ export const DashboardPage: React.FC = () => {
           {/* Main Stage (Left/Top) */}
           <div className="lg:col-span-2 space-y-6">
               <div className="lg:hidden mb-6">
-                <SmartWorkoutPreview
-                  nextWorkout={nextWorkout}
-                  dailyMetrics={dailyMetric}
-                  onWorkoutGenerated={(workout) => {
-                   // Optimistic update handled by refetch
-                    refreshNextWorkout();
-                  }}
-                onViewDetails={setSelectedWorkout}
-                onOpenPicker={handleOpenPicker}
-                />
+                {nextWorkout && (
+                  <SmartWorkoutPreview
+                    nextWorkout={nextWorkout}
+                    dailyMetrics={dailyMetric}
+                    onWorkoutGenerated={(workout) => {
+                      refreshNextWorkout();
+                    }}
+                    onViewDetails={setSelectedWorkout}
+                    onOpenPicker={handleOpenPicker}
+                  />
+                )}
                 <TodaysFocusCard 
                   dailyMetric={dailyMetric}
                   coachSpecialization={coachSpecialization}
                   isDemoMode={isDemoMode}
+                  nextWorkout={nextWorkout}
+                  onOpenPicker={handleOpenPicker}
                 />
                 {nextWorkout && (
                   <WorkoutAdjustmentChips
@@ -586,19 +564,23 @@ export const DashboardPage: React.FC = () => {
           {/* Right Rail (Recent Activities) */}
           <div className="lg:col-span-1 space-y-4">
             <div className="hidden lg:block">
-              <SmartWorkoutPreview
-                nextWorkout={nextWorkout}
-                dailyMetrics={dailyMetric}
-                onWorkoutGenerated={(workout) => {
-                  refreshNextWorkout();
-                }}
-                onViewDetails={setSelectedWorkout}
-                onOpenPicker={handleOpenPicker}
-              />
+              {nextWorkout && (
+                <SmartWorkoutPreview
+                  nextWorkout={nextWorkout}
+                  dailyMetrics={dailyMetric}
+                  onWorkoutGenerated={(workout) => {
+                    refreshNextWorkout();
+                  }}
+                  onViewDetails={setSelectedWorkout}
+                  onOpenPicker={handleOpenPicker}
+                />
+              )}
               <TodaysFocusCard 
                 dailyMetric={dailyMetric}
                 coachSpecialization={coachSpecialization}
                 isDemoMode={isDemoMode}
+                nextWorkout={nextWorkout}
+                onOpenPicker={handleOpenPicker}
               />
               {nextWorkout && (
                 <WorkoutAdjustmentChips
@@ -607,24 +589,6 @@ export const DashboardPage: React.FC = () => {
                 />
               )}
             </div>
-            <StreakWidget
-              streak={userStreak}
-              isRestDay={(() => {
-                if (!nextWorkout) return true; // No upcoming workout at all -> Rest/Free
-                const todayStr = new Date().toLocaleDateString('en-CA');
-                const workoutDateStr = nextWorkout.scheduledDate.toISOString().split('T')[0];
-                const isToday = workoutDateStr === todayStr;
-
-                if (!isToday) return true; // Next workout is in future -> Today is Rest
-                return nextWorkout.intensity === 'recovery' || nextWorkout.type === 'rest';
-              })()}
-              onStreakUpdate={(newStreak) => {
-                // React Query should handle this update generally, but if we need optimistic UI updates, we might need a setQueryData.
-                // For now, let's just invalidate query.
-                 queryClient.invalidateQueries({ queryKey: ['dashboard-data'] });
-              }}
-              userId={currentUserId || 'demo'} // Use currentUserId from hook
-            />
 
             <div className="sticky top-4 space-y-4">
               <div className="flex items-center justify-between mb-2">

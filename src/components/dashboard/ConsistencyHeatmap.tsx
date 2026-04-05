@@ -2,10 +2,15 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../services/supabaseClient';
 import { useAuth } from '../../contexts/AuthContext';
 import { ActivityType, Workout } from '../../types';
-import { Info } from 'lucide-react';
+import { Info, Snowflake, CheckCircle } from 'lucide-react';
+import { UserStreak, streakService } from '../../services/streakService';
 
 interface ConsistencyHeatmapProps {
   isDemoMode?: boolean;
+  streak?: UserStreak | null;
+  isRestDay?: boolean;
+  onStreakUpdate?: (newStreak: UserStreak) => void;
+  userId?: string;
 }
 
 // 16 weeks = 112 days
@@ -41,10 +46,40 @@ interface HeatmapCell {
   primaryActivity?: ActivityType | string;
 }
 
-export const ConsistencyHeatmap: React.FC<ConsistencyHeatmapProps> = ({ isDemoMode = false }) => {
+export const ConsistencyHeatmap: React.FC<ConsistencyHeatmapProps> = ({ 
+  isDemoMode = false,
+  streak,
+  isRestDay,
+  onStreakUpdate,
+  userId
+}) => {
   const { userProfile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
+  const [loadingCheckIn, setLoadingCheckIn] = useState(false);
+  const [optimisticStreak, setOptimisticStreak] = useState<UserStreak | null>(null);
+
+  useEffect(() => { setOptimisticStreak(null); }, [streak]);
+  
+  const displayStreak = optimisticStreak || streak;
+  const todayDateStr = new Date().toLocaleDateString('en-CA');
+  const isActiveToday = displayStreak?.last_activity_date === todayDateStr;
+
+  const handleCheckIn = async () => {
+      if (!userId) return;
+      setLoadingCheckIn(true);
+      try {
+          const updated = await streakService.checkInRestDay(userId, todayDateStr);
+          if (updated) {
+              setOptimisticStreak(updated);
+              onStreakUpdate?.(updated);
+          }
+      } catch (err) {
+          console.error(err);
+      } finally {
+          setLoadingCheckIn(false);
+      }
+  };
 
   useEffect(() => {
     const fetchWorkouts = async () => {
@@ -249,9 +284,33 @@ export const ConsistencyHeatmap: React.FC<ConsistencyHeatmapProps> = ({ isDemoMo
     <div className="w-full p-2">
       <div className="flex flex-col mb-4">
           <div className="flex justify-between items-center mb-6 px-2">
-            <h3 className="text-slate-300 font-medium">Activity History</h3>
-            <div className="text-slate-500 text-xs flex items-center">
-                <Info className="w-3 h-3 mr-1" /> Last 16 Weeks
+            <div className="flex items-center gap-4">
+              <h3 className="text-slate-300 font-medium whitespace-nowrap">Activity History</h3>
+              {displayStreak && isRestDay && !isActiveToday && (
+                <button 
+                  onClick={handleCheckIn}
+                  disabled={loadingCheckIn}
+                  className="px-2 py-1 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 border border-emerald-600/50 rounded text-[11px] font-medium transition-colors"
+                >
+                  {loadingCheckIn ? '...' : 'Rest Day Check-in'}
+                </button>
+              )}
+              {displayStreak && isActiveToday && isRestDay && (
+                 <span className="px-2 py-1 bg-green-500/10 text-green-400 border border-green-500/20 rounded text-[11px] font-medium flex items-center">
+                   <CheckCircle className="w-3 h-3 mr-1" /> Check-in logged
+                 </span>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              {displayStreak && (
+                <div title="Available Freezes" className="flex items-center space-x-1 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full text-blue-400 text-xs font-medium">
+                  <Snowflake className="w-3 h-3" />
+                  <span>{displayStreak.streak_freezes}</span>
+                </div>
+              )}
+              <div className="text-slate-500 text-xs hidden sm:flex items-center">
+                  <Info className="w-3 h-3 mr-1" /> Last 16 Weeks
+              </div>
             </div>
           </div>
           
@@ -325,12 +384,12 @@ export const ConsistencyHeatmap: React.FC<ConsistencyHeatmapProps> = ({ isDemoMo
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 border-t border-slate-800 pt-6 mt-2 px-2">
-         <div>
-            <div className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Current Streak</div>
-            <div className="text-xl font-bold text-slate-200 mt-1">
-                {stats.currentStreak} <span className="text-sm font-normal text-slate-400">days</span>
-            </div>
-         </div>
+          <div>
+             <div className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Current Streak</div>
+             <div className="text-xl font-bold text-slate-200 mt-1">
+                 {displayStreak ? displayStreak.current_streak : stats.currentStreak} <span className="text-sm font-normal text-slate-400">days</span>
+             </div>
+          </div>
          <div>
             <div className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Longest Streak</div>
             <div className="text-xl font-bold text-orange-500 mt-1">
