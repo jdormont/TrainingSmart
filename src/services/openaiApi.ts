@@ -1,6 +1,6 @@
 // OpenAI API service for training advice
 import axios from 'axios';
-import type { StravaActivity, StravaAthlete, StravaStats, ChatMessage, OuraSleepData, OuraReadinessData, Workout, DailyMetric, PlanReasoning } from '../types';
+import type { StravaActivity, StravaAthlete, StravaStats, ChatMessage, OuraSleepData, OuraReadinessData, Workout, DailyMetric, PlanReasoning, ActivityMixItem } from '../types';
 import { UserStreak } from './streakService';
 import { STORAGE_KEYS } from '../utils/constants';
 
@@ -36,6 +36,8 @@ interface TrainingContext {
     // Phase 1 — conversational onboarding fields
     coach_specialization?: string;
     fitness_mode?: string;
+    // Phase 2 — activity mix
+    activity_mix?: ActivityMixItem[];
   };
 }
 
@@ -323,6 +325,7 @@ Use the coaching style and personality defined above, while incorporating this r
           recentActivities: context.recentActivities,
           coach_specialization: context.userProfile?.coach_specialization,
           fitness_mode: context.userProfile?.fitness_mode,
+          activity_mix: context.userProfile?.activity_mix,
         },
         {
           headers: {

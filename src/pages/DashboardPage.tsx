@@ -39,6 +39,8 @@ import { analytics } from '../lib/analytics';
 import { Button } from '../components/common/Button';
 import { StreakWidget } from '../components/dashboard/StreakWidget';
 // import { StreakCelebration } from '../components/dashboard/StreakCelebration';
+import { LevelUpModal } from '../components/common/LevelUpModal';
+import { milestoneService } from '../services/milestoneService';
 import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
 import { WorkoutAdjustmentChips } from '../components/dashboard/WorkoutAdjustmentChips';
 
@@ -79,6 +81,9 @@ export const DashboardPage: React.FC = () => {
   // Smart Picker State for Dashboard
   const [showSmartPicker, setShowSmartPicker] = useState(false);
   const [pickerDate, setPickerDate] = useState<Date | null>(null);
+
+  // Level Up milestone state
+  const [levelUpStatus, setLevelUpStatus] = useState<ReturnType<typeof milestoneService.checkLevelUp> | null>(null);
 
   const handleOpenPicker = () => {
       setPickerDate(new Date()); // Today
@@ -225,6 +230,19 @@ export const DashboardPage: React.FC = () => {
   // The original code did:
   // if (newStreak > userStreak) ...
   // Since we replace state entirely, we might lose the "transition" event unless we useEffect on data.userStreak.
+
+  // Check level-up milestone whenever streak or fitness mode changes
+  useEffect(() => {
+    if (!isReEngager) return;
+    const status = milestoneService.checkLevelUp(userStreak, userProfile?.fitness_mode);
+    if (status.eligible) {
+      analytics.track('level_up_prompt_shown', {
+        weeks_consistent: status.weeksConsistent,
+        recent_activities: status.recentActivityCount,
+      });
+    }
+    setLevelUpStatus(status);
+  }, [userStreak, userProfile?.fitness_mode, isReEngager]);
 
   // Visibility handling for refetch
   useEffect(() => {
@@ -433,6 +451,16 @@ export const DashboardPage: React.FC = () => {
 
         {/* ── RE-ENGAGER LAYOUT ── */}
         {isReEngager ? (
+          <>
+          {/* Level Up Modal */}
+          {levelUpStatus?.eligible && (
+            <LevelUpModal
+              weeksConsistent={levelUpStatus.weeksConsistent}
+              recentActivityCount={levelUpStatus.recentActivityCount}
+              onClose={() => setLevelUpStatus(prev => prev ? { ...prev, eligible: false } : null)}
+            />
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main column */}
             <div className="lg:col-span-2 space-y-6">
@@ -509,6 +537,7 @@ export const DashboardPage: React.FC = () => {
               </div>
             </div>
           </div>
+          </>
         ) : (
 
         /* ── PERFORMANCE LAYOUT (existing) ── */

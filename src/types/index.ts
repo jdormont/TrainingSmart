@@ -172,6 +172,15 @@ export interface TrainingPlan {
   reasoning?: PlanReasoning;
 }
 
+export interface ActivityMetadata {
+  [key: string]: unknown;  // index signature for Record<string, unknown> compatibility
+  sets_reps?: string;      // Strength: e.g., "3x10 squats"
+  yoga_style?: string;     // Yoga: e.g., "restorative", "vinyasa", "yin"
+  elevation_gain?: number; // Hiking: feet
+  terrain?: string;        // Hiking: e.g., "trail", "moderate hills"
+  pace_zone?: string;      // Running: e.g., "Zone 2 easy pace"
+}
+
 export interface Workout {
   id: string;
   name: string;
@@ -184,6 +193,7 @@ export interface Workout {
   completed: boolean;
   status: 'planned' | 'completed' | 'skipped';
   google_calendar_event_id?: string;
+  activity_metadata?: ActivityMetadata;
 }
 
 export interface ContentItem {

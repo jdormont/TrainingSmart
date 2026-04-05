@@ -253,51 +253,36 @@ Small team — 1 full-stack developer (Josh), 1 AI/prompt engineer (roles may ov
   * Legacy coach_persona / training_goal fields preserved alongside new fields; overlap to be resolved in Settings refactor (see below)
   * Migration history had pre-existing conflicts (duplicate 20260115 filenames) — resolved by renaming 20260115_fix_rhr_constraint.sql → 20260115100000_fix_rhr_constraint.sql
 
-**Phase 1.5: Settings Page Refactor** — PLANNED (do before Phase 2)
+**Phase 1.5: Settings Page Refactor** ✅ COMPLETE — branch: `enhanced-fitness-phase2`
 
-* Problem: Settings page has grown unwieldy — overlapping coach concepts, scattered integrations, and a raw system prompt editor all on one long scroll
-* Solution: Reorganize into 4 tabs
+* Problem: Settings page had grown unwieldy — overlapping coach concepts, scattered integrations, and a raw system prompt editor all on one long scroll
+* Solution: Reorganized into 4 tabs
+  * ✅ **My Coach** — Coach Specialization selector, Fitness Mode toggle (Performance / Re-Engager), Communication Style (coach persona), Training Goal; onboarding `primary_goal` surfaced as a reference label above the legacy selector
+  * ✅ **My Profile** — Health Profile (gender, age bucket), Weekly Availability sliders (days/week + min/session, replacing legacy `weekly_hours`), FTP, Skill Level; single Save button writes all fields including new `weekly_availability_days/duration`
+  * ✅ **Integrations** — Strava, Oura Ring, Google Calendar, Apple Watch Health Sync all in one tab with consistent connect/disconnect UI
+  * ✅ **Advanced** — System prompt editor + save/reset, Content Interests pill selector, Example Coaching Styles collapsed behind toggle (reference, not primary UI), Admin Dashboard conditional (admins only)
+* Notes:
+  * `weekly_hours` legacy field is no longer shown in the UI; new `weekly_availability_days/duration` fields replace it functionally
+  * `primary_goal` (from onboarding) displayed as read-only label in My Coach tab alongside the editable legacy `training_goal`; full consolidation deferred to a future cleanup
+  * Admin Dashboard visible in Advanced tab for admin users; not yet moved to a dedicated `/admin` route
 
-  **Tab 1 — My Coach**
-  * Coach Specialization selector (4 types)
-  * Fitness Mode toggle (Performance / Re-Engager)
-  * Communication Style (legacy coach_persona: Supportive / Drill Sergeant / Analytical) — reframe as sub-preference under specialization, not a top-level concept
-  * Training Goal — show onboarding primary_goal value with inline edit; deprecate legacy training_goal dropdown
-
-  **Tab 2 — My Profile**
-  * Full name
-  * Health Profile: gender, age bucket (used for metric calibration)
-  * Weekly availability (days/week, session duration) — show onboarding values, allow edit
-  * Functional Threshold Power (FTP)
-  * Skill level
-
-  **Tab 3 — Integrations**
-  * Strava (connect/disconnect, refresh cache, status)
-  * Oura Ring (connect/disconnect, manual sync)
-  * Google Calendar (connect, copy URL)
-  * Apple Watch Health Sync (shortcut download, API key)
-  * All integration cards in one place with consistent connect/disconnect UI
-
-  **Tab 4 — Advanced**
-  * AI Coach Personality (system prompt editor, reset to default)
-  * Content interests (for Learn feed personalization)
-  * Example Coaching Styles (collapsed/expandable reference)
-  * Admin Dashboard (conditional, admins only) — or move to dedicated /admin route
-
-* Additional cleanup:
-  * Remove or collapse Example Coaching Styles — reference content, not settings
-  * Admin Dashboard should not push settings down for all admin users — move to /admin or accordion-collapse by default
-  * Consolidate overlapping onboarding fields: primary_goal supersedes training_goal; weekly_availability_days/duration supersede weekly_hours
-* Dependencies: Phase 1 complete ✅
-
-**Phase 2: Expansion (2 weeks)**
+**Phase 2: Expansion (2 weeks)** ✅ COMPLETE — branch: `enhanced-trainer-phase2`
 
 * Key Deliverables:
-  * Multi-modal plan generator AI prompt and output
-  * Plan UI updated with icons, colors, edit options
-  * Re-engager mode plan generator (2–3 sessions/wk, <45min, streak tracking logic)
-  * 'Ready to level up?' milestone flow
-* Dependencies: Phase 1 complete ✅; Settings refactor recommended first
+  * ✅ **ActivityMetadata type** — new `ActivityMetadata` interface (sets_reps, yoga_style, elevation_gain, terrain, pace_zone) with index signature; added to `Workout` interface
+  * ✅ **Multi-modal edge function** — rewrote `openai-training-plan` system prompt from cycling-only to multi-modal fitness coach; accepts `activity_mix[]` from user profile and injects per-type priority context; expanded workout schema to include `yoga` and `hiking` types; added optional `activity_metadata` output per workout; injected cross-activity recovery rules (no heavy strength after hard ride/run, yoga is recovery-safe, hiking counts as moderate aerobic load); deployed
+  * ✅ **Re-engager plan constraints** — edge function enforces hard limits when `fitness_mode === 're_engager'`: max 3 sessions/week, max 45min/session, 80% easy/recovery intensity, no "hard" workouts in weeks 1–2, encouragement-first descriptions
+  * ✅ **openaiApi.ts updated** — `activity_mix` added to `TrainingContext.userProfile`; passed through to edge function on every plan generation call
+  * ✅ **WorkoutCard** — added `Leaf` icon + teal theme for yoga; `Mountain` icon + amber theme for hiking; `TrendingUp` icon for running; per-type theme overrides take precedence over intensity-based theming; metadata pill row in expanded view (sets/reps, yoga style, elevation, terrain, pace zone)
+  * ✅ **PlansPage** — imports `useAuth`; derives `isReEngager` and `activityMix` from profile; activity mix summary card appears above form (priority-labeled pills); re-engager simplified form hides goal type selector / event date / focus areas, uses friendlier copy; event date auto-set to 8 weeks for re-engager; full `userProfile` context (coach_specialization, fitness_mode, activity_mix) now flows into plan generation; `activity_metadata` carried through the workout mapping and persisted to DB
+  * ✅ **trainingPlansService** — `activity_metadata` added to `DbWorkout` interface, workout insert, and workout hydration (select → map)
+  * ✅ **milestoneService.ts** — checks level-up eligibility: re-engager user with ≥21-day streak OR ≥8 activity entries in past 28 days; localStorage-backed dismiss (14-day cooldown) and accept (permanent); `reset()` method for when user switches back to re_engager
+  * ✅ **LevelUpModal.tsx** — celebratory modal with streak stats, "Yes, let's level up!" CTA (calls `updateFitnessMode('performance')` + `reloadProfile()`), "Not yet" dismisses for 14 days; tracks `level_up_accepted` and `level_up_prompt_dismissed` analytics events
+  * ✅ **DashboardPage** — milestone check runs on streak/profile change (re-engager only); `LevelUpModal` rendered when eligible; `<>` fragment wraps re-engager layout alongside modal
+* Notes:
+  * `activity_metadata` from AI is passed through as-is from the JSON response; the edge function includes it only for relevant workout types (strength, yoga, hiking, run) — bike and swim workouts omit it
+  * Level-up acceptance switches `fitness_mode` to `'performance'` only — does not change `coach_specialization`; user can update specialization separately in Settings → My Coach
+  * Re-engager plan form auto-sets event date to 8 weeks; the edge function's periodization logic calculates 8 weeks → Build→Peak→Taper, which is appropriate for a consistency-building cycle
 
 **Phase 3: Apple Watch & Polish (2 weeks)**
 

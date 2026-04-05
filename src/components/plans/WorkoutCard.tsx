@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Bike, CheckCircle2, Circle, Clock, MapPin, Activity, Heart, Calendar, MoreVertical, XCircle, Trash2, Check } from 'lucide-react';
+import { Bike, CheckCircle2, Circle, Clock, MapPin, Activity, Heart, Calendar, MoreVertical, XCircle, Trash2, Check, Leaf, Mountain, TrendingUp } from 'lucide-react';
 import { Workout } from '../../types';
 import { convertMarkdownToHtml } from '../../utils/markdownToHtml';
 import { googleCalendarService } from '../../services/googleCalendarService';
@@ -19,12 +19,32 @@ interface WorkoutCardProps {
 
 
 
-const TYPE_ICONS = {
+const TYPE_ICONS: Record<string, React.ElementType> = {
   bike: Bike,
-  run: Activity,
+  run: TrendingUp,
   swim: Activity,
   strength: Heart,
+  yoga: Leaf,
+  hiking: Mountain,
   rest: Circle,
+};
+
+// Per-activity-type theme overrides (take precedence over intensity-based theme for these types)
+const TYPE_THEME_OVERRIDES: Record<string, { bg: string; border: string; hover: string; icon: string; text: string } | undefined> = {
+  yoga: {
+    bg: 'bg-teal-500/10',
+    border: 'border-teal-500/20',
+    hover: 'hover:bg-teal-500/20 hover:border-teal-500/50',
+    icon: 'text-teal-400',
+    text: 'text-teal-200',
+  },
+  hiking: {
+    bg: 'bg-amber-500/10',
+    border: 'border-amber-500/20',
+    hover: 'hover:bg-amber-500/20 hover:border-amber-500/50',
+    icon: 'text-amber-400',
+    text: 'text-amber-200',
+  },
 };
 
 export default function WorkoutCard({
@@ -174,7 +194,7 @@ export default function WorkoutCard({
     };
   };
 
-  const theme = getTheme(workout.intensity);
+  const theme = TYPE_THEME_OVERRIDES[workout.type] ?? getTheme(workout.intensity);
 
   // Status Overrides
   const getCardStyle = () => {
@@ -404,14 +424,34 @@ export default function WorkoutCard({
           </div>
         </div>
 
-        {expanded && workout.description && (
-          <div className="mt-4 pt-4 border-t border-slate-700">
-            <div
-              className="prose prose-sm prose-invert max-w-none text-slate-200 prose-p:text-slate-200 prose-li:text-slate-200"
-              dangerouslySetInnerHTML={{
-                __html: convertMarkdownToHtml(workout.description),
-              }}
-            />
+        {expanded && (
+          <div className="mt-4 pt-4 border-t border-slate-700 space-y-3">
+            {/* Activity metadata pills */}
+            {workout.activity_metadata && (() => {
+              const m = workout.activity_metadata;
+              const pills: { label: string; value: string }[] = [];
+              if (m.sets_reps) pills.push({ label: 'Sets', value: m.sets_reps });
+              if (m.yoga_style) pills.push({ label: 'Style', value: m.yoga_style });
+              if (m.elevation_gain) pills.push({ label: 'Elevation', value: `${m.elevation_gain} ft gain` });
+              if (m.terrain) pills.push({ label: 'Terrain', value: m.terrain });
+              if (m.pace_zone) pills.push({ label: 'Pace', value: m.pace_zone });
+              if (pills.length === 0) return null;
+              return (
+                <div className="flex flex-wrap gap-2">
+                  {pills.map(p => (
+                    <span key={p.label} className={`px-2 py-0.5 rounded-full text-xs font-medium ${theme.bg} ${theme.icon} border ${theme.border}`}>
+                      <span className="opacity-60 mr-1">{p.label}:</span>{p.value}
+                    </span>
+                  ))}
+                </div>
+              );
+            })()}
+            {workout.description && (
+              <div
+                className="prose prose-sm prose-invert max-w-none text-slate-200 prose-p:text-slate-200 prose-li:text-slate-200"
+                dangerouslySetInnerHTML={{ __html: convertMarkdownToHtml(workout.description) }}
+              />
+            )}
           </div>
         )}
 
