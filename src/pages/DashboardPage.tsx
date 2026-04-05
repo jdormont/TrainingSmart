@@ -537,6 +537,7 @@ export const DashboardPage: React.FC = () => {
               </div>
             </div>
           </div>
+          </>
         ) : (
 
         /* ── PERFORMANCE LAYOUT (existing) ── */
