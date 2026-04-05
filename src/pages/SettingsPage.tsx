@@ -10,6 +10,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { STORAGE_KEYS } from '../utils/constants';
 import { supabase } from '../services/supabaseClient';
 import { Integrations } from '../components/settings/Integrations';
+import { CoachSpecializationSelector } from '../components/settings/CoachSpecializationSelector';
+import type { CoachSpecialization } from '../types';
 import {
   userProfileService,
   COACH_PERSONAS,
@@ -63,6 +65,9 @@ RESPONSE GUIDELINES:
 
 export const SettingsPage: React.FC = () => {
   const { userProfile } = useAuth();
+  const [coachSpecialization, setCoachSpecialization] = useState<CoachSpecialization | undefined>(
+    userProfile?.coach_specialization as CoachSpecialization | undefined
+  );
   const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -325,6 +330,21 @@ export const SettingsPage: React.FC = () => {
               <AdminDashboard />
             </div>
           )}
+          {/* Coach Specialization */}
+          <div className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 p-6">
+            <h2 className="text-xl font-semibold text-slate-100 mb-1 flex items-center gap-2">
+              <Bot className="w-5 h-5" />
+              Coach Specialization
+            </h2>
+            <p className="text-slate-400 text-sm mb-5">
+              Your coach type shapes your training plans, dashboard, and AI responses.
+            </p>
+            <CoachSpecializationSelector
+              current={coachSpecialization}
+              onUpdate={setCoachSpecialization}
+            />
+          </div>
+
           {/* Strava Connection */}
           <div className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 p-6">
             <h2 className="text-xl font-semibold text-slate-100 mb-4 flex items-center">
