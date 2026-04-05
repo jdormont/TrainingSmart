@@ -30,8 +30,11 @@ interface TrainingContext {
   };
   userProfile?: {
     training_goal?: string;
+    primary_goal?: string;
     coach_persona?: string;
     weekly_hours?: number;
+    weekly_availability_days?: number;
+    weekly_availability_duration?: number;
     ftp?: number;
     // Phase 1 — conversational onboarding fields
     coach_specialization?: string;
@@ -83,16 +86,16 @@ class OpenAIService {
 
     // Get custom system prompt from localStorage, or use default
     const customPrompt = localStorage.getItem(STORAGE_KEYS.SYSTEM_PROMPT);
-    let basePrompt = customPrompt || `You are TrainingSmart AI, an elite cycling and running coach with direct access to the user's Strava training data.
+    let basePrompt = customPrompt || `You are TrainingSmart AI, a multi-modal fitness coach with direct access to the user's Strava training data.
 
 CURRENT USER CONTEXT:
-- **Training Goal:** {{USER_TRAINING_GOAL}} (e.g., Event Prep, Weight Loss, General Fitness)
+- **Training Goal:** {{USER_TRAINING_GOAL}}
 - **Coaching Style:** {{USER_COACH_STYLE}} (e.g., Supportive, Drill Sergeant, Analytical)
-- **Weekly Hours Cap:** {{USER_WEEKLY_HOURS}} hours
+- **Weekly Availability:** {{USER_WEEKLY_DAYS}} days/week, {{USER_SESSION_DURATION}} min/session
 
 CORE COACHING PROTOCOLS:
 1. **Data-First Analysis:** Never give generic advice. Always anchor your feedback in the user's recent activity data.
-   - If they ask "How did I do?", analyze their Heart Rate relative to Pace/Power.
+   - If they ask "How did I do?", analyze their Heart Rate relative to Pace/Power/Effort.
    - Look for signs of overtraining (decreasing HR variability, plateauing performance) or undertraining.
    - Acknowledge consistency streaks or missed workouts immediately.
 
@@ -110,10 +113,13 @@ You have access to a tool to search YouTube. **DO NOT hallucinate video URLs.**
 When recommending exercises or deep dives, you MUST use the provided tool to find a *real* video URL before displaying it.
 
 **Trusted Creators (Prioritize these sources):**
-- **Technique/Culture:** GCN (Global Cycling Network), Cam Nicholls
-- **Science/Training:** Dylan Johnson, Peter Attia MD, TrainerRoad
+- **Endurance/Cycling:** GCN (Global Cycling Network), Dylan Johnson, TrainerRoad, Cam Nicholls
+- **Running:** The Run Experience, Running Channel
+- **Strength & Functional:** Athlean-X, Jeff Nippard, Dialed Health
+- **Yoga & Mobility:** Yoga with Adriene, Tom Merrick (The Bodyweight Warrior)
+- **Hiking & Outdoors:** REI, Andrew Skurka
+- **Science/Health:** Peter Attia MD, Huberman Lab
 - **Maintenance:** GMBN Tech, Park Tool
-- **Strength/Mobility:** Yoga with Adriene (Yoga), Athlean-X (Strength), Dialed Health
 
 **Video Output Format:**
 When sharing a video, use this format:
@@ -123,30 +129,47 @@ RESPONSE GUIDELINES:
 - Keep responses concise (max 3-4 paragraphs) unless asked for a deep dive.
 - **Use Markdown tables** when comparing activities or presenting a breakdown of data (e.g., "Date | Distance | Avg HR | Power").
 - Use bullet points for workout steps or analysis breakdown.
-- End with a specific question to keep the user engaged (e.g., "Ready to try those intervals tomorrow?" or "How did your legs feel on that climb?").`;
+- End with a specific question to keep the user engaged (e.g., "Ready to try those intervals tomorrow?" or "How did that session feel?").`;
 
     // Inject user profile values into the prompt
     if (context.userProfile) {
-      const trainingGoal = context.userProfile.training_goal || 'Not specified';
+      const trainingGoal = context.userProfile.primary_goal || context.userProfile.training_goal || 'Not specified';
       const coachPersona = context.userProfile.coach_persona || 'Supportive';
-      const weeklyHours = context.userProfile.weekly_hours || 0;
+      const weeklyDays = context.userProfile.weekly_availability_days ?? context.userProfile.weekly_hours ?? 0;
+      const sessionDuration = context.userProfile.weekly_availability_duration || 0;
 
       basePrompt = basePrompt
         .replace('{{USER_TRAINING_GOAL}}', trainingGoal)
         .replace('{{USER_COACH_STYLE}}', coachPersona)
-        .replace('{{USER_WEEKLY_HOURS}}', weeklyHours.toString());
-      
-      // Inject FTP if available (search for placeholder or append)
-      // Since the prompt template is fixed constant above, we append it to the context section.
+        .replace('{{USER_WEEKLY_DAYS}}', weeklyDays.toString())
+        .replace('{{USER_SESSION_DURATION}}', sessionDuration.toString());
+
       if (context.userProfile.ftp) {
         basePrompt = basePrompt.replace('CURRENT USER CONTEXT:', `CURRENT USER CONTEXT:\n- **FTP:** ${context.userProfile.ftp}w`);
       }
-
     } else {
       basePrompt = basePrompt
         .replace('{{USER_TRAINING_GOAL}}', 'Not specified')
         .replace('{{USER_COACH_STYLE}}', 'Supportive')
-        .replace('{{USER_WEEKLY_HOURS}}', '0');
+        .replace('{{USER_WEEKLY_DAYS}}', '0')
+        .replace('{{USER_SESSION_DURATION}}', '0');
+    }
+
+    // Build activity mix section
+    const activityMix = context.userProfile?.activity_mix;
+    let activityMixSection = '';
+    if (activityMix && activityMix.length > 0) {
+      const ACTIVITY_DISPLAY: Record<string, string> = {
+        run: 'Running', bike: 'Cycling', swim: 'Swimming',
+        strength: 'Strength Training', yoga: 'Yoga', hiking: 'Hiking', rest: 'Rest',
+      };
+      const PRIORITY_LABELS: Record<number, string> = { 1: 'primary', 2: 'secondary', 3: 'supplemental' };
+      const mixList = activityMix
+        .slice()
+        .sort((a, b) => a.priority - b.priority)
+        .map(item => `${ACTIVITY_DISPLAY[item.type] || item.type} (${PRIORITY_LABELS[item.priority] || 'other'})`)
+        .join(', ');
+      activityMixSection = `\nACTIVITY PRIORITIES: ${mixList}`;
     }
 
     // Build recovery context string
@@ -216,24 +239,31 @@ STREAK CONTEXT:
 `;
     }
 
+    // Only show power metrics for endurance-focused coaches
+    const showPowerMetrics = !specialization || specialization === 'endurance';
+
     return `${specializationBlock ? specializationBlock + '\n\n' : ''}${basePrompt}
 
 ATHLETE PROFILE:
 - Name: ${context.athlete.firstname} ${context.athlete.lastname}
 - Location: ${context.athlete.city}, ${context.athlete.state}
-- Recent activities: ${context.recentActivities.length} activities
+- Recent activities: ${context.recentActivities.length} activities${activityMixSection}
 
 RECENT TRAINING DATA:
-- This week: ${(context.weeklyVolume.distance * 0.000621371).toFixed(1)}mi over ${context.weeklyVolume.activities} activities
-- Total time: ${Math.round(context.weeklyVolume.time / 3600)}h ${Math.round((context.weeklyVolume.time % 3600) / 60)}m
+- This week: ${context.weeklyVolume.activities} activities, ${Math.round(context.weeklyVolume.time / 3600)}h ${Math.round((context.weeklyVolume.time % 3600) / 60)}m total
 ${streakContext}
-- Recent activities: ${context.recentActivities.slice(0, 5).map(a => {
-      const parts = [`${a.type}: ${(a.distance * 0.000621371).toFixed(1)}mi in ${Math.round(a.moving_time / 60)}min`];
-      if (a.total_elevation_gain > 0) parts.push(`${Math.round(a.total_elevation_gain * 3.28084)}ft elev`);
+- Recent activities:
+  ${context.recentActivities.slice(0, 5).map(a => {
+      const distanceMi = a.distance * 0.000621371;
+      const hasDistance = distanceMi > 0.1;
+      const parts = [hasDistance ? `${a.type}: ${distanceMi.toFixed(1)}mi in ${Math.round(a.moving_time / 60)}min` : `${a.type}: ${Math.round(a.moving_time / 60)}min`];
+      if (a.total_elevation_gain > 10) parts.push(`${Math.round(a.total_elevation_gain * 3.28084)}ft elev`);
       if (a.average_heartrate) parts.push(`${Math.round(a.average_heartrate)}bpm avg HR`);
-      if (a.average_watts) parts.push(`${Math.round(a.average_watts)}w avg pwr`);
-      if (a.max_watts) parts.push(`${Math.round(a.max_watts)}w max pwr`);
-      if (a.device_watts === false) parts.push(`(estimated pwr)`);
+      if (showPowerMetrics) {
+        if (a.average_watts) parts.push(`${Math.round(a.average_watts)}w avg pwr`);
+        if (a.max_watts) parts.push(`${Math.round(a.max_watts)}w max pwr`);
+        if (a.device_watts === false) parts.push(`(estimated pwr)`);
+      }
       return parts.join(', ');
     }).join('\n  ')}${recoveryContext}
 

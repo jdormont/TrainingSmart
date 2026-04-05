@@ -20,10 +20,35 @@ import { useChatSessions } from '../hooks/useChatSessions';
 import { useDashboardData } from '../hooks/useDashboardData';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChatSession } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+
+const SPECIALIZATION_LABELS: Record<string, string> = {
+  endurance: 'endurance coach',
+  strength_mobility: 'strength & mobility coach',
+  general_fitness: 'fitness coach',
+  comeback: 'comeback coach',
+};
+
+function buildWelcomeMessage(
+  firstName: string,
+  specialization?: string,
+  fitnessMode?: string,
+  category?: string
+): string {
+  if (category === 'content_preferences') {
+    return `Hi ${firstName}! I see you're interested in updating your content preferences. What topics would you like to focus on?`;
+  }
+  if (fitnessMode === 're_engager') {
+    return `Hey ${firstName}! Great to see you here. I'm your comeback coach — no pressure, just consistent progress. What's on your mind today?`;
+  }
+  const coachLabel = (specialization && SPECIALIZATION_LABELS[specialization]) || 'AI fitness coach';
+  return `Hi ${firstName}! I'm your ${coachLabel}. I've analyzed your recent training data. How can I help you today?`;
+}
 
 export const ChatPage: React.FC = () => {
   const location = useLocation();
   const queryClient = useQueryClient();
+  const { userProfile: authProfile } = useAuth();
   
   // Data Hooks
   const { 
@@ -149,12 +174,12 @@ export const ChatPage: React.FC = () => {
              // Original logic put it in data loading useEffect.
              // We can do it here.
              
-             let welcomeContent = '';
-             if (activeSession.category === 'content_preferences') {
-                 welcomeContent = `Hi ${athlete.firstname}! I see you're interested in updating your content preferences. What topics would you like to focus on for your cycling training?`;
-             } else {
-                 welcomeContent = `Hi ${athlete.firstname}! 👋 I'm your AI cycling coach. I've analyzed your recent training data. How can I help you today?`;
-             }
+             const welcomeContent = buildWelcomeMessage(
+               athlete.firstname,
+               authProfile?.coach_specialization ?? undefined,
+               authProfile?.fitness_mode ?? undefined,
+               activeSession.category
+             );
              
              // Check if we already have it locally to avoid loop? 
              // activeSession.messages length is 0 check protects us.
@@ -295,10 +320,14 @@ export const ChatPage: React.FC = () => {
         streak: streak,
         userProfile: userProfile ? {
           training_goal: userProfile.training_goal,
+          primary_goal: userProfile.primary_goal,
           coach_persona: userProfile.coach_persona,
           weekly_hours: userProfile.weekly_hours,
+          weekly_availability_days: userProfile.weekly_availability_days,
+          weekly_availability_duration: userProfile.weekly_availability_duration,
           coach_specialization: userProfile.coach_specialization,
           fitness_mode: userProfile.fitness_mode,
+          activity_mix: userProfile.activity_mix,
         } : undefined
       };
 
@@ -460,7 +489,18 @@ export const ChatPage: React.FC = () => {
           readinessData,
           dailyMetric,
           sleepScore
-        }
+        },
+        userProfile: authProfile ? {
+          training_goal: authProfile.training_goal,
+          primary_goal: authProfile.primary_goal,
+          coach_persona: authProfile.coach_persona,
+          weekly_hours: authProfile.weekly_hours,
+          weekly_availability_days: authProfile.weekly_availability_days,
+          weekly_availability_duration: authProfile.weekly_availability_duration,
+          coach_specialization: authProfile.coach_specialization,
+          fitness_mode: authProfile.fitness_mode,
+          activity_mix: authProfile.activity_mix as any,
+        } : undefined
       };
 
       const response = await openaiService.getChatResponse(
@@ -480,8 +520,8 @@ export const ChatPage: React.FC = () => {
           queryClient.invalidateQueries({ queryKey: ['chat-sessions'] });
       }
 
-      setActiveSession(prev => prev ? { 
-          ...prev, 
+      setActiveSession(prev => prev ? {
+          ...prev,
           messages: [...prev.messages, assistantMessage],
           updatedAt: new Date()
       } : null);
