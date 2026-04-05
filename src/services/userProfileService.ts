@@ -1,13 +1,27 @@
 import { supabase } from './supabaseClient';
+import type { ActivityMixItem, CoachSpecialization, FitnessLevel, FitnessMode } from '../types';
 
 export interface UserProfile {
+  // Legacy onboarding wizard fields
   training_goal?: string;
   weekly_hours?: number;
   coach_persona?: string;
+  // Demographic fields
   gender?: string;
   age_bucket?: string;
+  // Integration fields
   calendar_token?: string;
   ftp?: number;
+  // Conversational onboarding fields (Phase 1)
+  primary_goal?: string;
+  activity_mix?: ActivityMixItem[];
+  weekly_availability_days?: number;
+  weekly_availability_duration?: number;
+  fitness_level?: FitnessLevel;
+  coach_specialization?: CoachSpecialization;
+  fitness_mode?: FitnessMode;
+  conversational_onboarding_completed?: boolean;
+  conversational_onboarding_completed_at?: string;
 }
 export interface ContentProfile {
   interests: string[];
@@ -63,7 +77,14 @@ export const userProfileService = {
 
     const { data, error } = await supabase
       .from('user_profiles')
-      .select('training_goal, weekly_hours, coach_persona, gender, age_bucket, calendar_token, ftp')
+      .select(`
+        training_goal, weekly_hours, coach_persona,
+        gender, age_bucket, calendar_token, ftp,
+        primary_goal, activity_mix, weekly_availability_days,
+        weekly_availability_duration, fitness_level,
+        coach_specialization, fitness_mode,
+        conversational_onboarding_completed, conversational_onboarding_completed_at
+      `)
       .eq('user_id', user.id)
       .maybeSingle();
 
@@ -130,6 +151,21 @@ export const userProfileService = {
 
       if (error) throw error;
     }
+  },
+
+  async updateCoachSpecialization(specialization: CoachSpecialization): Promise<void> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { error } = await supabase
+      .from('user_profiles')
+      .update({
+        coach_specialization: specialization,
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', user.id);
+
+    if (error) throw error;
   },
 
   async regenerateCalendarToken(): Promise<string> {
