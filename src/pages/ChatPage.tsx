@@ -296,7 +296,9 @@ export const ChatPage: React.FC = () => {
         userProfile: userProfile ? {
           training_goal: userProfile.training_goal,
           coach_persona: userProfile.coach_persona,
-          weekly_hours: userProfile.weekly_hours
+          weekly_hours: userProfile.weekly_hours,
+          coach_specialization: userProfile.coach_specialization,
+          fitness_mode: userProfile.fitness_mode,
         } : undefined
       };
 

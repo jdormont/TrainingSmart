@@ -40,6 +40,9 @@ interface TrainingPlanRequest {
     distance: number;
     average_speed: number;
   }>;
+  // Phase 1 — coach specialization and fitness mode (optional, backward-compatible)
+  coach_specialization?: 'endurance' | 'strength_mobility' | 'general_fitness' | 'comeback';
+  fitness_mode?: 'performance' | 're_engager';
 }
 
 interface PlanReasoning {
@@ -89,6 +92,8 @@ Deno.serve(async (req: Request) => {
       weeklyVolume,
       recentActivities,
       dailyAvailability,
+      coach_specialization,
+      fitness_mode,
     }: TrainingPlanRequest & { dailyAvailability?: Record<string, string> } = await req.json();
 
     const avgDistance = recentActivities.length > 0
@@ -157,7 +162,21 @@ Deno.serve(async (req: Request) => {
     const avgDistMiles = Math.round(avgDistance * 0.621371);
     const avgSpeedMph = Math.round(avgSpeed * 0.621371);
 
-    const prompt = `Based on ${athleteName}'s CYCLING training data, create a detailed ${weeksAvailable}-week CYCLING training plan for their goal: "${goal}", ending on ${eventDate}.
+    // Build coach specialization context block
+    const specializationLabels: Record<string, string> = {
+      endurance: 'Endurance Coach — cycling and running focus, aerobic progression, power zones',
+      strength_mobility: 'Strength & Mobility Coach — prioritize strength, yoga, and functional movement; minimize cycling bias',
+      general_fitness: 'General Fitness Coach — balance all activity types equally',
+      comeback: 'Comeback Coach — consistency first, 2–3 sessions/week max, celebrate showing up over performance',
+    };
+    const specializationLine = coach_specialization
+      ? `\nCOACH SPECIALIZATION: ${specializationLabels[coach_specialization] ?? coach_specialization}`
+      : '';
+    const fitnessModeLine = fitness_mode === 're_engager'
+      ? '\nFITNESS MODE: Re-engager — cap sessions at 2–3/week, 20–45 min each; prioritize consistency and low intensity over volume.'
+      : '';
+
+    const prompt = `Based on ${athleteName}'s training data, create a detailed ${weeksAvailable}-week training plan for their goal: "${goal}", ending on ${eventDate}.${specializationLine}${fitnessModeLine}
 
 ${durationConstraint}
 
