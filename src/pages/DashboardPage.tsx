@@ -28,6 +28,8 @@ import { WorkoutDetailModal } from '../components/dashboard/WorkoutDetailModal';
 import { ActivityDetailModal } from '../components/dashboard/ActivityDetailModal';
 import { IntakeWizard } from '../components/onboarding/IntakeWizard'; // Import IntakeWizard
 import { getUserOnboardingStatus } from '../services/onboardingService';
+import { useAuth } from '../contexts/AuthContext';
+import type { CoachSpecialization, FitnessMode } from '../types';
 import { SmartWorkoutPreview } from '../components/dashboard/SmartWorkoutPreview';
 import { DashboardSkeleton } from '../components/skeletons/DashboardSkeleton';
 import { ROUTES } from '../utils/constants';
@@ -40,10 +42,22 @@ import { WorkoutAdjustmentChips } from '../components/dashboard/WorkoutAdjustmen
 
 
 
+const COACH_BADGE: Record<CoachSpecialization, { label: string; emoji: string }> = {
+  endurance:         { label: 'Endurance Coach',          emoji: '🚴' },
+  strength_mobility: { label: 'Strength & Mobility Coach', emoji: '💪' },
+  general_fitness:   { label: 'General Fitness Coach',    emoji: '⚡' },
+  comeback:          { label: 'Comeback Coach',           emoji: '🌱' },
+};
+
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const queryClient = useQueryClient(); // Initialize useQueryClient
+  const queryClient = useQueryClient();
+  const { userProfile } = useAuth();
+
+  const fitnessMode = (userProfile?.fitness_mode ?? 'performance') as FitnessMode;
+  const coachSpecialization = userProfile?.coach_specialization as CoachSpecialization | undefined;
+  const isReEngager = fitnessMode === 're_engager';
 
   // State defined by hook
   const {
@@ -237,6 +251,7 @@ export const DashboardPage: React.FC = () => {
             </h2>
             <p className="text-gray-600 mb-4">{error}</p>
             <button
+              type="button"
               onClick={() => window.location.reload()}
               className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-md transition-colors"
             >
@@ -333,6 +348,7 @@ export const DashboardPage: React.FC = () => {
                   </Button>
 
                   <button
+                    type="button"
                     onClick={() => navigate(`?demo=true`)}
                     className="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
                   >
@@ -391,6 +407,7 @@ export const DashboardPage: React.FC = () => {
               <span className="font-medium">You are viewing sample data. Connect Strava for real insights.</span>
             </div>
             <button
+              type="button"
               onClick={() => navigate(ROUTES.SETTINGS)}
               className="px-4 py-1.5 bg-white text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-50 transition-colors"
             >
@@ -402,6 +419,112 @@ export const DashboardPage: React.FC = () => {
       <NetworkErrorBanner />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
+        {/* Coach specialization badge */}
+        {coachSpecialization && COACH_BADGE[coachSpecialization] && (
+          <div className="mb-4 flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300 text-xs font-medium">
+              <span>{COACH_BADGE[coachSpecialization].emoji}</span>
+              {COACH_BADGE[coachSpecialization].label}
+            </span>
+          </div>
+        )}
+
+        {/* ── RE-ENGAGER LAYOUT ── */}
+        {isReEngager ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Main column */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Streak front-and-center */}
+              <StreakWidget
+                streak={userStreak}
+                isRestDay={(() => {
+                  if (!nextWorkout) return true;
+                  const todayStr = new Date().toLocaleDateString('en-CA');
+                  const workoutDateStr = nextWorkout.scheduledDate.toISOString().split('T')[0];
+                  if (workoutDateStr !== todayStr) return true;
+                  return nextWorkout.intensity === 'recovery' || nextWorkout.type === 'rest';
+                })()}
+                onStreakUpdate={() => queryClient.invalidateQueries({ queryKey: ['dashboard-data'] })}
+                userId={currentUserId || 'demo'}
+              />
+
+              {/* Today's workout */}
+              <SmartWorkoutPreview
+                nextWorkout={nextWorkout}
+                dailyMetrics={dailyMetric}
+                onWorkoutGenerated={() => refreshNextWorkout()}
+                onViewDetails={setSelectedWorkout}
+                onOpenPicker={handleOpenPicker}
+              />
+              {nextWorkout && (
+                <WorkoutAdjustmentChips
+                  workout={nextWorkout}
+                  onWorkoutUpdated={refreshNextWorkout}
+                />
+              )}
+
+              {/* Gentle weekly summary */}
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+                <h3 className="text-slate-200 font-semibold mb-3">This week</h3>
+                {weeklyStats ? (
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                      <p className="text-2xl font-bold text-orange-400">{weeklyStats.activityCount}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">sessions</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-orange-400">
+                        {Math.round((weeklyStats.totalTime / 60))}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-0.5">minutes</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-orange-400">
+                        {(weeklyStats.totalDistance / 1000).toFixed(1)}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-0.5">km</p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-slate-500 text-sm">No activities logged yet this week.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Right rail — recent activities only */}
+            <div className="lg:col-span-1 space-y-4">
+              <div className="sticky top-4 space-y-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-lg font-semibold text-slate-200">Recent Activities</h2>
+                  <span className="text-sm text-slate-500">{displayedActivities.length} / {activities.length}</span>
+                </div>
+                {activities.length === 0 ? (
+                  <div className="bg-slate-900 rounded-lg border border-slate-800 p-6 text-center">
+                    <div className="text-4xl mb-3">🏃</div>
+                    <p className="text-slate-400 text-sm">No activities yet — log your first session!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {displayedActivities.map((activity: StravaActivity) => (
+                      <ActivityCard key={activity.id} activity={activity} onClick={() => handleActivityClick(activity)} />
+                    ))}
+                    {activities.length > INITIAL_ACTIVITIES_COUNT && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllActivities(!showAllActivities)}
+                        className="w-full flex items-center justify-center px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-400 hover:border-slate-500 transition-colors"
+                      >
+                        {showAllActivities ? <><ChevronUp className="w-4 h-4 mr-2" />Show Less</> : <><ChevronDown className="w-4 h-4 mr-2" />Show All ({activities.length})</>}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+
+        /* ── PERFORMANCE LAYOUT (existing) ── */
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Stage (Left/Top) */}
           <div className="lg:col-span-2 space-y-6">
@@ -512,6 +635,7 @@ export const DashboardPage: React.FC = () => {
                   {activities.length > INITIAL_ACTIVITIES_COUNT && (
                     <div className="text-center pt-2">
                       <button
+                        type="button"
                         onClick={() => setShowAllActivities(!showAllActivities)}
                         className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-700 font-medium hover:bg-gray-50 transition-colors shadow-sm w-full justify-center"
                       >
@@ -534,6 +658,7 @@ export const DashboardPage: React.FC = () => {
             </div>
           </div>
         </div>
+        )} {/* end isReEngager ternary */}
 
         {/* Activity Detail Modal */}
         {selectedActivity && (

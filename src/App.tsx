@@ -17,6 +17,7 @@ import { OuraCallback } from './components/auth/OuraCallback';
 import { DirectOuraAuth } from './components/auth/DirectOuraAuth';
 import { DirectStravaAuth } from './components/auth/DirectStravaAuth';
 import PrivacyPage from './pages/PrivacyPage';
+import { ConversationalOnboarding } from './components/onboarding/ConversationalOnboarding';
 import { ROUTES } from './utils/constants';
 import { PostHogPageView } from './components/common/PostHogPageView';
 
@@ -39,6 +40,16 @@ function App() {
             <Route path="/auth/strava/direct" element={<DirectStravaAuth />} />
             <Route path="/auth/oura/callback" element={<OuraCallback />} />
             <Route path="/auth/oura/direct" element={<DirectOuraAuth />} />
+
+            {/* Onboarding */}
+            <Route
+              path="/onboarding"
+              element={
+                <ProtectedRoute>
+                  <ConversationalOnboarding />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Protected routes */}
             <Route

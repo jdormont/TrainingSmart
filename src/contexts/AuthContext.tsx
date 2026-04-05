@@ -15,6 +15,11 @@ interface UserProfile {
   weekly_hours?: number;
   coach_persona?: string;
   ingest_key?: string;
+  // Conversational onboarding (Phase 1)
+  primary_goal?: string;
+  conversational_onboarding_completed: boolean;
+  coach_specialization?: string;
+  fitness_mode?: string;
   created_at: string;
   updated_at: string;
 }
@@ -24,6 +29,7 @@ interface AuthContextType {
   userProfile: UserProfile | null;
   loading: boolean;
   signOut: () => Promise<void>;
+  reloadProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -109,11 +115,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     analytics.reset();
   };
 
+  const reloadProfile = async () => {
+    if (user) await loadUserProfile(user.id);
+  };
+
   const value = {
     user,
     userProfile,
     loading,
     signOut,
+    reloadProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

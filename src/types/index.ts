@@ -1,5 +1,26 @@
 // Core application types
 
+// Multi-modal expansion types (Phase 1)
+export type CoachSpecialization = 'endurance' | 'strength_mobility' | 'general_fitness' | 'comeback';
+export type FitnessMode = 'performance' | 're_engager';
+export type FitnessLevel = 'beginner' | 'returning' | 'intermediate' | 'advanced';
+export type ActivityType = 'run' | 'bike' | 'swim' | 'strength' | 'rest' | 'yoga' | 'hiking';
+
+export interface ActivityMixItem {
+  type: ActivityType;
+  priority: number; // 1 = highest priority
+}
+
+export interface OnboardingProfile {
+  primary_goal: string;
+  activity_mix: ActivityMixItem[];
+  weekly_availability_days: number;
+  weekly_availability_duration: number; // minutes
+  fitness_level: FitnessLevel;
+  coach_specialization: CoachSpecialization;
+  fitness_mode: FitnessMode;
+}
+
 export interface StravaAthlete {
   id: number;
   username: string;
@@ -154,7 +175,7 @@ export interface TrainingPlan {
 export interface Workout {
   id: string;
   name: string;
-  type: 'run' | 'bike' | 'swim' | 'strength' | 'rest';
+  type: ActivityType;
   description: string;
   duration: number; // minutes
   distance?: number; // meters
@@ -323,6 +344,20 @@ export interface UserProfile {
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   is_admin: boolean;
   ingest_key?: string;
+  // Legacy onboarding wizard fields
+  training_goal?: string;
+  weekly_hours?: number;
+  coach_persona?: string;
+  // Conversational onboarding fields (Phase 1)
+  primary_goal?: string;
+  activity_mix?: ActivityMixItem[];
+  weekly_availability_days?: number;
+  weekly_availability_duration?: number;
+  fitness_level?: FitnessLevel;
+  coach_specialization?: CoachSpecialization;
+  fitness_mode?: FitnessMode;
+  conversational_onboarding_completed: boolean;
+  conversational_onboarding_completed_at?: string;
   created_at: string;
   updated_at: string;
 }
