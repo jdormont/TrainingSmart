@@ -33,8 +33,24 @@ type AiWorkout = Partial<Workout> & { dayOfWeek?: number; week?: number; phase?:
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { usePlanData } from '../hooks/usePlanData';
 import { PlansSkeleton } from '../components/skeletons/PlansSkeleton';
+import { useAuth } from '../contexts/AuthContext';
+import type { ActivityMixItem } from '../types';
+
+const ACTIVITY_DISPLAY: Record<string, string> = {
+  bike: 'Cycling', run: 'Running', strength: 'Strength', yoga: 'Yoga', hiking: 'Hiking', swim: 'Swimming',
+};
+const PRIORITY_LABEL: Record<number, string> = { 1: 'primary', 2: 'secondary', 3: 'complementary' };
+const PRIORITY_COLOR: Record<number, string> = {
+  1: 'bg-orange-500/10 border-orange-500/30 text-orange-300',
+  2: 'bg-slate-700/50 border-slate-600 text-slate-300',
+  3: 'bg-slate-800/50 border-slate-700 text-slate-400',
+};
 
 export const PlansPage: React.FC = () => {
+  const { userProfile } = useAuth();
+  const isReEngager = userProfile?.fitness_mode === 're_engager';
+  const activityMix: ActivityMixItem[] = (userProfile?.activity_mix as ActivityMixItem[] | undefined) ?? [];
+
   const [athlete, setAthlete] = useState<StravaAthlete | null>(null);
   const [activities, setActivities] = useState<StravaActivity[]>([]);
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStats | null>(null);
@@ -233,17 +249,27 @@ export const PlansPage: React.FC = () => {
 
     const handleGeneratePlan = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!athlete || !goal.trim() || !eventDate) return;
+    if (!athlete || !goal.trim()) return;
 
-    // Validate Date (Must be >= 4 weeks)
-    const start = new Date();
-    const target = new Date(eventDate);
-    const diffTime = target.getTime() - start.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays < 28) {
+    // Re-engager: auto-set 8 weeks; performance: require explicit date
+    const resolvedEventDate = isReEngager
+      ? (eventDate || new Date(Date.now() + 56 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
+      : eventDate;
+
+    if (!resolvedEventDate) {
+      setError("Please select a target event date.");
+      return;
+    }
+
+    // Validate Date (Must be >= 4 weeks) — skip for re-engager auto-date
+    if (!isReEngager) {
+      const start = new Date();
+      const target = new Date(resolvedEventDate);
+      const diffDays = Math.ceil((target.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays < 28) {
         setError("Event date must be at least 4 weeks in the future to allow for a proper training cycle.");
         return;
+      }
     }
 
     setGenerating(true);
@@ -274,25 +300,36 @@ export const PlansPage: React.FC = () => {
           ftp
       );
 
+      // For re-engager, auto-set eventDate to 8 weeks if not provided
+      const resolvedEventDate = eventDate || new Date(Date.now() + 56 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
       const trainingContext = {
         athlete,
         recentActivities: cyclingActivities,
         stats: undefined,
         weeklyVolume: {
-          distance: cyclingActivities.length > 0 
+          distance: cyclingActivities.length > 0
             ? (cyclingActivities.reduce((acc: number, curr: StravaActivity) => acc + curr.distance, 0) / weeksSpan)
             : 0,
-          time: cyclingActivities.length > 0 
+          time: cyclingActivities.length > 0
             ? (cyclingActivities.reduce((acc: number, curr: StravaActivity) => acc + curr.moving_time, 0) / weeksSpan)
             : 0,
           activities: Math.round(cyclingActivities.length / weeksSpan)
-        }
+        },
+        userProfile: userProfile ? {
+          training_goal: userProfile.training_goal,
+          coach_persona: userProfile.coach_persona,
+          weekly_hours: userProfile.weekly_hours,
+          coach_specialization: userProfile.coach_specialization,
+          fitness_mode: userProfile.fitness_mode,
+          activity_mix: activityMix.length > 0 ? activityMix : undefined,
+        } : undefined,
       };
 
       const planDescription = `
 Goal: ${goal}
-Type: ${goalType}
-Target Event: ${eventDate}
+Type: ${isReEngager ? 'fitness' : goalType}
+Target: ${resolvedEventDate}
 Weekly Time Available: ${weeklyHours}
 Daily Schedule Availability:
 ${Object.entries(dailyAvailability).map(([day, time]) => `- ${day}: ${time}`).join('\n')}
@@ -303,17 +340,15 @@ Additional Preferences: ${preferences || 'None'}
       const { description, workouts: aiWorkouts, reasoning } = await openaiService.generateTrainingPlan(
         trainingContext,
         goal,
-        eventDate, // Pass event date
-        new Date().toISOString(), // Pass start date
-        riderProfile, // Pass calculated profile
+        resolvedEventDate,
+        new Date().toISOString(),
+        riderProfile,
         planDescription,
-        dailyAvailability // Pass structured availability
+        dailyAvailability
       );
 
-
-
-      const planStartDate = startOfWeek(new Date(), { weekStartsOn: 1 }); // Always start on Monday
-      const planEndDate = new Date(eventDate);
+      const planStartDate = startOfWeek(new Date(), { weekStartsOn: 1 });
+      const planEndDate = new Date(resolvedEventDate);
 
       const structuredWorkouts: Omit<Workout, 'id'>[] = aiWorkouts.map((w: AiWorkout, index: number) => {
         // Use explicit week if available (1-based to 0-based), otherwise fallback to index math
@@ -330,10 +365,11 @@ Additional Preferences: ${preferences || 'None'}
           duration: w.duration || 60,
           distance: w.distance ? w.distance * 1609.34 : undefined,
           intensity: w.intensity || 'moderate',
-          phase: w.phase || 'Build', // New field
+          phase: w.phase || 'Build',
           scheduledDate: workoutDate,
           completed: false,
-          status: 'planned'
+          status: 'planned',
+          activity_metadata: (w as any).activity_metadata ?? undefined,
         };
       });
 
@@ -861,12 +897,37 @@ Additional Preferences: ${preferences || 'None'}
         {/* Plan Generation Form */}
         {showForm && (
           <div className="bg-slate-900 rounded-lg shadow-sm border border-slate-800 p-4 md:p-6 mb-8">
-            <h3 className="text-lg font-semibold text-slate-50 mb-4">
-              Generate New Cycling Plan
+            <h3 className="text-lg font-semibold text-slate-50 mb-1">
+              {isReEngager ? 'Build Your Consistency Plan' : 'Generate New Training Plan'}
             </h3>
+            <p className="text-slate-400 text-sm mb-5">
+              {isReEngager
+                ? 'A gentle, realistic plan built around your availability — designed to build momentum, not pressure.'
+                : 'AI-generated plan based on your Strava data and activity mix.'}
+            </p>
+
+            {/* Activity Mix Card */}
+            {activityMix.length > 0 && (
+              <div className="mb-5 p-4 rounded-xl border border-slate-700 bg-slate-800/50">
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">Your Activity Mix</p>
+                <div className="flex flex-wrap gap-2">
+                  {[...activityMix].sort((a, b) => a.priority - b.priority).map(item => (
+                    <span
+                      key={item.type}
+                      className={`px-3 py-1 rounded-full text-xs font-medium border ${PRIORITY_COLOR[item.priority] ?? PRIORITY_COLOR[3]}`}
+                    >
+                      {ACTIVITY_DISPLAY[item.type] ?? item.type}
+                      <span className="ml-1 opacity-60">· {PRIORITY_LABEL[item.priority] ?? 'other'}</span>
+                    </span>
+                  ))}
+                </div>
+                <p className="text-xs text-slate-500 mt-2">Your plan will reflect these priorities. Adjust anytime in Settings → My Coach.</p>
+              </div>
+            )}
 
             <form onSubmit={handleGeneratePlan} className="space-y-6">
-              {/* Goal Type */}
+              {/* Goal Type — hidden for re-engager */}
+              {!isReEngager && (
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">
                   Goal Type
@@ -887,41 +948,46 @@ Additional Preferences: ${preferences || 'None'}
                   ))}
                 </div>
               </div>
+              )}
 
               {/* Specific Goal */}
               <div>
                 <label htmlFor="goal" className="block text-sm font-medium text-slate-300 mb-2">
-                  Specific Goal
+                  {isReEngager ? 'What do you want to work toward?' : 'Specific Goal'}
                 </label>
                 <input
                   type="text"
                   id="goal"
                   value={goal}
                   onChange={(e) => setGoal(e.target.value)}
-                  placeholder="e.g., Complete a century ride, Improve FTP by 20 watts, Ride 125mi/week consistently"
+                  placeholder={isReEngager
+                    ? "e.g., Build a consistent workout habit, Feel stronger and more energetic, Get back into running"
+                    : "e.g., Complete a century ride, Improve FTP by 20 watts, Ride 125mi/week consistently"}
                   className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-slate-50 placeholder-slate-500"
                   required
                 />
               </div>
 
               {/* Timeframe and Weekly Hours */}
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className={`grid gap-4 ${isReEngager ? '' : 'md:grid-cols-2'}`}>
+                {!isReEngager && (
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-2">
                     Target Event Date
                   </label>
                   <input
                     type="date"
+                    title="Target event date"
                     value={eventDate}
                     onChange={(e) => setEventDate(e.target.value)}
-                    min={new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]} // Min 4 weeks
+                    min={new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
                     className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-50"
-                    required
                   />
                   <p className="text-xs text-slate-500 mt-1">
                     Must be at least 4 weeks from today for periodization.
                   </p>
                 </div>
+                )}
                 <div>
                   <label htmlFor="weekly_hours" className="block text-sm font-medium text-slate-300 mb-2">
                     Weekly Time Available
@@ -965,7 +1031,8 @@ Additional Preferences: ${preferences || 'None'}
                 </div>
               </div>
 
-              {/* Focus Areas */}
+              {/* Focus Areas — hidden for re-engager */}
+              {!isReEngager && (
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">
                   Focus Areas (select all that apply)
@@ -986,6 +1053,7 @@ Additional Preferences: ${preferences || 'None'}
                   ))}
                 </div>
               </div>
+              )}
 
               {/* Additional Preferences */}
               <div>

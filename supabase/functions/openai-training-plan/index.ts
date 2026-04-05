@@ -22,11 +22,16 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+interface ActivityMixItem {
+  type: string;
+  priority: number; // 1 = highest
+}
+
 interface TrainingPlanRequest {
   athleteName: string;
   goal: string;
-  eventDate: string; // ISO format
-  startDate: string; // ISO format
+  eventDate: string;
+  startDate: string;
   riderProfile: {
     stamina: string;
     discipline: string;
@@ -40,9 +45,12 @@ interface TrainingPlanRequest {
     distance: number;
     average_speed: number;
   }>;
-  // Phase 1 — coach specialization and fitness mode (optional, backward-compatible)
+  dailyAvailability?: Record<string, string>;
+  // Phase 1 — coach context (optional, backward-compatible)
   coach_specialization?: 'endurance' | 'strength_mobility' | 'general_fitness' | 'comeback';
   fitness_mode?: 'performance' | 're_engager';
+  // Phase 2 — activity mix from onboarding profile
+  activity_mix?: ActivityMixItem[];
 }
 
 interface PlanReasoning {
@@ -68,12 +76,15 @@ interface PlanReasoning {
   }>;
 }
 
+const PRIORITY_LABELS: Record<number, string> = { 1: 'high', 2: 'medium', 3: 'low' };
+const ACTIVITY_DISPLAY: Record<string, string> = {
+  bike: 'Cycling', run: 'Running', strength: 'Strength Training',
+  yoga: 'Yoga & Mobility', hiking: 'Hiking', swim: 'Swimming',
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
@@ -94,101 +105,138 @@ Deno.serve(async (req: Request) => {
       dailyAvailability,
       coach_specialization,
       fitness_mode,
-    }: TrainingPlanRequest & { dailyAvailability?: Record<string, string> } = await req.json();
+      activity_mix,
+    }: TrainingPlanRequest = await req.json();
 
     const avgDistance = recentActivities.length > 0
       ? Math.round(recentActivities.reduce((sum, a) => sum + a.distance, 0) / recentActivities.length / 1000)
       : 0;
 
-    // Calculate Average Speed (Weighted by Distance/Time)
     let totalDist = 0;
     let totalTime = 0;
     recentActivities.forEach(a => {
-        totalDist += a.distance;
-        if (a.average_speed > 0) {
-            totalTime += a.distance / a.average_speed;
-        }
+      totalDist += a.distance;
+      if (a.average_speed > 0) totalTime += a.distance / a.average_speed;
     });
+    const avgSpeed = totalTime > 0 ? Math.round((totalDist / totalTime) * 3.6) : 0;
 
-    const avgSpeed = totalTime > 0 
-        ? Math.round((totalDist / totalTime) * 3.6) 
-        : 0;
-
-    // Calculate duration in weeks
     const start = new Date(startDate);
     const event = new Date(eventDate);
-    const diffTime = Math.abs(event.getTime() - start.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const diffDays = Math.ceil(Math.abs(event.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
     const weeksAvailable = Math.max(1, Math.floor(diffDays / 7));
 
-    // Force strict adherence to weeksAvailable in prompt
     const durationConstraint = `Total Duration: EXACTLY ${weeksAvailable} weeks. Do not generate more or less.`;
 
-    // Phase Calculation Logic
+    // Periodization
     let periodizationStructure = "";
     if (weeksAvailable < 4) {
-      periodizationStructure = "Ride safely within limits volume-wise. Focus on freshness. Final week must be Taper.";
+      periodizationStructure = "Focus on freshness and sustainable effort. Final week must be Taper.";
     } else if (weeksAvailable <= 8) {
-      // 4-8 weeks: Build -> Peak -> Taper
-      // If 8 weeks: 4 Build, 3 Peak, 1 Taper
       const taperWeeks = 1;
-      const peakWeeks = Math.min(3, Math.max(1, weeksAvailable - taperWeeks - 2)); // Ensure at least 2 weeks build
+      const peakWeeks = Math.min(3, Math.max(1, weeksAvailable - taperWeeks - 2));
       const buildWeeks = weeksAvailable - taperWeeks - peakWeeks;
       periodizationStructure = `Weeks 1-${buildWeeks}: Build. Weeks ${buildWeeks + 1}-${buildWeeks + peakWeeks}: Peak. Week ${weeksAvailable}: Taper.`;
     } else {
-      // 9+ weeks (Treating 12+ as full cycle, 9-11 as compressed)
-      // If 12+ weeks: X Base, Y Build, 3 Peak, 2 Taper
       const taperWeeks = weeksAvailable >= 12 ? 2 : 1;
       const peakWeeks = 3;
       const remainingWeeks = weeksAvailable - taperWeeks - peakWeeks;
-      const buildWeeks = Math.floor(remainingWeeks / 2); // Split remaining between Base/Build
+      const buildWeeks = Math.floor(remainingWeeks / 2);
       const baseWeeks = remainingWeeks - buildWeeks;
-
       periodizationStructure = `Weeks 1-${baseWeeks}: Base. Weeks ${baseWeeks + 1}-${baseWeeks + buildWeeks}: Build. Weeks ${baseWeeks + buildWeeks + 1}-${weeksAvailable - taperWeeks}: Peak. Weeks ${weeksAvailable - taperWeeks + 1}-${weeksAvailable}: Taper.`;
     }
-    
+
     const numWorkouts = weeksAvailable * 7;
 
-    // Build Daily Schedule Context
+    // Daily schedule constraints
     let scheduleConstraints = "";
     if (dailyAvailability) {
-        scheduleConstraints = Object.entries(dailyAvailability)
-            .map(([day, time]) => `- ${day}: ${time} max duration`)
-            .join("\n");
+      scheduleConstraints = Object.entries(dailyAvailability)
+        .map(([day, time]) => `- ${day}: ${time} max duration`)
+        .join("\n");
     }
 
-    // Convert to Imperial for Prompt
+    // Imperial conversions
     const weeklyVolMiles = ((weeklyVolume.distance / 1000) * 0.621371).toFixed(1);
     const avgDistMiles = Math.round(avgDistance * 0.621371);
     const avgSpeedMph = Math.round(avgSpeed * 0.621371);
 
-    // Build coach specialization context block
+    // ── Activity Mix Context ──────────────────────────────────────────────────
+    let activityMixSection = "";
+    if (activity_mix && activity_mix.length > 0) {
+      const sorted = [...activity_mix].sort((a, b) => a.priority - b.priority);
+      const lines = sorted.map(item => {
+        const label = ACTIVITY_DISPLAY[item.type] ?? item.type;
+        const prio = PRIORITY_LABELS[item.priority] ?? 'low';
+        return `- ${label}: ${prio} priority`;
+      });
+      activityMixSection = `\nATHLETE ACTIVITY PRIORITIES:\n${lines.join("\n")}`;
+
+      // Derive primary activities for type guidance
+      const highPriority = sorted.filter(i => i.priority === 1).map(i => ACTIVITY_DISPLAY[i.type] ?? i.type);
+      const medPriority = sorted.filter(i => i.priority === 2).map(i => ACTIVITY_DISPLAY[i.type] ?? i.type);
+      if (highPriority.length > 0) {
+        activityMixSection += `\n\nACTIVITY TYPE GUIDANCE: Majority of workouts should be ${highPriority.join(' and ')}. `;
+        if (medPriority.length > 0) {
+          activityMixSection += `Include ${medPriority.join(' and ')} as complementary sessions (1-2x/week). `;
+        }
+        activityMixSection += `Use the exact workout type values (bike, run, strength, yoga, hiking, swim) in the JSON output.`;
+      }
+    } else {
+      // Default: if no mix provided, default based on coach specialization
+      const defaultMix: Record<string, string> = {
+        endurance: "Prioritize bike and run workouts. Include occasional strength for injury prevention.",
+        strength_mobility: "Prioritize strength and yoga workouts. Include cycling or running as aerobic conditioning.",
+        general_fitness: "Balance bike, run, strength, and yoga sessions across the week.",
+        comeback: "Vary activity types — include easy bike or run, bodyweight strength, and yoga/mobility.",
+      };
+      activityMixSection = `\nACTIVITY TYPE GUIDANCE: ${defaultMix[coach_specialization ?? 'general_fitness'] ?? defaultMix.general_fitness}`;
+    }
+
+    // ── Coach Specialization ─────────────────────────────────────────────────
     const specializationLabels: Record<string, string> = {
-      endurance: 'Endurance Coach — cycling and running focus, aerobic progression, power zones',
-      strength_mobility: 'Strength & Mobility Coach — prioritize strength, yoga, and functional movement; minimize cycling bias',
+      endurance: 'Endurance Coach — cycling/running focus, aerobic progression, power zones',
+      strength_mobility: 'Strength & Mobility Coach — prioritize strength and yoga; cycling/running as conditioning only',
       general_fitness: 'General Fitness Coach — balance all activity types equally',
-      comeback: 'Comeback Coach — consistency first, 2–3 sessions/week max, celebrate showing up over performance',
+      comeback: 'Comeback Coach — consistency first, celebrate every session, warm supportive tone',
     };
     const specializationLine = coach_specialization
       ? `\nCOACH SPECIALIZATION: ${specializationLabels[coach_specialization] ?? coach_specialization}`
       : '';
-    const fitnessModeLine = fitness_mode === 're_engager'
-      ? '\nFITNESS MODE: Re-engager — cap sessions at 2–3/week, 20–45 min each; prioritize consistency and low intensity over volume.'
+
+    // ── Re-Engager Constraints ───────────────────────────────────────────────
+    const isReEngager = fitness_mode === 're_engager';
+    const fitnessModeLine = isReEngager
+      ? `\n\nRE-ENGAGER CONSTRAINTS (STRICT — DO NOT EXCEED):
+- Maximum 3 workouts per week. Never schedule more than 3 sessions in any 7-day window.
+- Maximum 45 minutes per session. Keep each workout short and achievable.
+- Intensity distribution: 80% of sessions must be "easy" or "recovery". Limit "moderate" to 1x/week max. No "hard" in weeks 1-2.
+- Vary activity types across the week to keep sessions engaging (e.g., yoga + bike + strength).
+- Write workout descriptions that celebrate showing up — avoid performance metrics and pressure language.
+- Plan descriptions should feel encouraging and momentum-building, not demanding.`
       : '';
 
-    const prompt = `Based on ${athleteName}'s training data, create a detailed ${weeksAvailable}-week training plan for their goal: "${goal}", ending on ${eventDate}.${specializationLine}${fitnessModeLine}
+    // ── Cross-Activity Recovery Rules ────────────────────────────────────────
+    const recoveryRules = `
+CROSS-ACTIVITY RECOVERY RULES:
+- Do NOT schedule heavy strength the day after a hard bike or run session.
+- Yoga and active recovery sessions may follow any workout type — they aid recovery.
+- Hiking counts as moderate aerobic volume — treat like a moderate run for recovery purposes (allow 1 rest day after a long hike).
+- Allow 48 hours between hard strength sessions targeting the same muscle groups.
+- Swimming is low-impact and can be scheduled on recovery days after hard efforts.`;
+
+    const prompt = `Based on ${athleteName}'s data, create a detailed ${weeksAvailable}-week multi-modal training plan for: "${goal}", ending on ${eventDate}.${specializationLine}${fitnessModeLine}
+${activityMixSection}
 
 ${durationConstraint}
 
-CURRENT FITNESS LEVEL:
-- Recent weekly cycling volume: ${weeklyVolMiles} miles
-- Recent cycling activities: ${recentActivities.length} rides
-- Average ride distance: ${avgDistMiles} miles
-- Average ride speed: ${avgSpeedMph} mph
-- Training consistency: ${recentActivities.length} activities in recent data
-- Rider Profile: Stamina (${riderProfile.stamina}), Discipline (${riderProfile.discipline})
+RECENT TRAINING DATA:
+- Weekly volume (primary sport): ${weeklyVolMiles} miles
+- Recent activities logged: ${recentActivities.length}
+- Average activity distance: ${avgDistMiles} miles
+- Average speed: ${avgSpeedMph} mph
+- Training consistency: ${riderProfile.discipline}, Stamina: ${riderProfile.stamina}
 
-PREFERENCES: ${preferences}
+PREFERENCES: ${preferences || 'None specified'}
 
 PERIODIZATION SCHEDULE:
 ${periodizationStructure}
@@ -196,28 +244,19 @@ ${periodizationStructure}
 WEEKLY SCHEDULE CONSTRAINTS (STRICT):
 ${scheduleConstraints || "No specific day-by-day constraints provided."}
 
-CRITICAL SCHEDULING CONSTRAINTS (HIGHEST PRIORITY):
-1. **Adhere strictly to the WEEKLY SCHEDULE CONSTRAINTS above.**
-   - **STRICT PENALTY:** If a day is marked as "Rest", "0:00", or "Unavailable", YOU MUST NOT schedule a workout (omit it).
-   - **STRICT PENALTY:** If a day has a time limit (e.g., "1 hour"), the workout duration MUST NOT exceed this limit.
-   - Map days correctly: Monday=0, Tuesday=1, etc.
-2. **CONFLICT RESOLUTION (Weekly vs Daily):**
-   - If "Weekly Time Available" is low (e.g. 5-6 hours) but the user has high "Daily Availability" on specific days (e.g. 3-4 hours on Weekend), **YOU MUST UTILIZE THE HIGH AVAILABILITY DAYS for key workouts.**
-   - Do NOT skip a long ride on a high-availability day just to stay under the weekly average. It is better to exceed the weekly preference slightly than to miss a key structural workout (Long Ride).
-   - Reduce duration on other days to compensate if needed.
-3. **Maximum 1 workout per day** unless the user explicitly asks for "double days" or "two-a-days".
-4. **DO NOT generate workout objects for "Rest Days".** If a day is a rest day, simply do not include a workout object for that day in the array.
-5. **For the final week (Week ${weeksAvailable}), ensure volume drops by 50% (Taper).**
-6. **For the starting week, calibrate intensity based on Rider Profile: Stamina ${riderProfile.stamina}, Discipline ${riderProfile.discipline}.**
+${recoveryRules}
+
+CRITICAL SCHEDULING RULES:
+1. Adhere strictly to schedule constraints above — "Rest" days must have NO workout scheduled (omit entirely).
+2. If a day has a time limit (e.g., "45 mins"), workout duration MUST NOT exceed it.
+3. Maximum 1 workout per day.
+4. DO NOT generate workout objects for rest days.
+5. Final week: reduce volume by 50% (Taper).
+6. Starting week: calibrate based on Stamina=${riderProfile.stamina}, Discipline=${riderProfile.discipline}.
 
 RESPONSE FORMAT:
-You must output a JSON object with two root keys: "reasoning" and "workouts".
-CRITICAL: You must generate the "reasoning" object FIRST. This ensures your workout generation is grounded in the strategy you define.
-
-Structure the "reasoning" object to explain your decisions:
-1. Assess the athlete's starting point based on the provided Rider Profile.
-2. Explain the "Macro Cycle" (how you fit the goal into the time remaining).
-3. For each week, define a specific "Focus" and "Rationale".
+Output a JSON object with two root keys: "reasoning" and "workouts".
+Generate "reasoning" FIRST to ground your workout decisions.
 
 SCHEMA:
 {
@@ -241,22 +280,30 @@ SCHEMA:
   },
   "workouts": [
     {
-      "week": number, // 1-based
-      "dayOfWeek": number, // 0=Monday through 6=Sunday
+      "week": number,
+      "dayOfWeek": number,
       "name": "string",
-      "type": "bike" | "run" | "swim" | "strength",
+      "type": "bike" | "run" | "swim" | "strength" | "yoga" | "hiking",
       "phase": "Base" | "Build" | "Peak" | "Taper",
-      "description": "string (with YouTube links)",
-      "duration": number, // minutes
-      "distance": number, // miles (optional)
-      "intensity": "easy" | "moderate" | "hard" | "recovery"
+      "description": "string",
+      "duration": number,
+      "distance": number,
+      "intensity": "easy" | "moderate" | "hard" | "recovery",
+      "activity_metadata": {
+        "sets_reps": "string (strength only, e.g. '3x10 squats')",
+        "yoga_style": "string (yoga only, e.g. 'restorative')",
+        "elevation_gain": number,
+        "terrain": "string (hiking only)",
+        "pace_zone": "string (run only)"
+      }
     }
   ]
 }
 
-Create ${numWorkouts} days of plan (workouts + rest days) with a balanced weekly structure, defaulting to rest days where appropriate by omitting workouts.`;
+Note: activity_metadata is optional — include only the relevant fields for the workout type. Omit activity_metadata entirely for bike and swim workouts.
+Generate ${numWorkouts} days of plan coverage (workouts + implied rest days) by omitting workouts on rest days.`;
 
-    console.log("Generating training plan with OpenAI (JSON Mode)...");
+    console.log(`Generating multi-modal training plan (${weeksAvailable} weeks, specialization: ${coach_specialization ?? 'none'}, mode: ${fitness_mode ?? 'performance'})...`);
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -269,10 +316,14 @@ Create ${numWorkouts} days of plan (workouts + rest days) with a balanced weekly
         messages: [
           {
             role: "system",
-            content: `You are an expert cycling coach creating personalized cycling training plans.
-You output strictly valid JSON.
-Include YouTube video links in workout descriptions using format: [Video Title](https://youtube.com/watch?v=VIDEO_ID) by Creator Name.
-Prioritize: GCN, TrainerRoad, Dylan Johnson, Cam Nicholls.`,
+            content: `You are an expert multi-modal fitness coach creating personalized training plans. You coach across cycling, running, strength training, yoga, and hiking.
+You output strictly valid JSON only.
+Include YouTube video links in workout descriptions using this format: [Video Title](https://youtube.com/watch?v=VIDEO_ID) by Creator Name.
+Prioritize these creators by activity type:
+- Cycling/Running: GCN, TrainerRoad, Dylan Johnson, Cam Nicholls
+- Strength: Athlean-X, Dialed Health
+- Yoga/Mobility: Yoga with Adriene, MoveWithNicole
+- Hiking: REI, Outdoor Boys`,
           },
           { role: "user", content: prompt },
         ],
@@ -292,40 +343,26 @@ Prioritize: GCN, TrainerRoad, Dylan Johnson, Cam Nicholls.`,
     const content = data.choices[0].message.content;
     const finishReason = data.choices[0].finish_reason;
 
-    console.log(`Received response (finish_reason: ${finishReason}), parsing JSON...`);
-
-    if (finishReason === 'length') {
-      console.warn("Response was truncated due to token limit!");
-    }
+    console.log(`Response received (finish_reason: ${finishReason}), parsing...`);
+    if (finishReason === 'length') console.warn("Response truncated due to token limit!");
 
     let result;
     try {
-      // First try parsing directly
       result = JSON.parse(content);
-    } catch (directParseError) {
-      console.log("Direct JSON parse failed, attempting to strip Markdown...");
-      try {
-        // Fallback: Strip markdown code blocks and try again
-        const cleaned = content
-          .replace(/^\s*```json\s*/, "") // Remove start block
-          .replace(/^\s*```\s*/, "")     // Remove start block generic
-          .replace(/\s*```\s*$/, "");    // Remove end block
-
-        result = JSON.parse(cleaned);
-      } catch (cleanedParseError) {
-        console.error("Failed to parse JSON response:", cleanedParseError);
-        console.log("Raw content causing error:", content.substring(0, 500) + "..."); // Log start of content
-        throw new Error(`Failed to parse AI response as JSON. Finish reason: ${finishReason}`);
-      }
+    } catch {
+      const cleaned = content
+        .replace(/^\s*```json\s*/, "")
+        .replace(/^\s*```\s*/, "")
+        .replace(/\s*```\s*$/, "");
+      result = JSON.parse(cleaned);
     }
 
     const { reasoning, workouts } = result;
-    
-    // BACKWARD COMPATIBILITY: Construct a description from the reasoning
+
     let description = "No overview provided.";
     if (reasoning) {
-        const { athleteAssessment, macroCycle } = reasoning as PlanReasoning;
-        description = `**Strategy:** ${macroCycle.strategy}\n\n**Assessment:** ${athleteAssessment.fitnessLevel}\n\n**Phases:**\n${macroCycle.phases.map((p: any) => `- ${p.name} (${p.weeks}): ${p.goal}`).join('\n')}`;
+      const { athleteAssessment, macroCycle } = reasoning as PlanReasoning;
+      description = `**Strategy:** ${macroCycle.strategy}\n\n**Assessment:** ${athleteAssessment.fitnessLevel}\n\n**Phases:**\n${macroCycle.phases.map((p: { name: string; weeks: string; goal: string }) => `- ${p.name} (${p.weeks}): ${p.goal}`).join('\n')}`;
     }
 
     if (!Array.isArray(workouts) || workouts.length === 0) {
@@ -336,27 +373,14 @@ Prioritize: GCN, TrainerRoad, Dylan Johnson, Cam Nicholls.`,
 
     return new Response(
       JSON.stringify({ description, reasoning, workouts }),
-      {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+
   } catch (error) {
     console.error("Error in openai-training-plan function:", error);
-
     return new Response(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : "An unknown error occurred",
-      }),
-      {
-        status: 500,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      }
+      JSON.stringify({ error: error instanceof Error ? error.message : "An unknown error occurred" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

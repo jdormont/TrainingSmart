@@ -15,8 +15,11 @@ interface UserProfile {
   weekly_hours?: number;
   coach_persona?: string;
   ingest_key?: string;
-  // Conversational onboarding (Phase 1)
+  // Conversational onboarding (Phase 1 & 2)
   primary_goal?: string;
+  activity_mix?: Array<{ type: string; priority: number }>;
+  weekly_availability_days?: number;
+  weekly_availability_duration?: number;
   conversational_onboarding_completed: boolean;
   coach_specialization?: string;
   fitness_mode?: string;

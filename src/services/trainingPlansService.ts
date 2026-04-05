@@ -28,6 +28,7 @@ interface DbWorkout {
   completed: boolean;
   status: 'planned' | 'completed' | 'skipped';
   google_calendar_event_id?: string;
+  activity_metadata?: Record<string, unknown> | null;
   plan_id: string;
   user_id: string;
 }
@@ -105,7 +106,8 @@ class TrainingPlansService {
         completed: w.completed, // Keep for backward compatibility view
         // If completed boolean is true, force status to completed. Otherwise use status or default.
         status: w.completed ? 'completed' : (w.status || 'planned'),
-        google_calendar_event_id: w.google_calendar_event_id
+        google_calendar_event_id: w.google_calendar_event_id,
+        activity_metadata: w.activity_metadata ?? undefined,
       }))
     };
 
@@ -246,7 +248,8 @@ class TrainingPlansService {
             distance: w.distance,
             intensity: this.sanitizeIntensity(w.intensity),
             scheduled_date: w.scheduledDate.toISOString().split('T')[0],
-            completed: w.completed
+            completed: w.completed,
+            activity_metadata: (w as any).activity_metadata ?? null,
           }));
 
         console.log(`Inserting ${workoutsToInsert.length} workouts for plan ${newPlan.id}`);
