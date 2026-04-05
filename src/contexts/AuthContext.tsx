@@ -16,6 +16,7 @@ interface UserProfile {
   coach_persona?: string;
   ingest_key?: string;
   // Conversational onboarding (Phase 1)
+  primary_goal?: string;
   conversational_onboarding_completed: boolean;
   coach_specialization?: string;
   fitness_mode?: string;
