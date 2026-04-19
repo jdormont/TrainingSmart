@@ -756,6 +756,79 @@ class TrainingPlansService {
     }
   }
 
+  async addWorkoutsToPlan(
+    planId: string,
+    workouts: Array<{
+      name: string;
+      type: string;
+      description: string;
+      duration: number;
+      distance?: number;
+      intensity: string;
+      scheduledDate: Date;
+      activity_metadata?: Record<string, unknown>;
+    }>
+  ): Promise<Workout[]> {
+    try {
+      const userId = await this.getCurrentUserId();
+
+      const buildPayload = (w: (typeof workouts)[number]) => {
+        const payload: any = {
+          plan_id: planId,
+          user_id: userId || 'local',
+          name: w.name,
+          type: w.type,
+          description: w.description,
+          duration: w.duration,
+          distance: w.distance ?? 0,
+          intensity: w.intensity,
+          completed: false,
+          scheduled_date: w.scheduledDate.toISOString().split('T')[0],
+        };
+        if (w.activity_metadata) payload.activity_metadata = w.activity_metadata;
+        Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
+        return payload;
+      };
+
+      if (!userId) {
+        return workouts.map(w => this.addLocalStorageWorkout(planId, buildPayload(w)));
+      }
+
+      const payloadArray = workouts.map(buildPayload);
+
+      const { data, error } = await supabase
+        .from('workouts')
+        .insert(payloadArray)
+        .select();
+
+      if (error) throw error;
+
+      // Touch plan timestamp directly since we have planId
+      await supabase
+        .from('training_plans')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', planId);
+
+      return (data as any[]).map(row => ({
+        id: row.id,
+        name: row.name,
+        type: row.type as Workout['type'],
+        description: row.description,
+        duration: row.duration,
+        distance: row.distance,
+        intensity: row.intensity as Workout['intensity'],
+        scheduledDate: new Date(row.scheduled_date + 'T00:00:00'),
+        completed: row.completed,
+        status: (row.status || 'planned') as Workout['status'],
+        google_calendar_event_id: row.google_calendar_event_id,
+        activity_metadata: row.activity_metadata,
+      }));
+    } catch (error) {
+      console.error('Error bulk-inserting workouts:', error);
+      throw error;
+    }
+  }
+
   async ensureActivePlan(forceUserId?: string): Promise<string> {
     try {
       const userId = forceUserId || await this.getCurrentUserId();
