@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { addDays, isSameDay, startOfWeek, format } from 'date-fns';
-import { Target, Plus, Trash2, MessageCircle, ChevronDown, Calendar as CalendarIcon, AlertTriangle } from 'lucide-react';
+import { Target, Plus, Trash2, MessageCircle, ChevronDown, Calendar as CalendarIcon, AlertTriangle, Upload, Download } from 'lucide-react';
 
 import { Button } from '../components/common/Button';
 import { stravaCacheService } from '../services/stravaCacheService';
@@ -27,6 +27,8 @@ import { streakService, UserStreak } from '../services/streakService';
 import { supabase } from '../services/supabaseClient';
 import { LightBulbIcon } from '@heroicons/react/24/outline';
 import PlanLogicViewer from '../components/plans/PlanLogicViewer';
+import { WorkoutImportModal } from '../components/plans/WorkoutImportModal';
+import { downloadSchemaTemplate } from '../utils/workoutImporter';
 
 type AiWorkout = Partial<Workout> & { dayOfWeek?: number; week?: number; phase?: string };
 
@@ -78,6 +80,8 @@ export const PlansPage: React.FC = () => {
     workouts: Workout[];
   }>({ isOpen: false, planId: null, weekNumber: 0, workouts: [] });
   const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importModalPlanId, setImportModalPlanId] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -863,6 +867,27 @@ Additional Preferences: ${preferences || 'None'}
               <span>Sync</span>
             </Button>
             <Button
+              onClick={downloadSchemaTemplate}
+              variant="outline"
+              className="flex items-center justify-center space-x-2 w-full md:w-auto border-slate-700 text-slate-300 hover:text-white"
+            >
+              <Download className="w-4 h-4" />
+              <span>Export Schema</span>
+            </Button>
+            {savedPlans.length > 0 && (
+              <Button
+                onClick={() => {
+                  setImportModalPlanId(savedPlans[0].id);
+                  setShowImportModal(true);
+                }}
+                variant="outline"
+                className="flex items-center justify-center space-x-2 w-full md:w-auto border-slate-700 text-slate-300 hover:text-white"
+              >
+                <Upload className="w-4 h-4" />
+                <span>Import Plan</span>
+              </Button>
+            )}
+            <Button
               onClick={() => setShowForm(true)}
               className="flex items-center justify-center space-x-2 w-full md:w-auto"
             >
@@ -1154,6 +1179,16 @@ Additional Preferences: ${preferences || 'None'}
                                    </button>
                                 )}
                                 <button
+                                    onClick={() => {
+                                      setImportModalPlanId(plan.id);
+                                      setShowImportModal(true);
+                                    }}
+                                    className="p-2 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-full transition-colors"
+                                    title="Import Workouts"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                </button>
+                                <button
                                     onClick={() => deletePlan(plan.id)}
                                     className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-full transition-colors"
                                     title="Delete Plan"
@@ -1315,6 +1350,18 @@ Additional Preferences: ${preferences || 'None'}
         onClose={() => setIsLogicViewerOpen(false)}
         reasoning={savedPlans.find(p => p.id === expandedPlan)?.reasoning}
       />
+      {showImportModal && importModalPlanId && (
+        <WorkoutImportModal
+          isOpen={showImportModal}
+          onClose={() => { setShowImportModal(false); setImportModalPlanId(null); }}
+          planId={importModalPlanId}
+          onImportSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['plan-data'] });
+            setShowImportModal(false);
+            setImportModalPlanId(null);
+          }}
+        />
+      )}
     </div>
   );
 };
