@@ -6,6 +6,11 @@ export interface HealthPayload {
     hrv: number;
     respiratory_rate?: number;
     date?: string;
+    active_calories?: number;
+    stand_hours?: number;
+    exercise_minutes?: number;
+    daily_steps?: number;
+    recent_workout?: string;
 }
 
 export interface DailyMetric {
@@ -16,6 +21,10 @@ export interface DailyMetric {
     hrv: number;
     respiratory_rate: number | null;
     recovery_score: number;
+    active_calories?: number | null;
+    stand_hours?: number | null;
+    exercise_minutes?: number | null;
+    daily_steps?: number | null;
 }
 
 /**

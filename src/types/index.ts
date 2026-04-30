@@ -342,6 +342,12 @@ export interface DailyMetric {
   sleep_efficiency?: number;
   temperature_deviation?: number;
   source?: 'manual' | 'oura' | 'apple_health';
+  
+  // Apple Watch Activity Fields
+  active_calories?: number;
+  stand_hours?: number;
+  exercise_minutes?: number;
+  daily_steps?: number;
 
   created_at?: string;
   updated_at?: string;

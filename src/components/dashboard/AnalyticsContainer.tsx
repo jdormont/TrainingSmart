@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { BarChart2, Activity, Heart, Grid } from 'lucide-react';
+import { BarChart2, Activity, Heart, Grid, Flame } from 'lucide-react';
 import { TrainingTrendsChart } from './TrainingTrendsChart';
 import { RiderProfileChart } from './RiderProfileChart';
 import { RecoveryCard } from './RecoveryCard';
 import { ConsistencyHeatmap } from './ConsistencyHeatmap';
+import { DailyActivityCard } from './DailyActivityCard';
 import type { StravaActivity, StravaAthlete, OuraSleepData, OuraReadinessData, DailyMetric } from '../../types';
 import type { HealthMetrics } from '../../services/weeklyInsightService';
 
@@ -19,7 +20,7 @@ interface AnalyticsContainerProps {
     loading?: boolean;
 }
 
-type TabType = 'trends' | 'health' | 'recovery' | 'consistency';
+type TabType = 'trends' | 'activity' | 'health' | 'recovery' | 'consistency';
 
 export const AnalyticsContainer: React.FC<AnalyticsContainerProps> = ({
     activities,
@@ -41,14 +42,16 @@ export const AnalyticsContainer: React.FC<AnalyticsContainerProps> = ({
             setActiveTab('health');
         } else if (location.hash === '#trends') {
             setActiveTab('trends');
+        } else if (location.hash === '#activity') {
+            setActiveTab('activity');
         } else if (location.hash === '#consistency') {
             setActiveTab('consistency');
         }
     }, [location.hash]);
 
-    // Tab Definitions
     const tabs = [
         { id: 'trends', label: 'Training Trends', icon: BarChart2 },
+        { id: 'activity', label: 'Daily Activity', icon: Flame },
         { id: 'health', label: 'Rider Profile', icon: Activity },
         { id: 'recovery', label: 'Recovery', icon: Heart },
         { id: 'consistency', label: 'Consistency', icon: Grid },
@@ -87,6 +90,11 @@ export const AnalyticsContainer: React.FC<AnalyticsContainerProps> = ({
                         healthMetrics={healthMetrics}
                         todayReadiness={readinessData}
                     />
+                </div>
+
+                {/* TAB 1.5: Daily Activity */}
+                <div className={activeTab === 'activity' ? 'block' : 'hidden'}>
+                    <DailyActivityCard dailyMetric={dailyMetric} />
                 </div>
 
                 {/* TAB 2: Health Balance */}

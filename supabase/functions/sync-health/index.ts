@@ -198,6 +198,10 @@ Deno.serve(async (req: Request) => {
       hrv: payload.hrv,
       respiratory_rate: payload.respiratory_rate || null,
       recovery_score,
+      active_calories: payload.active_calories !== undefined ? payload.active_calories : null,
+      stand_hours: payload.stand_hours !== undefined ? payload.stand_hours : null,
+      exercise_minutes: payload.exercise_minutes !== undefined ? payload.exercise_minutes : null,
+      daily_steps: payload.daily_steps !== undefined ? payload.daily_steps : null,
     };
 
     // Upsert (insert or update) the daily metric
@@ -221,6 +225,79 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
       );
+    }
+
+    // Handle recent_workout mapping
+    if (payload.recent_workout) {
+      // Find user's active training plan
+      const { data: activePlan } = await supabase
+        .from('training_plans')
+        .select('id')
+        .eq('user_id', userId)
+        .gte('end_date', date)
+        .lte('start_date', date)
+        .order('start_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (activePlan) {
+        // Map Apple Health workout string to ActivityType
+        const workoutString = payload.recent_workout.toLowerCase();
+        let activityType = 'rest';
+        if (workoutString.includes('run')) activityType = 'run';
+        else if (workoutString.includes('cycl') || workoutString.includes('bike')) activityType = 'bike';
+        else if (workoutString.includes('swim')) activityType = 'swim';
+        else if (workoutString.includes('strength') || workoutString.includes('weight')) activityType = 'strength';
+        else if (workoutString.includes('yoga') || workoutString.includes('flexibility')) activityType = 'yoga';
+        else if (workoutString.includes('hik') || workoutString.includes('walk')) activityType = 'hiking';
+
+        if (activityType !== 'rest') {
+          // Check if we already have a completed workout of this type on this date to prevent duplicates
+          const { data: existingWorkout } = await supabase
+            .from('workouts')
+            .select('id')
+            .eq('plan_id', activePlan.id)
+            .eq('scheduled_date', date)
+            .eq('type', activityType)
+            .eq('completed', true)
+            .limit(1)
+            .maybeSingle();
+
+          if (!existingWorkout) {
+            // See if there's an uncompleted planned workout of this type to update, or insert a new one
+            const { data: plannedWorkout } = await supabase
+              .from('workouts')
+              .select('id')
+              .eq('plan_id', activePlan.id)
+              .eq('scheduled_date', date)
+              .eq('type', activityType)
+              .eq('completed', false)
+              .limit(1)
+              .maybeSingle();
+
+            if (plannedWorkout) {
+              await supabase
+                .from('workouts')
+                .update({ completed: true })
+                .eq('id', plannedWorkout.id);
+            } else {
+              await supabase
+                .from('workouts')
+                .insert({
+                  plan_id: activePlan.id,
+                  user_id: userId,
+                  name: `Apple Watch: ${payload.recent_workout}`,
+                  type: activityType,
+                  description: 'Logged via Apple Watch.',
+                  duration: payload.exercise_minutes || 30, // Fallback if no exercise_minutes
+                  intensity: 'moderate',
+                  scheduled_date: date,
+                  completed: true
+                });
+            }
+          }
+        }
+      }
     }
 
     // Return success response
