@@ -198,10 +198,10 @@ Deno.serve(async (req: Request) => {
       hrv: payload.hrv,
       respiratory_rate: payload.respiratory_rate || null,
       recovery_score,
-      active_calories: payload.active_calories !== undefined ? payload.active_calories : null,
-      stand_hours: payload.stand_hours !== undefined ? payload.stand_hours : null,
-      exercise_minutes: payload.exercise_minutes !== undefined ? payload.exercise_minutes : null,
-      daily_steps: payload.daily_steps !== undefined ? payload.daily_steps : null,
+      active_calories: payload.active_calories !== undefined && payload.active_calories !== null ? Math.round(Number(payload.active_calories)) : null,
+      stand_hours: payload.stand_hours !== undefined && payload.stand_hours !== null ? Math.round(Number(payload.stand_hours)) : null,
+      exercise_minutes: payload.exercise_minutes !== undefined && payload.exercise_minutes !== null ? Math.round(Number(payload.exercise_minutes)) : null,
+      daily_steps: payload.daily_steps !== undefined && payload.daily_steps !== null ? Math.round(Number(payload.daily_steps)) : null,
     };
 
     // Upsert (insert or update) the daily metric
