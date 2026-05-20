@@ -113,6 +113,7 @@ export const TodaysFocusCard: React.FC<TodaysFocusCardProps> = ({
   let suggestion = "20-30 min session of your choice";
   let Icon = Sparkles;
   let iconColor = "text-blue-400";
+  let shouldHide = false;
 
   if (isLowRecovery) {
     headline = "Take it easy today";
@@ -145,12 +146,22 @@ export const TodaysFocusCard: React.FC<TodaysFocusCardProps> = ({
     Icon = Map;
     iconColor = "text-purple-400";
   } else {
-    // Default fallback, but try to nuance with existing data
-    if (recoveryScore) {
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    const workoutDateStr = nextWorkout?.scheduledDate instanceof Date
+      ? nextWorkout.scheduledDate.toISOString().split('T')[0]
+      : nextWorkout?.scheduledDate
+        ? String(nextWorkout.scheduledDate).split('T')[0]
+        : null;
+    if (nextWorkout && workoutDateStr === todayStr) {
+      // SmartWorkoutPreview already covers today's workout context
+      shouldHide = true;
+    } else if (recoveryScore) {
       explanation = `Your recovery is steady at ${recoveryScore}%.`;
       suggestion = "A 20-30 min session of your choice";
     }
   }
+
+  if (shouldHide) return null;
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-4 shadow-sm relative overflow-hidden">
@@ -182,6 +193,7 @@ export const TodaysFocusCard: React.FC<TodaysFocusCardProps> = ({
 
         {!nextWorkout && onOpenPicker && (
             <button
+              type="button"
               onClick={onOpenPicker}
               className="w-full flex items-center justify-center px-4 py-2 mt-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg transition-colors font-medium border border-slate-600 shadow-sm text-sm"
             >

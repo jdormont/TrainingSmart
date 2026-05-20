@@ -25,7 +25,7 @@ export interface WeeklyInsight {
 
 interface WeeklyInsightCache {
   insight: WeeklyInsight;
-  weekOf: string; // ISO string for comparison
+  dateOf: string; // ISO date YYYY-MM-DD — refreshes daily not weekly
 }
 
 interface Correlation {
@@ -78,19 +78,15 @@ interface TrainingPatterns {
 class WeeklyInsightService {
   private readonly CACHE_KEY = 'weekly_insight_cache';
 
-  /*
-  // Check if we have a valid cached insight for this week
   private getCachedInsight(): WeeklyInsight | null {
     try {
       const cached = localStorage.getItem(this.CACHE_KEY);
       if (!cached) return null;
 
       const cache: WeeklyInsightCache = JSON.parse(cached);
-      const currentWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
-      const cacheWeekStart = format(currentWeekStart, 'yyyy-MM-dd');
+      const today = format(new Date(), 'yyyy-MM-dd');
 
-      // Check if cached insight is for current week
-      if (cache.weekOf === cacheWeekStart) {
+      if (cache.dateOf === today) {
         return {
           ...cache.insight,
           generatedAt: new Date(cache.insight.generatedAt),
@@ -100,23 +96,20 @@ class WeeklyInsightService {
 
       return null;
     } catch (error) {
-      console.warn('Failed to load cached weekly insight:', error);
+      console.warn('Failed to load cached insight:', error);
       return null;
     }
   }
-  */
 
-  // Cache the insight for this week
   private cacheInsight(insight: WeeklyInsight): void {
     try {
-      const currentWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
       const cache: WeeklyInsightCache = {
         insight,
-        weekOf: format(currentWeekStart, 'yyyy-MM-dd')
+        dateOf: format(new Date(), 'yyyy-MM-dd')
       };
       localStorage.setItem(this.CACHE_KEY, JSON.stringify(cache));
     } catch (error) {
-      console.warn('Failed to cache weekly insight:', error);
+      console.warn('Failed to cache insight:', error);
     }
   }
 
@@ -391,12 +384,10 @@ Generate a JSON response with:
   ): Promise<WeeklyInsight> {
     console.log('Generating weekly insight...');
 
-    // Skip cache for development/testing of new logic
-    // const cached = this.getCachedInsight();
-    // if (cached) {
-    //   console.log('Using cached weekly insight');
-    //   return cached;
-    // }
+    const cached = this.getCachedInsight();
+    if (cached) {
+      return cached;
+    }
 
     try {
       // Analyze new Bio-Aware metrics
@@ -776,18 +767,29 @@ Generate a JSON response with:
       };
     }
 
-    // Default / Catch-All: Balanced or On Track (The "Status Quo")
-    // We return this matching the Bio-Aware structure regardless of 'Unknown' status
-    // to ensure the new UI always renders.
+    // Default / Catch-All: Balanced or On Track
     const isUnknown = recovery.status === 'Unknown';
     const remainingDays = Math.max(0, 8 - daysAvailable);
 
+    let defaultTitle = 'Training Balanced';
+    let defaultMessage = '';
+    if (recovery.status === 'Fresh') {
+      defaultTitle = 'Ready to Push';
+      defaultMessage = `Readiness at ${recovery.score} with ${pacing.reason} — body is primed. A good day to make your session count.`;
+    } else if (recovery.status === 'Balanced') {
+      defaultTitle = 'Training Balanced';
+      defaultMessage = `${pacing.reason} with readiness holding at ${recovery.score}. Load and recovery are in sync — keep the pattern going.`;
+    } else {
+      defaultTitle = 'Managing the Load';
+      defaultMessage = `${pacing.reason} with readiness at ${recovery.score}. Let recovery guide your effort level today.`;
+    }
+
     return {
       id: isUnknown ? 'building_data' : 'balanced_status',
-      title: isUnknown ? 'Gathering Recovery Data' : 'Training Balanced',
+      title: isUnknown ? 'Gathering Recovery Data' : defaultTitle,
       message: isUnknown
         ? `We're building your recovery baseline. You need ${remainingDays} more day${remainingDays !== 1 ? 's' : ''} of collection to unlock personalized readiness insights.`
-        : `You are ${pacing.status} with your training goals and your body is responding well. Keep up the momentum!`,
+        : defaultMessage,
       type: 'consistency',
       confidence: 80,
       generatedAt: new Date(),

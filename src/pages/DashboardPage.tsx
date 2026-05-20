@@ -485,6 +485,7 @@ export const DashboardPage: React.FC = () => {
                 <WorkoutAdjustmentChips
                   workout={nextWorkout}
                   onWorkoutUpdated={refreshNextWorkout}
+                  recoveryScore={dailyMetric?.recovery_score ?? undefined}
                 />
               )}
 
@@ -615,6 +616,7 @@ export const DashboardPage: React.FC = () => {
                 <WorkoutAdjustmentChips
                   workout={nextWorkout}
                   onWorkoutUpdated={refreshNextWorkout}
+                  recoveryScore={dailyMetric?.recovery_score ?? undefined}
                 />
               )}
             </div>

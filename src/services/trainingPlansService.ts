@@ -358,6 +358,36 @@ class TrainingPlansService {
     }
   }
 
+  async saveWorkoutCheckin(workoutId: string, rpe: number | null, notes: string): Promise<void> {
+    try {
+      const userId = await this.getCurrentUserId();
+      if (!userId) return;
+
+      // Read existing metadata so we don't clobber plan-generated fields
+      const { data } = await supabase
+        .from('workouts')
+        .select('activity_metadata')
+        .eq('id', workoutId)
+        .eq('user_id', userId)
+        .single();
+
+      const existing = (data?.activity_metadata as Record<string, unknown>) || {};
+      const checkin: Record<string, unknown> = {};
+      if (rpe !== null) checkin.rpe = rpe;
+      if (notes.trim()) checkin.checkin_notes = notes.trim();
+
+      const { error } = await supabase
+        .from('workouts')
+        .update({ activity_metadata: { ...existing, ...checkin } })
+        .eq('id', workoutId)
+        .eq('user_id', userId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Failed to save workout check-in:', error);
+    }
+  }
+
   // Helper to update plan timestamp
   private async touchPlanUpdatedAt(workoutId: string) {
     const { data } = await supabase

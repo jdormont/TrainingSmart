@@ -28,6 +28,7 @@ import { supabase } from '../services/supabaseClient';
 import { LightBulbIcon } from '@heroicons/react/24/outline';
 import PlanLogicViewer from '../components/plans/PlanLogicViewer';
 import { WorkoutImportModal } from '../components/plans/WorkoutImportModal';
+import { PostWorkoutCheckinModal } from '../components/plans/PostWorkoutCheckinModal';
 import { downloadSchemaTemplate } from '../utils/workoutImporter';
 
 type AiWorkout = Partial<Workout> & { dayOfWeek?: number; week?: number; phase?: string };
@@ -82,6 +83,7 @@ export const PlansPage: React.FC = () => {
   const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importModalPlanId, setImportModalPlanId] = useState<string | null>(null);
+  const [pendingCheckin, setPendingCheckin] = useState<Workout | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -478,11 +480,14 @@ Additional Preferences: ${preferences || 'None'}
 
     try {
       await trainingPlansService.updateWorkoutStatus(workoutId, newStatus);
-      // Refresh streak after status update
       await refreshStreak();
+
+      if (newStatus === 'completed') {
+        const workout = plan.workouts.find((w: Workout) => w.id === workoutId);
+        if (workout) setPendingCheckin(workout);
+      }
     } catch (err) {
       console.error('Failed to update workout status:', err);
-      // Revert on failure
       queryClient.setQueryData(['plan-data'], previousData);
       setError('Failed to update workout status');
     }
@@ -1360,6 +1365,17 @@ Additional Preferences: ${preferences || 'None'}
             setShowImportModal(false);
             setImportModalPlanId(null);
           }}
+        />
+      )}
+
+      {pendingCheckin && (
+        <PostWorkoutCheckinModal
+          workout={pendingCheckin}
+          onSave={async (rpe, notes) => {
+            await trainingPlansService.saveWorkoutCheckin(pendingCheckin.id, rpe, notes);
+            setPendingCheckin(null);
+          }}
+          onSkip={() => setPendingCheckin(null)}
         />
       )}
     </div>
