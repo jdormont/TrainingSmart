@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { callAI } from "../_shared/ai-provider.ts";
 
 /*
  * STRAVA API COMPLIANCE - AI/ML Usage
@@ -88,11 +89,6 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!openaiApiKey) {
-      throw new Error("OpenAI API key not configured in environment variables");
-    }
-
     const {
       athleteName,
       goal,
@@ -305,18 +301,8 @@ Generate ${numWorkouts} days of plan coverage (workouts + implied rest days) by 
 
     console.log(`Generating multi-modal training plan (${weeksAvailable} weeks, specialization: ${coach_specialization ?? 'none'}, mode: ${fitness_mode ?? 'performance'})...`);
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${openaiApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert multi-modal fitness coach creating personalized training plans. You coach across cycling, running, strength training, yoga, and hiking.
+    const content = await callAI({
+      systemPrompt: `You are an expert multi-modal fitness coach creating personalized training plans. You coach across cycling, running, strength training, yoga, and hiking.
 You output strictly valid JSON only.
 Include YouTube video links in workout descriptions using this format: [Video Title](https://youtube.com/watch?v=VIDEO_ID) by Creator Name.
 Prioritize these creators by activity type:
@@ -324,27 +310,13 @@ Prioritize these creators by activity type:
 - Strength: Athlean-X, Dialed Health
 - Yoga/Mobility: Yoga with Adriene, MoveWithNicole
 - Hiking: REI, Outdoor Boys`,
-          },
-          { role: "user", content: prompt },
-        ],
-        max_tokens: 12000,
-        temperature: 0.7,
-        response_format: { type: "json_object" },
-      }),
+      messages: [{ role: "user", content: prompt }],
+      maxTokens: 12000,
+      temperature: 0.7,
+      jsonMode: true,
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error("OpenAI API error:", errorData);
-      throw new Error(`OpenAI API error: ${errorData.error?.message || response.statusText}`);
-    }
-
-    const data = await response.json();
-    const content = data.choices[0].message.content;
-    const finishReason = data.choices[0].finish_reason;
-
-    console.log(`Response received (finish_reason: ${finishReason}), parsing...`);
-    if (finishReason === 'length') console.warn("Response truncated due to token limit!");
+    console.log(`Response received, parsing...`);
 
     let result;
     try {
