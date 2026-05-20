@@ -871,7 +871,8 @@ export const ChatPage: React.FC = () => {
             sessionName={activeSession.name}
             athlete={athlete}
             recentActivities={activities}
-            stats={undefined} 
+            stats={undefined}
+            userProfile={authProfile}
           />
         )}
       </div>

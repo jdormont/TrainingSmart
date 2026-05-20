@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { callAI } from "../_shared/ai-provider.ts";
 
 /*
  * STRAVA API COMPLIANCE - AI/ML Usage
@@ -48,11 +49,6 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!openaiApiKey) {
-      throw new Error("OpenAI API key not configured in environment variables");
-    }
-
     const {
       existingWorkouts,
       modificationRequest,
@@ -103,40 +99,18 @@ INSTRUCTIONS:
 
 Respond with the complete modified workout array for this week.`;
 
-    console.log("Modifying training plan with OpenAI...");
+    console.log("Modifying training plan...");
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${openaiApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert cycling coach modifying training plans.
+    const content = await callAI({
+      systemPrompt: `You are an expert cycling coach modifying training plans.
 
 CRITICAL: Respond with ONLY a JSON array of modified workouts wrapped in \`\`\`json code block.
 Keep the same structure: name, type, description, duration, distance, intensity, dayOfWeek.
 Maintain training principles while accommodating the athlete's constraints.`,
-          },
-          { role: "user", content: prompt },
-        ],
-        max_tokens: 2000,
-        temperature: 0.7,
-      }),
+      messages: [{ role: "user", content: prompt }],
+      maxTokens: 2000,
+      temperature: 0.7,
     });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error("OpenAI API error:", errorData);
-      throw new Error(`OpenAI API error: ${errorData.error?.message || response.statusText}`);
-    }
-
-    const data = await response.json();
-    const content = data.choices[0].message.content;
 
     console.log("Received response, parsing modified workouts...");
 

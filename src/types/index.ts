@@ -179,6 +179,8 @@ export interface ActivityMetadata {
   elevation_gain?: number; // Hiking: feet
   terrain?: string;        // Hiking: e.g., "trail", "moderate hills"
   pace_zone?: string;      // Running: e.g., "Zone 2 easy pace"
+  rpe?: number;            // Post-workout: 1 (easy) | 3 (as planned) | 5 (tough)
+  checkin_notes?: string;  // Post-workout: free-text note
 }
 
 export interface Workout {

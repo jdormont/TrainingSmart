@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { callAI } from "../_shared/ai-provider.ts";
 
 /*
  * STRAVA API COMPLIANCE - AI/ML Usage
@@ -37,11 +38,6 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!openaiApiKey) {
-      throw new Error("OpenAI API key not configured in environment variables");
-    }
-
     const { messages, systemPrompt, maxTokens = 1000, temperature = 0.7 }: ChatRequest = await req.json();
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -52,38 +48,14 @@ Deno.serve(async (req: Request) => {
       throw new Error("System prompt is required");
     }
 
-    const openAIMessages = [
-      { role: "system", content: systemPrompt },
-      ...messages.map(msg => ({
-        role: msg.role,
-        content: msg.content,
-      })),
-    ];
-
     console.log(`Processing chat request with ${messages.length} messages`);
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${openaiApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: openAIMessages,
-        max_tokens: maxTokens,
-        temperature: temperature,
-      }),
+    const content = await callAI({
+      systemPrompt,
+      messages: messages.map(msg => ({ role: msg.role as "user" | "assistant", content: msg.content })),
+      maxTokens,
+      temperature,
     });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error("OpenAI API error:", errorData);
-      throw new Error(`OpenAI API error: ${errorData.error?.message || response.statusText}`);
-    }
-
-    const data = await response.json();
-    const content = data.choices[0].message.content;
 
     return new Response(
       JSON.stringify({ content }),

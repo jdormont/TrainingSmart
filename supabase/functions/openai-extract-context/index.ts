@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { callAI } from "../_shared/ai-provider.ts";
 
 /*
  * STRAVA API COMPLIANCE - AI/ML Usage
@@ -47,11 +48,6 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
-    }
-
-    const openaiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!openaiKey) {
-      throw new Error("OpenAI API key not configured");
     }
 
     const conversationText = messages
@@ -114,36 +110,13 @@ IMPORTANT:
 - Set isGoalOriented to true if the user has discussed training goals, false otherwise
 - Use actual message IDs from the conversation when possible`;
 
-    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${openaiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: "You are an expert at analyzing training conversations and extracting structured planning information. Respond only with valid JSON."
-          },
-          {
-            role: "user",
-            content: extractionPrompt
-          }
-        ],
-        temperature: 0.3,
-        max_tokens: 1500
-      }),
+    const content = await callAI({
+      systemPrompt: "You are an expert at analyzing training conversations and extracting structured planning information. Respond only with valid JSON.",
+      messages: [{ role: "user", content: extractionPrompt }],
+      temperature: 0.3,
+      maxTokens: 1500,
+      jsonMode: true,
     });
-
-    if (!openaiResponse.ok) {
-      const errorData = await openaiResponse.json();
-      throw new Error(errorData.error?.message || "OpenAI API request failed");
-    }
-
-    const data = await openaiResponse.json();
-    const content = data.choices[0].message.content;
 
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
