@@ -8,7 +8,7 @@ import { STORAGE_KEYS } from '../utils/constants';
 // OpenAI Configuration
 const OPENAI_CONFIG = {
   MODEL: 'gpt-4o-mini', // More cost-effective than gpt-4
-  MAX_TOKENS: 1000,
+  MAX_TOKENS: 2000,
   TEMPERATURE: 0.7,
 } as const;
 
@@ -62,6 +62,223 @@ const RE_ENGAGER_ADDENDUM = `
 FITNESS MODE — RE-ENGAGER:
 This athlete is rebuilding consistency after a break. Plans should default to 2–3 sessions/week at 20–45 minutes each. Prioritize showing up over volume or intensity. Celebrate streaks and small wins. When suggesting next steps, use "Ready to level up?" framing only after sustained consistency — never pressure the athlete.`;
 
+export const formatDate = (dateStr: string): string => {
+  try {
+    if (!dateStr) return 'N/A';
+    const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      const year = parseInt(match[1]);
+      const month = parseInt(match[2]) - 1;
+      const day = parseInt(match[3]);
+      const d = new Date(year, month, day);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return 'N/A';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch {
+    return 'N/A';
+  }
+};
+
+export const filterActivitiesByDays = (activities: StravaActivity[], days: number): StravaActivity[] => {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  return activities.filter(a => {
+    if (!a.start_date_local) return false;
+    const activityDate = new Date(a.start_date_local);
+    return activityDate >= cutoff;
+  });
+};
+
+export interface RollingMetrics {
+  count: number;
+  distanceMi: number;
+  durationHrs: number;
+  avgHr?: number;
+  avgPwr?: number;
+}
+
+export const calculateMetricsForPeriod = (periodActivities: StravaActivity[], showPowerMetrics: boolean): RollingMetrics => {
+  let totalDistanceM = 0;
+  let totalTimeS = 0;
+  let hrSum = 0;
+  let hrCount = 0;
+  let pwrSum = 0;
+  let pwrCount = 0;
+
+  periodActivities.forEach(a => {
+    totalDistanceM += a.distance || 0;
+    totalTimeS += a.moving_time || 0;
+    if (a.average_heartrate) {
+      hrSum += a.average_heartrate;
+      hrCount++;
+    }
+    if (showPowerMetrics && a.average_watts) {
+      pwrSum += a.average_watts;
+      pwrCount++;
+    }
+  });
+
+  return {
+    count: periodActivities.length,
+    distanceMi: totalDistanceM * 0.000621371,
+    durationHrs: totalTimeS / 3600,
+    avgHr: hrCount > 0 ? Math.round(hrSum / hrCount) : undefined,
+    avgPwr: pwrCount > 0 ? Math.round(pwrSum / pwrCount) : undefined,
+  };
+};
+
+export const buildHistoricalSummary = (activities: StravaActivity[], showPowerMetrics: boolean): string => {
+  const acts7 = filterActivitiesByDays(activities, 7);
+  const acts30 = filterActivitiesByDays(activities, 30);
+  const acts90 = filterActivitiesByDays(activities, 90);
+
+  const m7 = calculateMetricsForPeriod(acts7, showPowerMetrics);
+  const m30 = calculateMetricsForPeriod(acts30, showPowerMetrics);
+  const m90 = calculateMetricsForPeriod(acts90, showPowerMetrics);
+
+  let weeksCount = 90 / 7;
+  if (activities.length > 0) {
+    const oldestActivityDate = new Date(activities[activities.length - 1].start_date_local);
+    const daysDiff = Math.ceil((Date.now() - oldestActivityDate.getTime()) / (1000 * 60 * 60 * 24));
+    weeksCount = Math.max(1, Math.min(90, daysDiff) / 7);
+  }
+
+  const weeklyWorkouts = (m90.count / weeksCount).toFixed(1);
+  const weeklyDistance = (m90.distanceMi / weeksCount).toFixed(1);
+  
+  const weeklyDurationHrs = m90.durationHrs / weeksCount;
+  const weeklyDurationH = Math.floor(weeklyDurationHrs);
+  const weeklyDurationM = Math.round((weeklyDurationHrs % 1) * 60);
+
+  const formatPeriodLine = (label: string, m: RollingMetrics): string => {
+    const hrs = Math.floor(m.durationHrs);
+    const mins = Math.round((m.durationHrs % 1) * 60);
+    const durationStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+    
+    let line = `- **${label}**: ${m.count} activities, ${m.distanceMi.toFixed(1)} mi, ${durationStr}`;
+    if (m.avgHr) line += `, Avg HR: ${m.avgHr} bpm`;
+    if (m.avgPwr) line += `, Avg Power: ${m.avgPwr} w`;
+    return line;
+  };
+
+  return `HISTORICAL TRAINING METRICS (90-Day Lookback):
+${formatPeriodLine('Last 7 Days', m7)}
+${formatPeriodLine('Last 30 Days', m30)}
+${formatPeriodLine('Last 90 Days', m90)}
+- **Weekly Averages (Last 90 Days)**: ${weeklyWorkouts} workouts/wk, ${weeklyDistance} mi/wk, ${weeklyDurationH > 0 ? `${weeklyDurationH}h ${weeklyDurationM}m` : `${weeklyDurationM}m`}/wk`;
+};
+
+export const buildMilestonesSummary = (activities: StravaActivity[], showPowerMetrics: boolean): string => {
+  const acts90 = filterActivitiesByDays(activities, 90);
+  if (acts90.length === 0) return '90-DAY MILESTONES & CAPACITY: None logged.';
+
+  let longestDistAct: StravaActivity | null = null;
+  let longestTimeAct: StravaActivity | null = null;
+  let peakAvgPwrAct: StravaActivity | null = null;
+  let peakMaxPwrAct: StravaActivity | null = null;
+  let highestAvgHrAct: StravaActivity | null = null;
+
+  acts90.forEach(a => {
+    if (a.distance && (!longestDistAct || a.distance > longestDistAct.distance)) {
+      longestDistAct = a;
+    }
+    if (a.moving_time && (!longestTimeAct || a.moving_time > longestTimeAct.moving_time)) {
+      longestTimeAct = a;
+    }
+    if (a.average_heartrate && (!highestAvgHrAct || a.average_heartrate > (highestAvgHrAct.average_heartrate || 0))) {
+      highestAvgHrAct = a;
+    }
+    if (showPowerMetrics) {
+      if (a.average_watts && (!peakAvgPwrAct || a.average_watts > (peakAvgPwrAct.average_watts || 0))) {
+        peakAvgPwrAct = a;
+      }
+      if (a.max_watts && (!peakMaxPwrAct || a.max_watts > (peakMaxPwrAct.max_watts || 0))) {
+        peakMaxPwrAct = a;
+      }
+    }
+  });
+
+  const lines: string[] = [];
+
+  if (longestDistAct) {
+    const act: StravaActivity = longestDistAct;
+    const distanceMi = (act.distance * 0.000621371).toFixed(1);
+    const dateStr = formatDate(act.start_date_local);
+    lines.push(`- **Longest Distance**: ${distanceMi} mi (${act.type}) on ${dateStr} - "${act.name}"`);
+  }
+
+  if (longestTimeAct) {
+    const act: StravaActivity = longestTimeAct;
+    const hrs = Math.floor(act.moving_time / 3600);
+    const mins = Math.round((act.moving_time % 3600) / 60);
+    const durationStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+    const dateStr = formatDate(act.start_date_local);
+    lines.push(`- **Longest Duration**: ${durationStr} (${act.type}) on ${dateStr} - "${act.name}"`);
+  }
+
+  if (showPowerMetrics && peakAvgPwrAct) {
+    const act: StravaActivity = peakAvgPwrAct;
+    const dateStr = formatDate(act.start_date_local);
+    lines.push(`- **Peak Average Power**: ${Math.round(act.average_watts || 0)}w on ${dateStr} - "${act.name}"`);
+  }
+
+  if (showPowerMetrics && peakMaxPwrAct) {
+    const act: StravaActivity = peakMaxPwrAct;
+    const dateStr = formatDate(act.start_date_local);
+    lines.push(`- **Peak Max Power**: ${Math.round(act.max_watts || 0)}w on ${dateStr} - "${act.name}"`);
+  }
+
+  if (highestAvgHrAct) {
+    const act: StravaActivity = highestAvgHrAct;
+    const dateStr = formatDate(act.start_date_local);
+    lines.push(`- **Highest Average HR**: ${Math.round(act.average_heartrate || 0)} bpm (${act.type}) on ${dateStr} - "${act.name}"`);
+  }
+
+  if (lines.length === 0) return '';
+
+  return `90-DAY MILESTONES & CAPACITY:\n${lines.join('\n')}`;
+};
+
+export const buildActivitiesTable = (activities: StravaActivity[], showPowerMetrics: boolean): string => {
+  if (activities.length === 0) return 'No recent activities logged.';
+
+  const header = `| Date | Type | Distance | Duration | Elev Gain | Avg HR | Avg Power | Max Power |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |`;
+
+  const rows = activities.slice(0, 20).map(a => {
+    const dateStr = formatDate(a.start_date_local);
+    const typeStr = a.type || 'Other';
+    
+    const distanceMi = a.distance ? (a.distance * 0.000621371).toFixed(1) + ' mi' : '-';
+    
+    const hrs = Math.floor(a.moving_time / 3600);
+    const mins = Math.round((a.moving_time % 3600) / 60);
+    const durationStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+    
+    const elevGain = a.total_elevation_gain > 10 ? `${Math.round(a.total_elevation_gain * 3.28084)} ft` : '-';
+    
+    const avgHr = a.average_heartrate ? `${Math.round(a.average_heartrate)} bpm` : '-';
+    
+    let avgPwr = '-';
+    let maxPwr = '-';
+    if (showPowerMetrics) {
+      if (a.average_watts) {
+        avgPwr = `${Math.round(a.average_watts)}w`;
+        if (a.device_watts === false) avgPwr += ' (est)';
+      }
+      if (a.max_watts) {
+        maxPwr = `${Math.round(a.max_watts)}w`;
+      }
+    }
+
+    return `| ${dateStr} | ${typeStr} | ${distanceMi} | ${durationStr} | ${elevGain} | ${avgHr} | ${avgPwr} | ${maxPwr} |`;
+  });
+
+  return [header, ...rows].join('\n');
+};
+
 class OpenAIService {
   private supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   private supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -73,7 +290,6 @@ class OpenAIService {
   }
 
   private buildSystemPrompt(context: TrainingContext): string {
-    // Build specialization prefix based on coach_specialization and fitness_mode
     const specialization = context.userProfile?.coach_specialization;
     const fitnessMode = context.userProfile?.fitness_mode;
     let specializationBlock = '';
@@ -84,7 +300,6 @@ class OpenAIService {
       specializationBlock += RE_ENGAGER_ADDENDUM;
     }
 
-    // Get custom system prompt from localStorage, or use default
     const customPrompt = localStorage.getItem(STORAGE_KEYS.SYSTEM_PROMPT);
     let basePrompt = customPrompt || `You are TrainingSmart AI, a multi-modal fitness coach with direct access to the user's Strava training data.
 
@@ -131,7 +346,6 @@ RESPONSE GUIDELINES:
 - Use bullet points for workout steps or analysis breakdown.
 - End with a specific question to keep the user engaged (e.g., "Ready to try those intervals tomorrow?" or "How did that session feel?").`;
 
-    // Inject user profile values into the prompt
     if (context.userProfile) {
       const trainingGoal = context.userProfile.primary_goal || context.userProfile.training_goal || 'Not specified';
       const coachPersona = context.userProfile.coach_persona || 'Supportive';
@@ -155,7 +369,6 @@ RESPONSE GUIDELINES:
         .replace('{{USER_SESSION_DURATION}}', '0');
     }
 
-    // Build activity mix section
     const activityMix = context.userProfile?.activity_mix;
     let activityMixSection = '';
     if (activityMix && activityMix.length > 0) {
@@ -172,14 +385,12 @@ RESPONSE GUIDELINES:
       activityMixSection = `\nACTIVITY PRIORITIES: ${mixList}`;
     }
 
-    // Build recovery context string
     let recoveryContext = '';
     const recovery = context.recovery;
 
     if (recovery?.sleepData || recovery?.readinessData || recovery?.dailyMetric) {
       recoveryContext = '\n\nRECOVERY DATA:';
 
-      // 1. Prioritize Oura Data found
       if (recovery.sleepData) {
         const sleep = recovery.sleepData;
         const sleepHours = Math.round((sleep.total_sleep_duration / 3600) * 10) / 10;
@@ -197,7 +408,6 @@ RESPONSE GUIDELINES:
 - Sleep score: ${recovery.sleepScore}/100`;
         }
       }
-      // 2. Fallback to Daily Metric (Apple Health / Manual)
       else if (recovery.dailyMetric) {
         const dm = recovery.dailyMetric;
         const sleepHours = dm.sleep_minutes ? Math.round((dm.sleep_minutes / 60) * 10) / 10 : 0;
@@ -213,7 +423,6 @@ RESPONSE GUIDELINES:
         }
       }
 
-      // Readiness Data (Oura)
       if (recovery.readinessData) {
         const readiness = recovery.readinessData;
         recoveryContext += `
@@ -227,7 +436,6 @@ RESPONSE GUIDELINES:
       recoveryContext += '\n\nIMPORTANT: Use this recovery data to inform your training recommendations. Poor sleep or low readiness should lead to easier training suggestions.';
     }
 
-    // Build Streak Context
     let streakContext = '';
     if (context.streak) {
       streakContext = `
@@ -239,7 +447,6 @@ STREAK CONTEXT:
 `;
     }
 
-    // Only show power metrics for endurance-focused coaches
     const showPowerMetrics = !specialization || specialization === 'endurance';
 
     return `${specializationBlock ? specializationBlock + '\n\n' : ''}${basePrompt}
@@ -252,20 +459,13 @@ ATHLETE PROFILE:
 RECENT TRAINING DATA:
 - This week: ${context.weeklyVolume.activities} activities, ${Math.round(context.weeklyVolume.time / 3600)}h ${Math.round((context.weeklyVolume.time % 3600) / 60)}m total
 ${streakContext}
-- Recent activities:
-  ${context.recentActivities.slice(0, 5).map(a => {
-      const distanceMi = a.distance * 0.000621371;
-      const hasDistance = distanceMi > 0.1;
-      const parts = [hasDistance ? `${a.type}: ${distanceMi.toFixed(1)}mi in ${Math.round(a.moving_time / 60)}min` : `${a.type}: ${Math.round(a.moving_time / 60)}min`];
-      if (a.total_elevation_gain > 10) parts.push(`${Math.round(a.total_elevation_gain * 3.28084)}ft elev`);
-      if (a.average_heartrate) parts.push(`${Math.round(a.average_heartrate)}bpm avg HR`);
-      if (showPowerMetrics) {
-        if (a.average_watts) parts.push(`${Math.round(a.average_watts)}w avg pwr`);
-        if (a.max_watts) parts.push(`${Math.round(a.max_watts)}w max pwr`);
-        if (a.device_watts === false) parts.push(`(estimated pwr)`);
-      }
-      return parts.join(', ');
-    }).join('\n  ')}${recoveryContext}
+
+RECENT DETAILED ACTIVITIES:
+${buildActivitiesTable(context.recentActivities, showPowerMetrics)}
+
+${buildHistoricalSummary(context.recentActivities, showPowerMetrics)}
+
+${buildMilestonesSummary(context.recentActivities, showPowerMetrics)}${recoveryContext}
 
 Use the coaching style and personality defined above, while incorporating this real-time training data into your responses.`;
   }
