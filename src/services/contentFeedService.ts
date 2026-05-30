@@ -5,12 +5,25 @@ import { STORAGE_KEYS } from '../utils/constants';
 
 // YouTube API Configuration
 const YOUTUBE_CONFIG = {
-  BASE_URL: 'https://www.googleapis.com/youtube/v3',
-  API_KEY: import.meta.env.VITE_YOUTUBE_API_KEY,
   MAX_RESULTS: 20,
   CACHE_DURATION: 2 * 60 * 60 * 1000, // 2 hours in milliseconds
   DISPLAY_LIMIT: 8, // Show fewer items to reduce choice overload
 } as const;
+
+// Edge Function proxy URL — the API key lives server-side, never in the bundle.
+const YOUTUBE_PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/youtube-search`;
+
+/** POST to the youtube-search Edge Function instead of calling YouTube directly. */
+async function youtubeProxy(body: Record<string, unknown>): Promise<any> {
+  const response = await axios.post(YOUTUBE_PROXY_URL, body, {
+    headers: {
+      'Content-Type': 'application/json',
+      // Include the anon key so Supabase recognises the request
+      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY ?? '',
+    },
+  });
+  return response.data;
+}
 
 // Top cycling channels to monitor
 const CYCLING_CHANNELS = {
@@ -278,9 +291,8 @@ class ContentFeedService {
       return cachedContent.content;
     }
 
-    if (!YOUTUBE_CONFIG.API_KEY ||
-      YOUTUBE_CONFIG.API_KEY.includes('your_youtube_api_key')) {
-      console.warn('YouTube API key not configured, using mock content');
+    if (!YOUTUBE_PROXY_URL) {
+      console.warn('Supabase URL not configured, using mock content');
       return this.getMockYouTubeContent(userProfile);
     }
 
@@ -298,12 +310,11 @@ class ContentFeedService {
 
       for (const interest of searchQueries) {
         try {
-          // Add "cycling" context to ensure relevance
           const query = interest.toLowerCase().includes('cycling') || interest.toLowerCase().includes('bike')
             ? interest
             : `cycling ${interest}`;
 
-          const items = await this.searchContentByKeywords(query, 6); // Fetch 6 items per interest
+          const items = await this.searchContentByKeywords(query, 6);
           items.forEach(item => contentMap.set(item.id, item));
           totalApiCalls++;
         } catch (err) {
@@ -312,29 +323,21 @@ class ContentFeedService {
       }
 
       // 2. TRENDING/LATEST FROM CHANNELS (Secondary)
-      // Fetch from a subset of top channels to keep user updated
-      const channelsToFetch = Object.entries(CYCLING_CHANNELS).slice(0, 3); // Top 3 channels only
+      const channelsToFetch = Object.entries(CYCLING_CHANNELS).slice(0, 3);
 
       for (const [channelName, channelId] of channelsToFetch) {
         try {
-          const response = await axios.get(`${YOUTUBE_CONFIG.BASE_URL}/search`, {
-            params: {
-              key: YOUTUBE_CONFIG.API_KEY,
-              channelId,
-              part: 'snippet',
-              order: 'date',
-              maxResults: 2, // Just 2 latest items per channel
-              type: 'video',
-              publishedAfter: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString() // Last 2 weeks
-            }
+          const data = await youtubeProxy({
+            op: 'channel',
+            channelId,
+            maxResults: 2,
+            publishedAfter: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
           });
           totalApiCalls++;
 
-          const items = this.mapYouTubeItems(response.data.items, channelName);
+          const items = this.mapYouTubeItems(data.items ?? [], channelName);
           items.forEach(item => {
-            if (!contentMap.has(item.id)) {
-              contentMap.set(item.id, item);
-            }
+            if (!contentMap.has(item.id)) contentMap.set(item.id, item);
           });
         } catch (err) {
           console.warn(`Failed to fetch from channel ${channelName}:`, err);
@@ -360,16 +363,13 @@ class ContentFeedService {
 
       if (videoIdsToFetch.length > 0) {
         try {
-          const statsResponse = await axios.get(`${YOUTUBE_CONFIG.BASE_URL}/videos`, {
-            params: {
-              key: YOUTUBE_CONFIG.API_KEY,
-              id: videoIdsToFetch.join(','),
-              part: 'statistics,contentDetails'
-            }
+          const statsData = await youtubeProxy({
+            op: 'videos',
+            ids: videoIdsToFetch.join(','),
           });
 
           const statsMap = new Map(
-            statsResponse.data.items.map((item: YouTubeApiItem) => [item.id as string, item])
+            (statsData.items ?? []).map((item: YouTubeApiItem) => [item.id as string, item])
           );
 
           // Update content with stats
@@ -409,20 +409,13 @@ class ContentFeedService {
 
   // Helper to search YouTube by keywords
   private async searchContentByKeywords(query: string, maxResults: number): Promise<ContentItem[]> {
-    const response = await axios.get(`${YOUTUBE_CONFIG.BASE_URL}/search`, {
-      params: {
-        key: YOUTUBE_CONFIG.API_KEY,
-        q: query,
-        part: 'snippet',
-        order: 'relevance',
-        maxResults: maxResults,
-        type: 'video',
-        videoDuration: 'medium', // Avoid shorts if possible, or very short videos
-        publishedAfter: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString() // Last 3 months (broader window for niche interests)
-      }
+    const data = await youtubeProxy({
+      op: 'search',
+      q: query,
+      maxResults,
+      publishedAfter: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
     });
-
-    return this.mapYouTubeItems(response.data.items, 'YouTube Search');
+    return this.mapYouTubeItems(data.items ?? [], 'YouTube Search');
   }
 
   // Helper to map API response items to ContentItem[]

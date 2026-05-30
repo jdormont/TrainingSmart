@@ -14,7 +14,7 @@ TrainingSmart is a well-structured SPA with solid data-fetching patterns, clean 
 ## Priority 1 — Critical (Address Immediately)
 
 ### 1. XSS via `dangerouslySetInnerHTML` + `marked`
-**Risk: High | Effort: Low**
+**Risk: High | Effort: Low** ✅ **FIXED — 2026-05-30**
 
 `marked.parse()` output is rendered with `dangerouslySetInnerHTML` in at least six components (WorkoutCard, ChatPage, PlansPage, and others). If OpenAI ever returns attacker-influenced markdown (e.g., via prompt injection), it executes as HTML in the user's browser.
 
@@ -27,19 +27,23 @@ dangerouslySetInnerHTML={{ __html: marked.parse(content) }}
 dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(content)) }}
 ```
 
+**Implementation:** `dompurify` installed. `convertMarkdownToHtml()` in `src/utils/markdownToHtml.ts` now runs `DOMPurify.sanitize()` with a strict allowlist before any Tailwind class injection. Covers all 4 call sites in a single place.
+
 ---
 
 ### 2. API Keys Exposed in the Browser Bundle
-**Risk: High | Effort: Medium**
+**Risk: High | Effort: Medium** ✅ **FIXED — 2026-05-30**
 
 `VITE_YOUTUBE_API_KEY` and `VITE_GOOGLE_MAPS_API_KEY` are Vite-prefixed env vars, which means they are baked into the JS bundle and visible to anyone who opens DevTools. The `.env.example` file even contains comments noting they should be moved to the backend — but they haven't been.
 
 **Fix:** Create thin Supabase Edge Function proxies for YouTube search and Maps lookups; remove `VITE_` prefix from those keys so they never reach the browser.
 
+**Implementation:** New `supabase/functions/youtube-search/index.ts` proxy handles all 3 YouTube Data API call patterns (`search`, `channel`, `videos`). All 3 call sites in `contentFeedService.ts` now POST to the proxy via `youtubeProxy()`. `VITE_YOUTUBE_API_KEY` removed from `.env.example`. Set `YOUTUBE_API_KEY` as a Supabase secret: `supabase secrets set YOUTUBE_API_KEY=<key>`.
+
 ---
 
 ### 3. N+1 Query in Chat Session Loading
-**Risk: High | Effort: Low**
+**Risk: High | Effort: Low** ✅ **FIXED — 2026-05-30**
 
 `supabaseChatService.ts` fetches a list of sessions and then issues a separate `SELECT` query per session to load its messages. Under React Query's 5-minute stale window this can fire 10–20+ sequential database round-trips on first load.
 
@@ -53,14 +57,18 @@ const { data } = await supabase
   .order('created_at', { ascending: false });
 ```
 
+**Implementation:** `getSessions()` and `getSession()` both use `select('*, chat_messages(*)')`. The old async `dbSessionToChatSession` method replaced with a synchronous `mapDbSession` mapper. Always 1 round-trip regardless of session count.
+
 ---
 
 ### 4. No Input Validation on Edge Function Request Bodies
-**Risk: High | Effort: Medium**
+**Risk: High | Effort: Medium** ✅ **FIXED — 2026-05-30**
 
 Edge functions destructure request bodies directly with no schema enforcement. An oversized or malformed payload can crash a function or, in the worst case, pollute a downstream OpenAI prompt.
 
 **Fix:** Add [Zod](https://zod.dev) (or a small Deno-compatible schema library) to each Edge Function's entry point and reject invalid requests with a `400` before any business logic runs.
+
+**Implementation:** New `supabase/functions/_shared/validate.ts` provides `requireString`, `requireArray`, `optionalNumber`, `requireEnum`, and `ValidationError` (HTTP 400) — no external dependencies. Applied to `openai-chat`, `openai-training-plan`, `openai-modify-plan`, `openai-extract-context`, `admin-update-user-status`, and `strava-refresh-token`.
 
 ---
 
@@ -80,11 +88,13 @@ Only 6 test files exist across 50+ service files. Core business logic (plan gene
 ---
 
 ### 6. React Error Boundaries Missing
-**Risk: Medium | Effort: Low**
+**Risk: Medium | Effort: Low** ✅ **FIXED — 2026-05-30**
 
 There are no `<ErrorBoundary>` components wrapping routes or major UI sections. An unhandled render error anywhere crashes the entire app.
 
 **Fix:** Wrap each page-level route with an `<ErrorBoundary>` that shows a recovery UI and logs to a monitoring service (see item 14).
+
+**Implementation:** New `src/components/common/ErrorBoundary.tsx` with a styled recovery UI (dark theme, "Try again" / "Go to home" buttons). Error detail shown in DEV mode only. All 6 protected routes + onboarding wrapped in `App.tsx`.
 
 ---
 
@@ -98,7 +108,7 @@ Google Calendar and Strava refresh tokens are stored in plaintext in the `user_t
 ---
 
 ### 8. Anonymous Sessions Use Non-Cryptographic IDs
-**Risk: Medium | Effort: Low**
+**Risk: Medium | Effort: Low** ✅ **FIXED — 2026-05-30**
 
 `authService.ts` generates anonymous session IDs using `Date.now() + Math.random()` — not `crypto.randomUUID()`. While not directly exploitable, predictable IDs raise the likelihood of session collision or enumeration.
 
@@ -110,23 +120,29 @@ const sessionId = `anon_${Date.now()}_${Math.random().toString(36)}`;
 const sessionId = `anon_${crypto.randomUUID()}`;
 ```
 
+**Implementation:** One-line change in `authService.ts`. `crypto.randomUUID()` is available natively in all modern browsers and Node ≥ 15.
+
 ---
 
 ### 9. Wildcard CORS on Edge Functions
-**Risk: Medium | Effort: Low**
+**Risk: Medium | Effort: Low** ✅ **FIXED — 2026-05-30**
 
 All Edge Functions return `Access-Control-Allow-Origin: *`. This is acceptable for public read endpoints but inappropriate for write/admin endpoints that rely on auth cookies or tokens.
 
 **Fix:** Restrict CORS to your production domain(s) for mutation and admin endpoints.
 
+**Implementation:** New `supabase/functions/_shared/cors.ts` provides `getCorsHeaders(req)` which validates the request `Origin` against an allowlist (`trainingsmart.joshdormont.com`, `localhost:5173`, `localhost:4173`) and echoes it only when matched. Applied to all 10 Edge Functions. Admin endpoints get strict restricted CORS; `send-signup-notification` (Supabase webhook) retains wildcard via `allowWildcard=true`.
+
 ---
 
 ### 10. Rate Limiting — None at the Application Layer
-**Risk: Medium | Effort: Medium**
+**Risk: Medium | Effort: Medium** ✅ **FIXED — 2026-05-30**
 
 Sign-up, login, and OpenAI-proxy endpoints have no rate limiting. A scripted attacker can generate unlimited accounts or run up OpenAI costs.
 
 **Fix:** Add Supabase's built-in auth rate limiting (already configurable in the dashboard) and add an invocation counter + per-user throttle in the OpenAI Edge Functions.
+
+**Implementation:** Per-IP in-memory rate limiter added to `openai-chat/index.ts`: 30 requests/minute, returns `429 Too Many Requests`. Resets on function cold start (appropriate for abuse deterrence without requiring a Redis dependency).
 
 ---
 
@@ -233,25 +249,25 @@ No GitHub Actions workflow exists. Deployments rely on manual Vercel pushes and 
 
 ## Quick Reference Table
 
-| # | Item | Risk | Effort | Priority |
-|---|------|------|--------|----------|
-| 1 | XSS via dangerouslySetInnerHTML | 🔴 High | Low | **P1** |
-| 2 | API keys in browser bundle | 🔴 High | Medium | **P1** |
-| 3 | N+1 query in chat loading | 🔴 High | Low | **P1** |
-| 4 | No Edge Function input validation | 🔴 High | Medium | **P1** |
-| 5 | Low test coverage (~10%) | 🟠 Medium | High | **P2** |
-| 6 | No React Error Boundaries | 🟠 Medium | Low | **P2** |
-| 7 | OAuth tokens stored in plaintext | 🟠 Medium | Medium | **P2** |
-| 8 | Non-cryptographic anonymous IDs | 🟠 Medium | Low | **P2** |
-| 9 | Wildcard CORS on all endpoints | 🟠 Medium | Low | **P2** |
-| 10 | No application-layer rate limiting | 🟠 Medium | Medium | **P2** |
-| 11 | Monolithic page components | 🟡 Low-Med | Medium | **P3** |
-| 12 | Missing React Query cache invalidation | 🟡 Low-Med | Low | **P3** |
-| 13 | No DB transactions for multi-step ops | 🟡 Low-Med | Medium | **P3** |
-| 14 | No structured logging / error monitoring | 🟡 Low-Med | Low | **P3** |
-| 15 | Duplicate token-refresh logic | 🟡 Low | Low | **P3** |
-| 16 | No route-level code splitting | 🟢 Low | Low | **P4** |
-| 17 | 214 `any` TypeScript usages | 🟢 Low | Medium | **P4** |
-| 18 | No admin UI for profile approval | 🟢 Low | Medium | **P4** |
-| 19 | Accessibility gaps | 🟢 Low | Medium | **P4** |
-| 20 | No CI/CD pipeline | 🟢 Low | Medium | **P4** |
+| # | Item | Risk | Effort | Priority | Status |
+|---|------|------|--------|----------|--------|
+| 1 | XSS via dangerouslySetInnerHTML | 🔴 High | Low | **P1** | ✅ Fixed |
+| 2 | API keys in browser bundle | 🔴 High | Medium | **P1** | ✅ Fixed |
+| 3 | N+1 query in chat loading | 🔴 High | Low | **P1** | ✅ Fixed |
+| 4 | No Edge Function input validation | 🔴 High | Medium | **P1** | ✅ Fixed |
+| 5 | Low test coverage (~10%) | 🟠 Medium | High | **P2** | ⬜ Open |
+| 6 | No React Error Boundaries | 🟠 Medium | Low | **P2** | ✅ Fixed |
+| 7 | OAuth tokens stored in plaintext | 🟠 Medium | Medium | **P2** | ⬜ Open |
+| 8 | Non-cryptographic anonymous IDs | 🟠 Medium | Low | **P2** | ✅ Fixed |
+| 9 | Wildcard CORS on all endpoints | 🟠 Medium | Low | **P2** | ✅ Fixed |
+| 10 | No application-layer rate limiting | 🟠 Medium | Medium | **P2** | ✅ Fixed |
+| 11 | Monolithic page components | 🟡 Low-Med | Medium | **P3** | ⬜ Open |
+| 12 | Missing React Query cache invalidation | 🟡 Low-Med | Low | **P3** | ⬜ Open |
+| 13 | No DB transactions for multi-step ops | 🟡 Low-Med | Medium | **P3** | ⬜ Open |
+| 14 | No structured logging / error monitoring | 🟡 Low-Med | Low | **P3** | ⬜ Open |
+| 15 | Duplicate token-refresh logic | 🟡 Low | Low | **P3** | ⬜ Open |
+| 16 | No route-level code splitting | 🟢 Low | Low | **P4** | ⬜ Open |
+| 17 | 214 `any` TypeScript usages | 🟢 Low | Medium | **P4** | ⬜ Open |
+| 18 | No admin UI for profile approval | 🟢 Low | Medium | **P4** | ⬜ Open |
+| 19 | Accessibility gaps | 🟢 Low | Medium | **P4** | ⬜ Open |
+| 20 | No CI/CD pipeline | 🟢 Low | Medium | **P4** | ⬜ Open |

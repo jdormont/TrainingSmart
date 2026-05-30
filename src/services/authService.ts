@@ -56,8 +56,9 @@ class AuthService {
 
   // Create anonymous session for users who don't want to sign up
   async createAnonymousSession(): Promise<string> {
-    // Generate a unique anonymous user ID
-    const anonymousId = `anon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // Generate a cryptographically random anonymous user ID (crypto.randomUUID is
+    // available in all modern browsers and Node ≥ 15 — no polyfill needed).
+    const anonymousId = `anon_${crypto.randomUUID()}`;
     
     // Store in localStorage for persistence
     localStorage.setItem('anonymous_user_id', anonymousId);

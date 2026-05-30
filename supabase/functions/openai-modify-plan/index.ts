@@ -1,5 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { callAI } from "../_shared/ai-provider.ts";
+import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
+import { requireString, requireArray, optionalNumber, optionalString, ValidationError } from "../_shared/validate.ts";
 
 /*
  * STRAVA API COMPLIANCE - AI/ML Usage
@@ -17,47 +19,27 @@ import { callAI } from "../_shared/ai-provider.ts";
  * See /STRAVA_COMPLIANCE.md for full documentation.
  */
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
-
-interface ModifyPlanRequest {
-  existingWorkouts: any[];
-  modificationRequest: string;
-  athleteName: string;
-  weekNumber: number;
-  weeklyVolume: {
-    distance: number;
-  };
-  recentActivities: Array<{
-    distance: number;
-  }>;
-  recovery?: {
-    sleepScore?: number;
-    readinessScore?: number;
-  };
-}
-
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
-  }
+  if (req.method === "OPTIONS") return handleOptions(req);
+
+  const corsHeaders = getCorsHeaders(req);
 
   try {
-    const {
-      existingWorkouts,
-      modificationRequest,
-      athleteName,
-      weekNumber,
-      weeklyVolume,
-      recentActivities,
-      recovery,
-    }: ModifyPlanRequest = await req.json();
+    const body = await req.json().catch(() => { throw new ValidationError("Request body must be valid JSON"); });
+
+    const existingWorkouts = requireArray(body.existingWorkouts, "existingWorkouts", 200);
+    const modificationRequest = requireString(body.modificationRequest, "modificationRequest", 2000);
+    const athleteName = requireString(body.athleteName, "athleteName", 200);
+    const weekNumber = optionalNumber(body.weekNumber, "weekNumber", 1, 52, 1);
+
+    // weeklyVolume
+    if (!body.weeklyVolume || typeof body.weeklyVolume.distance !== "number") {
+      throw new ValidationError("'weeklyVolume.distance' must be a number");
+    }
+    const weeklyVolume = { distance: body.weeklyVolume.distance };
+
+    const recentActivities = requireArray(body.recentActivities ?? [], "recentActivities", 100) as Array<{ distance: number }>;
+    const recovery = body.recovery as { sleepScore?: number; readinessScore?: number } | undefined;
 
     const avgDistance = recentActivities.length > 0
       ? Math.round(recentActivities.reduce((sum, a) => sum + a.distance, 0) / recentActivities.length / 1000)
@@ -67,10 +49,7 @@ Deno.serve(async (req: Request) => {
 
     let recoveryContext = "";
     if (recovery) {
-      recoveryContext = `\n\nRECOVERY STATUS:
-- Sleep score: ${recovery.sleepScore || "N/A"}/100
-- Readiness: ${recovery.readinessScore || "N/A"}/100
-`;
+      recoveryContext = `\n\nRECOVERY STATUS:\n- Sleep score: ${recovery.sleepScore || "N/A"}/100\n- Readiness: ${recovery.readinessScore || "N/A"}/100\n`;
     }
 
     const prompt = `You are modifying Week ${weekNumber} of ${athleteName}'s CYCLING training plan.
@@ -124,27 +103,14 @@ Maintain training principles while accommodating the athlete's constraints.`,
 
     return new Response(
       JSON.stringify({ workouts: modifiedWorkouts }),
-      {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
     console.error("Error in openai-modify-plan function:", error);
-
+    const status = error instanceof ValidationError ? 400 : 500;
     return new Response(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : "An unknown error occurred",
-      }),
-      {
-        status: 500,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      }
+      JSON.stringify({ error: error instanceof Error ? error.message : "An unknown error occurred" }),
+      { status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });

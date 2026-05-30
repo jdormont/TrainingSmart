@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { Header } from './components/layout/Header';
 import { HomePage } from './pages/HomePage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -46,7 +47,9 @@ function App() {
               path="/onboarding"
               element={
                 <ProtectedRoute>
-                  <ConversationalOnboarding />
+                  <ErrorBoundary>
+                    <ConversationalOnboarding />
+                  </ErrorBoundary>
                 </ProtectedRoute>
               }
             />
@@ -56,7 +59,9 @@ function App() {
               path={ROUTES.DASHBOARD}
               element={
                 <ProtectedRoute>
-                  <DashboardPage />
+                  <ErrorBoundary>
+                    <DashboardPage />
+                  </ErrorBoundary>
                 </ProtectedRoute>
               }
             />
@@ -64,7 +69,9 @@ function App() {
               path={ROUTES.CHAT}
               element={
                 <ProtectedRoute>
-                  <ChatPage />
+                  <ErrorBoundary>
+                    <ChatPage />
+                  </ErrorBoundary>
                 </ProtectedRoute>
               }
             />
@@ -72,7 +79,9 @@ function App() {
               path={ROUTES.PLANS}
               element={
                 <ProtectedRoute>
-                  <PlansPage />
+                  <ErrorBoundary>
+                    <PlansPage />
+                  </ErrorBoundary>
                 </ProtectedRoute>
               }
             />
@@ -80,7 +89,9 @@ function App() {
               path={ROUTES.LEARN}
               element={
                 <ProtectedRoute>
-                  <LearnPage />
+                  <ErrorBoundary>
+                    <LearnPage />
+                  </ErrorBoundary>
                 </ProtectedRoute>
               }
             />
@@ -88,7 +99,9 @@ function App() {
               path={ROUTES.SETTINGS}
               element={
                 <ProtectedRoute>
-                  <SettingsPage />
+                  <ErrorBoundary>
+                    <SettingsPage />
+                  </ErrorBoundary>
                 </ProtectedRoute>
               }
             />

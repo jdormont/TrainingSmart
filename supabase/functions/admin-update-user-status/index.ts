@@ -1,19 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.58.0";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
+import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
+import { requireString, requireEnum, ValidationError } from "../_shared/validate.ts";
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
-  }
+  if (req.method === "OPTIONS") return handleOptions(req);
+
+  const corsHeaders = getCorsHeaders(req); // restricted — admin endpoint
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -21,27 +14,9 @@ Deno.serve(async (req: Request) => {
       throw new Error("Missing authorization header");
     }
 
-    const { userId, status } = await req.json();
-
-    if (!userId || !status) {
-      return new Response(
-        JSON.stringify({ error: "Missing userId or status" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    if (!["APPROVED", "REJECTED", "PENDING"].includes(status)) {
-      return new Response(
-        JSON.stringify({ error: "Invalid status value" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
+    const body = await req.json().catch(() => { throw new ValidationError("Request body must be valid JSON"); });
+    const userId = requireString(body.userId, "userId", 100);
+    const status = requireEnum(body.status, "status", ["APPROVED", "REJECTED", "PENDING"] as const);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -97,10 +72,11 @@ Deno.serve(async (req: Request) => {
     );
   } catch (error) {
     console.error("Error in admin-update-user-status:", error);
+    const status = error instanceof ValidationError ? 400 : 500;
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error occurred" }),
       {
-        status: 500,
+        status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );

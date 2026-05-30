@@ -1,16 +1,13 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.58.0";
 import { Resend } from "npm:resend@2.0.0";
-
-const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
-    if (req.method === "OPTIONS") {
-        return new Response("ok", { headers: corsHeaders });
-    }
+    // This endpoint is called by Supabase database webhooks, so wildcard CORS is appropriate here.
+    if (req.method === "OPTIONS") return handleOptions(req, true);
+
+    const corsHeaders = getCorsHeaders(req, true /* allowWildcard — Supabase webhook caller */);
 
     try {
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

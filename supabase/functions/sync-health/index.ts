@@ -1,11 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { HealthPayload, DailyMetric, calculateWeightedRecoveryScore } from './scoring.ts';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-Client-Info, Apikey, x-api-key',
-};
+import { getCorsHeaders, handleOptions } from '../_shared/cors.ts';
 
 // Hardcoded API secret for webhook-style authentication
 const API_SECRET = 'Demo-1234';
@@ -20,12 +15,9 @@ function getTodayDate(): string {
 
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
-  }
+  if (req.method === 'OPTIONS') return handleOptions(req);
+
+  const corsHeaders = getCorsHeaders(req);
 
   try {
     // Only accept POST requests

@@ -1,5 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { callAI } from "../_shared/ai-provider.ts";
+import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
+import { requireArray, ValidationError } from "../_shared/validate.ts";
 
 /*
  * STRAVA API COMPLIANCE - AI/ML Usage
@@ -17,12 +19,6 @@ import { callAI } from "../_shared/ai-provider.ts";
  * See /STRAVA_COMPLIANCE.md for full documentation.
  */
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
-
 interface ChatMessage {
   id: string;
   role: string;
@@ -30,29 +26,25 @@ interface ChatMessage {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
-  }
+  if (req.method === "OPTIONS") return handleOptions(req);
+
+  const corsHeaders = getCorsHeaders(req);
 
   try {
-    const { messages } = await req.json();
+    const body = await req.json().catch(() => { throw new ValidationError("Request body must be valid JSON"); });
 
-    if (!messages || !Array.isArray(messages)) {
-      return new Response(
-        JSON.stringify({ error: "Messages array is required" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
+    const messages = requireArray(body.messages, "messages", 200) as ChatMessage[];
+
+    // Validate each message shape
+    messages.forEach((msg, i) => {
+      if (typeof msg?.role !== "string" || typeof msg?.content !== "string") {
+        throw new ValidationError(`messages[${i}] must have string 'role' and 'content' fields`);
+      }
+    });
 
     const conversationText = messages
-      .map((m: ChatMessage) => `${m.role === 'user' ? 'User' : 'Coach'}: ${m.content}`)
-      .join('\n\n');
+      .map((m: ChatMessage) => `${m.role === "user" ? "User" : "Coach"}: ${m.content}`)
+      .join("\n\n");
 
     const extractionPrompt = `Analyze this training coaching conversation and extract structured planning context.
 
@@ -90,7 +82,7 @@ Respond with ONLY valid JSON in this exact format:
   },
   "keyMessages": [
     {
-      "messageId": "${messages[0]?.id || 'unknown'}",
+      "messageId": "${messages[0]?.id || "unknown"}",
       "content": "relevant excerpt from conversation",
       "relevance": "why this message is important for planning"
     }
@@ -120,28 +112,21 @@ IMPORTANT:
 
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      throw new Error('Failed to extract JSON from AI response');
+      throw new Error("Failed to extract JSON from AI response");
     }
 
     const extracted = JSON.parse(jsonMatch[0]);
 
     return new Response(
       JSON.stringify(extracted),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
     console.error("Context extraction error:", error);
+    const status = error instanceof ValidationError ? 400 : 500;
     return new Response(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : "Failed to extract context"
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      JSON.stringify({ error: error instanceof Error ? error.message : "Failed to extract context" }),
+      { status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });

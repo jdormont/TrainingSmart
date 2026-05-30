@@ -1,4 +1,5 @@
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 // Configure marked to ensure GFM is enabled (it is by default in newer versions but explicit is good)
 // and to match the styling expectations
@@ -7,15 +8,36 @@ marked.use({
   breaks: true,
 });
 
+// Tags and attributes we intentionally emit in the post-processing step below.
+// Everything else is stripped by DOMPurify before we touch the output.
+const PURIFY_CONFIG: DOMPurify.Config = {
+  ALLOWED_TAGS: [
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'p', 'br', 'hr',
+    'ul', 'ol', 'li',
+    'a',
+    'blockquote',
+    'table', 'thead', 'tbody', 'tr', 'th', 'td',
+    'strong', 'em', 'code', 'pre',
+    'div', 'span',
+  ],
+  ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'scope'],
+  // Forbid javascript: URIs in hrefs
+  ALLOW_DATA_ATTR: false,
+};
+
 export const convertMarkdownToHtml = (text: string): string => {
   if (!text) return '';
 
-  // parse returns a Promise if async is true, but synchronous by default for strings
+  // 1. Parse markdown → raw HTML
   const rawHtml = marked.parse(text) as string;
 
-  // Post-process to add specific Tailwind classes matching the original design
-  // This is a lightweight way to style without a full custom renderer
-  return rawHtml
+  // 2. Sanitize FIRST — strips any attacker-injected tags/scripts before we
+  //    inject Tailwind classes. This is the XSS firewall for all call sites.
+  const sanitized = DOMPurify.sanitize(rawHtml, PURIFY_CONFIG);
+
+  // 3. Post-process to add Tailwind classes matching the original design
+  return sanitized
     .replace(/<h1>/g, '<h1 class="text-2xl font-bold text-gray-900 mt-8 mb-4">')
     .replace(/<h2>/g, '<h2 class="text-xl font-bold text-gray-900 mt-8 mb-4">')
     .replace(/<h3>/g, '<h3 class="text-lg font-semibold text-gray-900 mt-6 mb-3">')

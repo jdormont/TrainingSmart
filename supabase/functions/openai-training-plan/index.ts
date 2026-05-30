@@ -1,27 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { callAI } from "../_shared/ai-provider.ts";
-
-/*
- * STRAVA API COMPLIANCE - AI/ML Usage
- *
- * This edge function is COMPLIANT with Strava's API Terms section 2.6.
- *
- * COMPLIANCE DETAILS:
- * - Strava activity data (distance, speed, volume) is used as runtime context
- * - Data is passed to OpenAI Chat Completions API for INFERENCE ONLY
- * - Used to generate personalized training plans based on current fitness
- * - NO training, fine-tuning, or model improvement of any kind
- * - Data is processed in real-time and discarded after plan generation
- * - OpenAI API requests are NOT used to train or improve AI models (per OpenAI policy)
- *
- * See /STRAVA_COMPLIANCE.md for full documentation.
- */
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
+import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
+import { requireString, requireArray, ValidationError } from "../_shared/validate.ts";
 
 interface ActivityMixItem {
   type: string;
@@ -84,25 +64,36 @@ const ACTIVITY_DISPLAY: Record<string, string> = {
 };
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { status: 200, headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return handleOptions(req);
+
+  const corsHeaders = getCorsHeaders(req);
 
   try {
+    const body = await req.json().catch(() => { throw new ValidationError("Request body must be valid JSON"); });
+
+    // Validate required fields before any business logic
+    const athleteName = requireString(body.athleteName, "athleteName", 200);
+    const goal = requireString(body.goal, "goal", 1000);
+    const eventDate = requireString(body.eventDate, "eventDate", 30);
+    const startDate = requireString(body.startDate, "startDate", 30);
+    const recentActivities = requireArray(body.recentActivities ?? [], "recentActivities", 200) as Array<{ distance: number; average_speed: number }>;
+
+    if (!body.riderProfile || typeof body.riderProfile.stamina !== "string" || typeof body.riderProfile.discipline !== "string") {
+      throw new ValidationError("'riderProfile' must have string 'stamina' and 'discipline' fields");
+    }
+    if (!body.weeklyVolume || typeof body.weeklyVolume.distance !== "number") {
+      throw new ValidationError("'weeklyVolume.distance' must be a number");
+    }
+
     const {
-      athleteName,
-      goal,
-      eventDate,
-      startDate,
       riderProfile,
       preferences,
       weeklyVolume,
-      recentActivities,
       dailyAvailability,
       coach_specialization,
       fitness_mode,
       activity_mix,
-    }: TrainingPlanRequest = await req.json();
+    }: TrainingPlanRequest = body;
 
     const avgDistance = recentActivities.length > 0
       ? Math.round(recentActivities.reduce((sum, a) => sum + a.distance, 0) / recentActivities.length / 1000)
@@ -350,9 +341,10 @@ Prioritize these creators by activity type:
 
   } catch (error) {
     console.error("Error in openai-training-plan function:", error);
+    const status = error instanceof ValidationError ? 400 : 500;
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "An unknown error occurred" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

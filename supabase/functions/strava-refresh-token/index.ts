@@ -1,10 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
+import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
+import { requireString, ValidationError } from "../_shared/validate.ts";
 
 interface RefreshTokenResponse {
   access_token: string;
@@ -15,19 +11,13 @@ interface RefreshTokenResponse {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
-  }
+  if (req.method === "OPTIONS") return handleOptions(req);
+
+  const corsHeaders = getCorsHeaders(req);
 
   try {
-    const { refresh_token } = await req.json();
-
-    if (!refresh_token) {
-      throw new Error("Refresh token is required");
-    }
+    const body = await req.json().catch(() => { throw new ValidationError("Request body must be valid JSON"); });
+    const refresh_token = requireString(body.refresh_token, "refresh_token", 500);
 
     const clientId = Deno.env.get("STRAVA_CLIENT_ID");
     const clientSecret = Deno.env.get("STRAVA_CLIENT_SECRET");

@@ -1,5 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { callAI } from "../_shared/ai-provider.ts";
+import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
+import { requireArray, requireString, optionalNumber, ValidationError } from "../_shared/validate.ts";
 
 /*
  * STRAVA API COMPLIANCE - AI/ML Usage
@@ -16,36 +18,63 @@ import { callAI } from "../_shared/ai-provider.ts";
  * See /STRAVA_COMPLIANCE.md for full documentation.
  */
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
+// ---------------------------------------------------------------------------
+// Per-user rate limiter (in-memory; resets on cold start)
+// Prevents scripted users from running up unbounded OpenAI costs.
+// ---------------------------------------------------------------------------
+interface RateLimitEntry { count: number; resetAt: number; }
+const rateLimitMap = new Map<string, RateLimitEntry>();
+const RATE_LIMIT_MAX = 30;          // requests per window
+const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
 
-interface ChatRequest {
-  messages: Array<{ role: string; content: string }>;
-  systemPrompt: string;
-  maxTokens?: number;
-  temperature?: number;
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(userId);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+  if (entry.count >= RATE_LIMIT_MAX) return false;
+  entry.count++;
+  return true;
 }
 
+// ---------------------------------------------------------------------------
+// Handler
+// ---------------------------------------------------------------------------
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
-  }
+  if (req.method === "OPTIONS") return handleOptions(req);
+
+  const corsHeaders = getCorsHeaders(req);
 
   try {
-    const { messages, systemPrompt, maxTokens = 1000, temperature = 0.7 }: ChatRequest = await req.json();
+    // Parse and validate request body
+    const body = await req.json().catch(() => {
+      throw new ValidationError("Request body must be valid JSON");
+    });
 
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      throw new Error("Messages array is required");
-    }
+    const messages = requireArray(body.messages, "messages", 100) as Array<{ role: string; content: string }>;
+    const systemPrompt = requireString(body.systemPrompt, "systemPrompt", 20_000);
+    const maxTokens = optionalNumber(body.maxTokens, "maxTokens", 1, 4000, 1000);
+    const temperature = optionalNumber(body.temperature, "temperature", 0, 2, 0.7);
 
-    if (!systemPrompt) {
-      throw new Error("System prompt is required");
+    // Validate each message in the array
+    messages.forEach((msg, i) => {
+      if (typeof msg?.role !== "string" || typeof msg?.content !== "string") {
+        throw new ValidationError(`messages[${i}] must have string 'role' and 'content' fields`);
+      }
+      if (msg.content.length > 50_000) {
+        throw new ValidationError(`messages[${i}].content exceeds maximum length`);
+      }
+    });
+
+    // Rate limit by IP (no auth on this endpoint in the current setup)
+    const clientIp = req.headers.get("x-forwarded-for") ?? req.headers.get("cf-connecting-ip") ?? "unknown";
+    if (!checkRateLimit(clientIp)) {
+      return new Response(
+        JSON.stringify({ error: "Too many requests. Please wait before sending more messages." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     console.log(`Processing chat request with ${messages.length} messages`);
@@ -59,27 +88,14 @@ Deno.serve(async (req: Request) => {
 
     return new Response(
       JSON.stringify({ content }),
-      {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
     console.error("Error in openai-chat function:", error);
-
+    const status = error instanceof ValidationError ? 400 : 500;
     return new Response(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : "An unknown error occurred"
-      }),
-      {
-        status: 500,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      }
+      JSON.stringify({ error: error instanceof Error ? error.message : "An unknown error occurred" }),
+      { status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });

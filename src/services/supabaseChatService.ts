@@ -18,66 +18,50 @@ class SupabaseChatService {
     return userId;
   }
 
-  // Convert database row to ChatSession
-  private async dbSessionToChatSession(dbSession: any): Promise<ChatSession> {
-    // Get messages for this session
-    const { data: messages, error } = await supabase
-      .from('chat_messages')
-      .select('*')
-      .eq('session_id', dbSession.id)
-      .order('timestamp', { ascending: true });
-
-    if (error) {
-      console.error('Error fetching messages:', error);
-      throw error;
-    }
-
+  // Convert a pre-loaded database row (with chat_messages already joined) to ChatSession.
+  // Pure synchronous mapper — no additional DB round-trips.
+  private mapDbSession(dbSession: any): ChatSession {
     return {
       id: dbSession.id,
       name: dbSession.name,
       description: dbSession.description,
       category: dbSession.category as ChatSession['category'],
-      messages: (messages || []).map(msg => ({
-        id: msg.id,
-        role: msg.role as 'user' | 'assistant',
-        content: msg.content,
-        timestamp: new Date(msg.timestamp)
-      })),
+      messages: ((dbSession.chat_messages as any[]) || [])
+        .slice()
+        .sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+        .map((msg: any) => ({
+          id: msg.id,
+          role: msg.role as 'user' | 'assistant',
+          content: msg.content,
+          timestamp: new Date(msg.timestamp),
+        })),
       createdAt: new Date(dbSession.created_at),
-      updatedAt: new Date(dbSession.updated_at)
+      updatedAt: new Date(dbSession.updated_at),
     };
   }
 
-  // Get all chat sessions for current user
+  // Get all chat sessions for current user — single joined query (was N+1)
   async getSessions(): Promise<ChatSession[]> {
     try {
       const userId = await this.getCurrentUserId();
       if (!userId) {
-        // Return empty array if not authenticated (fallback to localStorage)
         return this.getLocalStorageSessions();
       }
 
       const { data: sessions, error } = await supabase
         .from('chat_sessions')
-        .select('*')
+        .select('*, chat_messages(*)')   // join messages in one round-trip
         .eq('user_id', userId)
         .order('updated_at', { ascending: false });
 
       if (error) {
         console.error('Error fetching sessions:', error);
-        // Fallback to localStorage on error
         return this.getLocalStorageSessions();
       }
 
-      // Convert database sessions to ChatSession objects
-      const chatSessions = await Promise.all(
-        (sessions || []).map(session => this.dbSessionToChatSession(session))
-      );
-
-      return chatSessions;
+      return (sessions ?? []).map(s => this.mapDbSession(s));
     } catch (error) {
       console.error('Error in getSessions:', error);
-      // Fallback to localStorage
       return this.getLocalStorageSessions();
     }
   }
@@ -133,7 +117,16 @@ class SupabaseChatService {
         throw error;
       }
 
-      const chatSession = await this.dbSessionToChatSession(session);
+      // New sessions have no messages yet — construct directly without a join
+      const chatSession: ChatSession = {
+        id: session.id,
+        name: session.name,
+        description: session.description,
+        category: session.category as ChatSession['category'],
+        messages: [],
+        createdAt: new Date(session.created_at),
+        updatedAt: new Date(session.updated_at),
+      };
       
       // Set as active session
       this.setActiveSession(chatSession.id);
@@ -326,7 +319,7 @@ class SupabaseChatService {
 
       const { data: session, error } = await supabase
         .from('chat_sessions')
-        .select('*')
+        .select('*, chat_messages(*)')   // join messages in one round-trip
         .eq('id', sessionId)
         .eq('user_id', userId)
         .single();
@@ -336,7 +329,7 @@ class SupabaseChatService {
         return null;
       }
 
-      return await this.dbSessionToChatSession(session);
+      return this.mapDbSession(session);
     } catch (error) {
       console.error('Error in getSession:', error);
       // Fallback to localStorage
