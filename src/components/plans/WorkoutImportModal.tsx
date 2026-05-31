@@ -53,9 +53,6 @@ export function WorkoutImportModal({ isOpen, onClose, planId, onImportSuccess }:
   const [importError, setImportError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  if (!isOpen) return null;
-
   const processFile = (file: File) => {
     if (!file.name.endsWith('.json')) {
       setParseErrors(['Please upload a .json file.']);
@@ -84,6 +81,8 @@ export function WorkoutImportModal({ isOpen, onClose, planId, onImportSuccess }:
     const file = e.dataTransfer.files?.[0];
     if (file) processFile(file);
   }, []);
+
+  if (!isOpen) return null;
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();

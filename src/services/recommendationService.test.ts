@@ -3,6 +3,14 @@ import { recommendationService } from './recommendationService';
 import { trainingPlansService } from './trainingPlansService';
 import { Workout } from '../types';
 
+// Prevent supabaseClient from throwing on missing env vars at import time
+vi.mock('./supabaseClient', () => ({
+  supabase: {
+    from: vi.fn(),
+    auth: { getUser: vi.fn() },
+  },
+}));
+
 // Mock trainingPlansService
 vi.mock('./trainingPlansService', () => ({
   trainingPlansService: {

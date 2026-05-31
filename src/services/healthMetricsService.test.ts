@@ -206,7 +206,8 @@ describe('HealthMetricsService', () => {
       
       expect(metrics.profile.discipline.level).toBe(6);
       expect(metrics.profile.stamina.level).toBe(4);
-      expect(metrics.profile.punch.level).toBe(6);
+      // punch level uses ftp*1.1 fallback (no power stream) → ratio=1.1 → floor((1.1-1)*40)=4
+      expect(metrics.profile.punch.level).toBe(4);
   });
 
   it('calculates Efficiency Trend', () => {
