@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { addDays, isSameDay, startOfWeek, format } from 'date-fns';
-import { Target, Plus, Trash2, MessageCircle, ChevronDown, Calendar as CalendarIcon, AlertTriangle, Upload, Download } from 'lucide-react';
+import { Target, Plus, Trash2, MessageCircle, ChevronDown, Calendar as CalendarIcon, AlertTriangle, Upload, Download, Clock, MapPin, TrendingUp, Flame } from 'lucide-react';
 
 import { Button } from '../components/common/Button';
 import { stravaCacheService } from '../services/stravaCacheService';
@@ -1136,6 +1136,41 @@ Additional Preferences: ${preferences || 'None'}
             const completionPercentage = totalWorkouts > 0 ? Math.round((completedWorkouts / totalWorkouts) * 100) : 0;
             const totalDistance = plan.workouts.reduce((sum, w) => sum + (w.distance || 0), 0);
             
+            // Calculate plan-wide cumulative completed stats from actual Strava activities
+            const planActivities = activities.filter(activity => {
+                const dateStr = activity.start_date_local.endsWith('Z')
+                    ? activity.start_date_local.slice(0, -1)
+                    : activity.start_date_local;
+                const activityDate = new Date(dateStr);
+                const planStart = new Date(plan.startDate);
+                planStart.setHours(0, 0, 0, 0);
+                const planEnd = new Date(plan.endDate);
+                planEnd.setHours(23, 59, 59, 999);
+                return activityDate >= planStart && activityDate <= planEnd;
+            });
+
+            const completedDistance = planActivities.reduce((sum, a) => sum + (a.distance || 0), 0);
+            const completedDuration = planActivities.reduce((sum, a) => sum + (a.moving_time || 0), 0);
+            const completedElevation = planActivities.reduce((sum, a) => sum + (a.total_elevation_gain || 0), 0);
+            const completedCalories = planActivities.reduce((sum, activity) => {
+                const kj = activity.kilojoules || 0;
+                if (kj > 0) return sum + kj;
+                // Fallback: 600 kcal/hr
+                const durationHours = activity.moving_time / 3600;
+                return sum + (durationHours * 600);
+            }, 0);
+
+            const totalPlannedDurationMinutes = plan.workouts.reduce((sum, w) => sum + (w.duration || 0), 0);
+
+            const plannedMiles = totalDistance / 1609.34;
+            const completedMiles = completedDistance / 1609.34;
+            const plannedHours = totalPlannedDurationMinutes / 60;
+            const completedHours = completedDuration / 3600;
+            const completedFeet = completedElevation * 3.28084;
+
+            const distanceProgress = plannedMiles > 0 ? (completedMiles / plannedMiles) * 100 : 0;
+            const timeProgress = plannedHours > 0 ? (completedHours / plannedHours) * 100 : 0;
+            
             return (
               <div key={plan.id} className="mb-24 relative">
                  {/* Slim Sticky Header */}
@@ -1214,17 +1249,95 @@ Additional Preferences: ${preferences || 'None'}
                              </div>
                         </div>
                     </div>
-
-                    {/* Collapsible Info Drawer (Absolute positioned below header) */}
-                    <div className={`overflow-hidden transition-all duration-300 bg-slate-900 border-b border-white/5 ${expandedPlan === plan.id ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
+                                     {/* Collapsible Info Drawer (Absolute positioned below header) */}
+                    <div className={`overflow-hidden transition-all duration-300 bg-slate-900 border-b border-white/5 ${expandedPlan === plan.id ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'}`}>
                          <div className="max-w-7xl mx-auto px-4 py-6">
                             <div className="grid md:grid-cols-3 gap-8">
-                                <div className="md:col-span-2 prose prose-sm prose-invert">
-                                    <h4 className="text-slate-400 font-medium mb-2 uppercase tracking-wider text-xs">Description</h4>
-                                    <div 
-                                       dangerouslySetInnerHTML={{ __html: convertMarkdownToHtml(plan.description || '') }} 
-                                       className="text-slate-300 [&_p]:text-slate-300 [&_li]:text-slate-300 [&_strong]:text-white [&_h1]:text-white [&_h2]:text-white [&_h3]:text-white"
-                                    />
+                                <div className="md:col-span-2 space-y-6">
+                                    <div className="prose prose-sm prose-invert">
+                                        <h4 className="text-slate-400 font-medium mb-2 uppercase tracking-wider text-xs">Description</h4>
+                                        <div 
+                                           dangerouslySetInnerHTML={{ __html: convertMarkdownToHtml(plan.description || '') }} 
+                                           className="text-slate-300 [&_p]:text-slate-300 [&_li]:text-slate-300 [&_strong]:text-white [&_h1]:text-white [&_h2]:text-white [&_h3]:text-white"
+                                        />
+                                    </div>
+
+                                    {/* Cumulative Stats Section */}
+                                    <div className="border-t border-white/5 pt-6">
+                                        <h4 className="text-slate-400 font-medium mb-4 uppercase tracking-wider text-xs flex items-center gap-2">
+                                            <TrendingUp className="w-4 h-4 text-orange-500" />
+                                            <span>Cumulative Plan Progress</span>
+                                        </h4>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                            {/* Distance Card */}
+                                            <div className="bg-slate-950/40 border border-white/5 rounded-xl p-4 hover:border-slate-800 transition-colors">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className="text-xs font-medium text-slate-400">Total Distance</span>
+                                                    <MapPin className="w-4 h-4 text-blue-400" />
+                                                </div>
+                                                <div className="text-lg font-bold text-white mb-2">
+                                                    {completedMiles.toFixed(1)} <span className="text-xs font-normal text-slate-400">/ {plannedMiles.toFixed(1)} mi</span>
+                                                </div>
+                                                <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                                                    <div 
+                                                        className="bg-blue-500 h-1.5 rounded-full transition-all duration-500" 
+                                                        style={{ width: `${Math.min(distanceProgress, 100)}%` }}
+                                                    />
+                                                </div>
+                                                <div className="text-[10px] text-slate-500 mt-1 text-right">
+                                                    {distanceProgress.toFixed(0)}% completed
+                                                </div>
+                                            </div>
+                                            
+                                            {/* Time Card */}
+                                            <div className="bg-slate-950/40 border border-white/5 rounded-xl p-4 hover:border-slate-800 transition-colors">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className="text-xs font-medium text-slate-400">Total Time</span>
+                                                    <Clock className="w-4 h-4 text-green-400" />
+                                                </div>
+                                                <div className="text-lg font-bold text-white mb-2">
+                                                    {completedHours.toFixed(1)} <span className="text-xs font-normal text-slate-400">/ {plannedHours.toFixed(1)} hrs</span>
+                                                </div>
+                                                <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                                                    <div 
+                                                        className="bg-green-500 h-1.5 rounded-full transition-all duration-500" 
+                                                        style={{ width: `${Math.min(timeProgress, 100)}%` }}
+                                                    />
+                                                </div>
+                                                <div className="text-[10px] text-slate-500 mt-1 text-right">
+                                                    {timeProgress.toFixed(0)}% completed
+                                                </div>
+                                            </div>
+
+                                            {/* Elevation Card */}
+                                            <div className="bg-slate-950/40 border border-white/5 rounded-xl p-4 hover:border-slate-800 transition-colors">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className="text-xs font-medium text-slate-400">Total Ascent</span>
+                                                    <TrendingUp className="w-4 h-4 text-purple-400" />
+                                                </div>
+                                                <div className="text-lg font-bold text-white">
+                                                    {Math.round(completedFeet).toLocaleString()} <span className="text-xs font-normal text-slate-400">ft</span>
+                                                </div>
+                                                <div className="text-[10px] text-slate-500 mt-3">
+                                                    Climbed during plan
+                                                </div>
+                                            </div>
+
+                                            {/* Calories Card */}
+                                            <div className="bg-slate-950/40 border border-white/5 rounded-xl p-4 hover:border-slate-800 transition-colors">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className="text-xs font-medium text-slate-400">Total Energy</span>
+                                                    <Flame className="w-4 h-4 text-orange-500" />
+                                                </div>
+                                                <div className="text-lg font-bold text-white">
+                                                    {Math.round(completedCalories).toLocaleString()} <span className="text-xs font-normal text-slate-400">kcal</span>
+                                                </div>
+                                                <div className="text-[10px] text-slate-500 mt-3">
+                                                    Burned during plan
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div className="bg-slate-950/50 rounded-lg p-4 border border-white/5 h-fit">
                                     <h4 className="text-slate-400 font-medium mb-4 uppercase tracking-wider text-xs">At a Glance</h4>
@@ -1241,14 +1354,13 @@ Additional Preferences: ${preferences || 'None'}
                                             <span className="text-slate-500">Source</span>
                                             <span className="text-blue-400 flex items-center gap-1">
                                                 <MessageCircle className="w-3 h-3" /> AI Chat
-                                            </span>
+                                             </span>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                          </div>
-                    </div>
-                 </div>
+                    </div>     </div>
 
                  {/* Coach's Alert */}
                  {planHealth[plan.id] && planHealth[plan.id].status !== 'Green' && (
