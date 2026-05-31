@@ -1,6 +1,25 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { trainingPlansService } from './trainingPlansService';
 import type { Workout } from '../types';
+
+// Create a chainable mock object
+const mockChain = {
+  select: vi.fn().mockReturnThis(),
+  insert: vi.fn().mockReturnThis(),
+  eq: vi.fn().mockReturnThis(),
+  single: vi.fn(),
+  order: vi.fn().mockReturnThis(),
+};
+
+// Mock Supabase client
+vi.mock('./supabaseClient', () => ({
+  supabase: {
+    from: vi.fn(() => mockChain),
+    auth: {
+      getUser: vi.fn(() => Promise.resolve({ data: { user: { id: 'test-user-id' } } })),
+    },
+  },
+}));
 
 describe('calculateMatchConfidence', () => {
   const baseWorkout: Workout = {
@@ -138,5 +157,157 @@ describe('calculateMatchConfidence', () => {
     const score = trainingPlansService.calculateMatchConfidence(strengthWorkout, activity);
     // Since distance is ignored, it defaults to full 15 points for distance matching.
     expect(score).toBe(100);
+  });
+});
+
+describe('createPlanFromTemplate', () => {
+  const mockTemplate = {
+    id: 'template-123',
+    name: 'Active Recovery Week',
+    description: 'Gentle recovery sessions',
+    goal: 'Active Recovery',
+    duration_weeks: 1,
+    workouts: [
+      {
+        week: 1,
+        dayOfWeek: 2,
+        name: 'Recovery Ride',
+        type: 'bike',
+        duration: 30,
+        intensity: 'recovery',
+        description: 'Spin easy'
+      },
+      {
+        week: 1,
+        dayOfWeek: 3,
+        name: 'Gentle Yoga',
+        type: 'yoga',
+        duration: 20,
+        intensity: 'recovery',
+        description: 'Stretch'
+      }
+    ]
+  };
+
+  const mockDbPlan = {
+    id: 'plan-123',
+    name: 'My Active Recovery Week',
+    description: 'Gentle recovery sessions',
+    goal: 'Active Recovery',
+    start_date: '2026-06-01',
+    end_date: '2026-06-07',
+    created_at: '2026-05-31T12:00:00Z',
+    user_id: 'test-user-id',
+    workouts: [
+      {
+        id: 'w-1',
+        plan_id: 'plan-123',
+        user_id: 'test-user-id',
+        name: 'Recovery Ride',
+        type: 'bike',
+        description: 'Spin easy',
+        duration: 30,
+        distance: 0,
+        intensity: 'recovery',
+        scheduled_date: '2026-06-02',
+        completed: false,
+        status: 'planned'
+      },
+      {
+        id: 'w-2',
+        plan_id: 'plan-123',
+        user_id: 'test-user-id',
+        name: 'Gentle Yoga',
+        type: 'yoga',
+        description: 'Stretch',
+        duration: 20,
+        distance: 0,
+        intensity: 'recovery',
+        scheduled_date: '2026-06-03',
+        completed: false,
+        status: 'planned'
+      }
+    ]
+  };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mockChain.select.mockReturnValue(mockChain);
+    mockChain.insert.mockReturnValue(mockChain);
+    mockChain.eq.mockReturnValue(mockChain);
+    mockChain.order.mockReturnValue(mockChain);
+  });
+
+  it('correctly maps template workout dates starting from a Monday', async () => {
+    // 1. Fetch template
+    mockChain.single.mockResolvedValueOnce({ data: mockTemplate, error: null }); // plan_templates.select().eq().single()
+    
+    // 2. Create plan record
+    const createdPlanRecord = {
+      id: 'plan-123',
+      name: 'My Active Recovery Week',
+      description: 'Gentle recovery sessions',
+      goal: 'Active Recovery',
+      start_date: '2026-06-01',
+      end_date: '2026-06-07',
+      created_at: '2026-05-31T12:00:00Z',
+      user_id: 'test-user-id'
+    };
+    mockChain.single.mockResolvedValueOnce({ data: createdPlanRecord, error: null }); // training_plans.insert().select().single()
+
+    // 4. Fetch full plan with workouts
+    mockChain.single.mockResolvedValueOnce({ data: mockDbPlan, error: null }); // training_plans.select().eq().single()
+
+    const startDate = new Date('2026-06-01T00:00:00');
+    const plan = await trainingPlansService.createPlanFromTemplate('template-123', startDate);
+
+    expect(plan.startDate).toEqual(new Date('2026-06-01T00:00:00'));
+    expect(plan.endDate).toEqual(new Date('2026-06-07T00:00:00'));
+    
+    // Verify mapped workout dates
+    expect(plan.workouts.length).toBe(2);
+    expect(plan.workouts[0].name).toBe('Recovery Ride');
+    expect(plan.workouts[0].scheduledDate).toEqual(new Date('2026-06-02T00:00:00')); // Tuesday
+    
+    expect(plan.workouts[1].name).toBe('Gentle Yoga');
+    expect(plan.workouts[1].scheduledDate).toEqual(new Date('2026-06-03T00:00:00')); // Wednesday
+  });
+
+  it('correctly maps template workout dates starting mid-week (Wednesday)', async () => {
+    // 1. Fetch template
+    mockChain.single.mockResolvedValueOnce({ data: mockTemplate, error: null });
+    
+    // 2. Create plan record (Wednesday is June 3rd, so end_date is June 7th)
+    const createdPlanRecord = {
+      id: 'plan-123',
+      name: 'My Active Recovery Week',
+      description: 'Gentle recovery sessions',
+      goal: 'Active Recovery',
+      start_date: '2026-06-03',
+      end_date: '2026-06-07',
+      created_at: '2026-05-31T12:00:00Z',
+      user_id: 'test-user-id'
+    };
+    mockChain.single.mockResolvedValueOnce({ data: createdPlanRecord, error: null });
+
+    // 4. Fetch full plan with workouts
+    mockChain.single.mockResolvedValueOnce({ data: mockDbPlan, error: null });
+
+    const startDate = new Date('2026-06-03T00:00:00'); // Wednesday
+    await trainingPlansService.createPlanFromTemplate('template-123', startDate);
+
+    // Verify that workouts were inserted with dates relative to the Monday of start week (June 1st)
+    // Tuesday -> June 2nd, Wednesday -> June 3rd
+    const workoutsInserted = mockChain.insert.mock.calls[1][0];
+    expect(workoutsInserted).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        name: 'Recovery Ride',
+        scheduled_date: '2026-06-02' // Tuesday of start week
+      }),
+      expect.objectContaining({
+        name: 'Gentle Yoga',
+        scheduled_date: '2026-06-03' // Wednesday of start week
+      })
+    ]));
   });
 });

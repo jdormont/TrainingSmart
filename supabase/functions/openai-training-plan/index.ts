@@ -225,8 +225,14 @@ RECENT TRAINING DATA:
 
 PREFERENCES: ${preferences || 'None specified'}
 
-PERIODIZATION SCHEDULE:
+PERIODIZATION SCHEDULE GUIDELINES (STRICT):
 ${periodizationStructure}
+
+Phase Rules to Enforce:
+- Base Phase: 100% low intensity (easy/recovery, max 1 moderate session, strictly NO hard sessions), with progressive linear volume growth week-over-week.
+- Build Phase: Introduce targeted interval training (Zone 4/5, hard intensity) 1-2x/week, while building to peak volume levels.
+- Peak Phase: Maintain high intensity (hard interval sessions), but reduce overall volume by 10-20% to allow for recovery and adaptation.
+- Taper Phase: Reduce overall training volume by 50% to shed fatigue, but preserve short, high-intensity micro-sessions to keep muscle systems primed.
 
 WEEKLY SCHEDULE CONSTRAINTS (STRICT):
 ${scheduleConstraints || "No specific day-by-day constraints provided."}

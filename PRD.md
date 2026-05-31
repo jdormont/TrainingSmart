@@ -65,8 +65,8 @@ Consistent notation is used to represent current development status.
 - `[x] COMPLETE` - Plan logic and AI reasoning transparency popup ("Brain" icon).
 - `[x] COMPLETE` - Level-Up Consistency Milestones & celebratory modal for Re-Engager consistency.
 - `[x] COMPLETE` - Collapsible "Plan Info" drawer with plan-wide completed stats (miles, hours, climb, and calories) and progress bars.
-- `[ ] INCOMPLETE` - Advanced periodization logic (e.g. customized block progression for cycling events).
-- `[ ] INCOMPLETE` - Plan templates library (ready-to-use boilerplate schedules).
+- `[x] COMPLETE` - Advanced periodization logic (Base, Build, Peak, Taper phase instructions).
+- `[x] COMPLETE` - Plan templates library (Active Recovery, Base Builder, Gran Fondo Prep).
 - `[ ] INCOMPLETE` - Recurring season schedules.
 
 ### 3.4. Dashboard, Trends & Strava Reconciliation

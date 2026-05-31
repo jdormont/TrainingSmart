@@ -117,6 +117,25 @@ export const PlansPage: React.FC = () => {
     '4+ hours'
   ];
 
+  // Phase 2 - Template States
+  const [generatorMode, setGeneratorMode] = useState<'ai' | 'template'>('ai');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [templateStartDate, setTemplateStartDate] = useState<string>(
+    (() => {
+      const today = new Date();
+      const nextMon = addDays(today, (8 - (today.getDay() || 7)) % 7);
+      return nextMon.toISOString().split('T')[0];
+    })()
+  );
+  const [customPlanName, setCustomPlanName] = useState<string>('');
+  const [instantiating, setInstantiating] = useState(false);
+
+  // Fetch plan templates
+  const { data: planTemplates = [], isLoading: isLoadingTemplates } = useQuery({
+    queryKey: ['plan-templates'],
+    queryFn: () => trainingPlansService.getPlanTemplates(),
+    enabled: showForm
+  });
 
   // Plan Health State
   const [planHealth, setPlanHealth] = useState<Record<string, { score: number; status: 'Green' | 'Yellow' | 'Red' }>>({});
@@ -410,6 +429,40 @@ Additional Preferences: ${preferences || 'None'}
       setError((err as Error).message);
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handleInstantiateTemplate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTemplateId || !templateStartDate) return;
+
+    setInstantiating(true);
+    setError(null);
+
+    try {
+      const newPlan = await trainingPlansService.createPlanFromTemplate(
+        selectedTemplateId,
+        new Date(templateStartDate + 'T00:00:00'),
+        customPlanName.trim() || undefined
+      );
+
+      await queryClient.cancelQueries({ queryKey: ['plan-data'] });
+      queryClient.setQueryData(['plan-data'], (oldData: any) => {
+        if (!oldData) return { plans: [newPlan], isAuthenticated: true };
+        return {
+          ...oldData,
+          plans: [...(oldData.plans || []), newPlan]
+        };
+      });
+
+      setShowForm(false);
+      setSelectedTemplateId(null);
+      setCustomPlanName('');
+    } catch (err) {
+      console.error('Failed to instantiate template plan:', err);
+      setError(err instanceof Error ? err.message : 'Failed to instantiate plan template');
+    } finally {
+      setInstantiating(false);
     }
   };
 
@@ -933,199 +986,440 @@ Additional Preferences: ${preferences || 'None'}
             <p className="text-slate-400 text-sm mb-5">
               {isReEngager
                 ? 'A gentle, realistic plan built around your availability — designed to build momentum, not pressure.'
-                : 'AI-generated plan based on your Strava data and activity mix.'}
+                : 'AI-generated plan or pre-built template based on your availability.'}
             </p>
 
-            {/* Activity Mix Card */}
-            {activityMix.length > 0 && (
-              <div className="mb-5 p-4 rounded-xl border border-slate-700 bg-slate-800/50">
-                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">Your Activity Mix</p>
-                <div className="flex flex-wrap gap-2">
-                  {[...activityMix].sort((a, b) => a.priority - b.priority).map(item => (
-                    <span
-                      key={item.type}
-                      className={`px-3 py-1 rounded-full text-xs font-medium border ${PRIORITY_COLOR[item.priority] ?? PRIORITY_COLOR[3]}`}
-                    >
-                      {ACTIVITY_DISPLAY[item.type] ?? item.type}
-                      <span className="ml-1 opacity-60">· {PRIORITY_LABEL[item.priority] ?? 'other'}</span>
-                    </span>
-                  ))}
-                </div>
-                <p className="text-xs text-slate-500 mt-2">Your plan will reflect these priorities. Adjust anytime in Settings → My Coach.</p>
-              </div>
-            )}
+            {/* Tabbed Navigation */}
+            <div className="flex space-x-1 border-b border-slate-800 mb-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setGeneratorMode('ai');
+                  setError(null);
+                }}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  generatorMode === 'ai'
+                    ? 'border-orange-500 text-orange-400 font-semibold'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                AI Generator
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setGeneratorMode('template');
+                  setError(null);
+                }}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  generatorMode === 'template'
+                    ? 'border-orange-500 text-orange-400 font-semibold'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Plan Templates
+              </button>
+            </div>
 
-            <form onSubmit={handleGeneratePlan} className="space-y-6">
-              {/* Goal Type — hidden for re-engager */}
-              {!isReEngager && (
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Goal Type
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {goalTypeOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => setGoalType(option.value as 'distance' | 'event' | 'fitness')}
-                      className={`p-3 text-sm rounded-lg border transition-colors ${goalType === option.value
-                        ? 'border-orange-500 bg-orange-500/10 text-orange-400'
-                        : 'border-slate-700 bg-slate-800/50 text-slate-300 hover:border-slate-600 hover:bg-slate-800'
-                        }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              )}
-
-              {/* Specific Goal */}
-              <div>
-                <label htmlFor="goal" className="block text-sm font-medium text-slate-300 mb-2">
-                  {isReEngager ? 'What do you want to work toward?' : 'Specific Goal'}
-                </label>
-                <input
-                  type="text"
-                  id="goal"
-                  value={goal}
-                  onChange={(e) => setGoal(e.target.value)}
-                  placeholder={isReEngager
-                    ? "e.g., Build a consistent workout habit, Feel stronger and more energetic, Get back into running"
-                    : "e.g., Complete a century ride, Improve FTP by 20 watts, Ride 125mi/week consistently"}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-slate-50 placeholder-slate-500"
-                  required
-                />
-              </div>
-
-              {/* Timeframe and Weekly Hours */}
-              <div className={`grid gap-4 ${isReEngager ? '' : 'md:grid-cols-2'}`}>
-                {!isReEngager && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
-                    Target Event Date
-                  </label>
-                  <input
-                    type="date"
-                    title="Target event date"
-                    value={eventDate}
-                    onChange={(e) => setEventDate(e.target.value)}
-                    min={new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-50"
-                  />
-                  <p className="text-xs text-slate-500 mt-1">
-                    Must be at least 4 weeks from today for periodization.
-                  </p>
-                </div>
+            {generatorMode === 'ai' && (
+              <>
+                {/* Activity Mix Card */}
+                {activityMix.length > 0 && (
+                  <div className="mb-5 p-4 rounded-xl border border-slate-700 bg-slate-800/50">
+                    <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">Your Activity Mix</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[...activityMix].sort((a, b) => a.priority - b.priority).map(item => (
+                        <span
+                          key={item.type}
+                          className={`px-3 py-1 rounded-full text-xs font-medium border ${PRIORITY_COLOR[item.priority] ?? PRIORITY_COLOR[3]}`}
+                        >
+                          {ACTIVITY_DISPLAY[item.type] ?? item.type}
+                          <span className="ml-1 opacity-60">· {PRIORITY_LABEL[item.priority] ?? 'other'}</span>
+                        </span>
+                      ))}
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2">Your plan will reflect these priorities. Adjust anytime in Settings → My Coach.</p>
+                  </div>
                 )}
-                <div>
-                  <label htmlFor="weekly_hours" className="block text-sm font-medium text-slate-300 mb-2">
-                    Weekly Time Available
-                  </label>
-                  <select
-                    id="weekly_hours"
-                    value={weeklyHours}
-                    onChange={(e) => setWeeklyHours(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-50"
-                  >
-                    <option value="3-4 hours">3-4 hours</option>
-                    <option value="5-6 hours">5-6 hours</option>
-                    <option value="6-8 hours">6-8 hours</option>
-                    <option value="8-10 hours">8-10 hours</option>
-                    <option value="10+ hours">10+ hours</option>
-                  </select>
-                </div>
-              </div>
 
-              {/* Daily Availability */}
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Daily Workout Availability
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                  {Object.keys(dailyAvailability).map((day) => (
-                    <div key={day} className="flex flex-col">
-                      <span className="text-xs text-slate-400 mb-1">{day}</span>
-                      <select
-                        aria-label={`Availability for ${day}`}
-                        value={dailyAvailability[day]}
-                        onChange={(e) => setDailyAvailability(prev => ({ ...prev, [day]: e.target.value }))}
-                        className="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-orange-500 text-slate-50"
-                      >
-                        {availabilityOptions.map(opt => (
-                          <option key={opt} value={opt}>{opt}</option>
+                <form onSubmit={handleGeneratePlan} className="space-y-6">
+                  {/* Goal Type — hidden for re-engager */}
+                  {!isReEngager && (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">
+                        Goal Type
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {goalTypeOptions.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setGoalType(option.value as 'distance' | 'event' | 'fitness')}
+                            className={`p-3 text-sm rounded-lg border transition-colors ${goalType === option.value
+                              ? 'border-orange-500 bg-orange-500/10 text-orange-400'
+                              : 'border-slate-700 bg-slate-800/50 text-slate-300 hover:border-slate-600 hover:bg-slate-800'
+                              }`}
+                          >
+                            {option.label}
+                          </button>
                         ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Specific Goal */}
+                  <div>
+                    <label htmlFor="goal" className="block text-sm font-medium text-slate-300 mb-2">
+                      {isReEngager ? 'What do you want to work toward?' : 'Specific Goal'}
+                    </label>
+                    <input
+                      type="text"
+                      id="goal"
+                      value={goal}
+                      onChange={(e) => setGoal(e.target.value)}
+                      placeholder={isReEngager
+                        ? "e.g., Build a consistent workout habit, Feel stronger and more energetic, Get back into running"
+                        : "e.g., Complete a century ride, Improve FTP by 20 watts, Ride 125mi/week consistently"}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-slate-50 placeholder-slate-500"
+                      required
+                    />
+                  </div>
+
+                  {/* Timeframe and Weekly Hours */}
+                  <div className={`grid gap-4 ${isReEngager ? '' : 'md:grid-cols-2'}`}>
+                    {!isReEngager && (
+                      <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-2">
+                          Target Event Date
+                        </label>
+                        <input
+                          type="date"
+                          title="Target event date"
+                          value={eventDate}
+                          onChange={(e) => setEventDate(e.target.value)}
+                          min={new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                          className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-50"
+                        />
+                        <p className="text-xs text-slate-500 mt-1">
+                          Must be at least 4 weeks from today for periodization.
+                        </p>
+                      </div>
+                    )}
+                    <div>
+                      <label htmlFor="weekly_hours" className="block text-sm font-medium text-slate-300 mb-2">
+                        Weekly Time Available
+                      </label>
+                      <select
+                        id="weekly_hours"
+                        value={weeklyHours}
+                        onChange={(e) => setWeeklyHours(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-50"
+                      >
+                        <option value="3-4 hours">3-4 hours</option>
+                        <option value="5-6 hours">5-6 hours</option>
+                        <option value="6-8 hours">6-8 hours</option>
+                        <option value="8-10 hours">8-10 hours</option>
+                        <option value="10+ hours">10+ hours</option>
                       </select>
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
 
-              {/* Focus Areas — hidden for re-engager */}
-              {!isReEngager && (
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Focus Areas (select all that apply)
-                </label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                  {focusAreaOptions.map((area) => (
-                    <button
-                      key={area}
-                      type="button"
-                      onClick={() => toggleFocusArea(area)}
-                      className={`p-2 text-xs rounded-md border transition-colors text-left ${focusAreas.includes(area)
-                        ? 'border-orange-500 bg-orange-500/10 text-orange-400'
-                        : 'border-slate-700 bg-slate-800/50 text-slate-300 hover:border-slate-600 hover:bg-slate-800'
-                        }`}
+                  {/* Daily Availability */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      Daily Workout Availability
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                      {Object.keys(dailyAvailability).map((day) => (
+                        <div key={day} className="flex flex-col">
+                          <span className="text-xs text-slate-400 mb-1">{day}</span>
+                          <select
+                            aria-label={`Availability for ${day}`}
+                            value={dailyAvailability[day]}
+                            onChange={(e) => setDailyAvailability(prev => ({ ...prev, [day]: e.target.value }))}
+                            className="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-orange-500 text-slate-50"
+                          >
+                            {availabilityOptions.map(opt => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Focus Areas — hidden for re-engager */}
+                  {!isReEngager && (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">
+                        Focus Areas (select all that apply)
+                      </label>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                        {focusAreaOptions.map((area) => (
+                          <button
+                            key={area}
+                            type="button"
+                            onClick={() => toggleFocusArea(area)}
+                            className={`p-2 text-xs rounded-md border transition-colors text-left ${focusAreas.includes(area)
+                              ? 'border-orange-500 bg-orange-500/10 text-orange-400'
+                              : 'border-slate-700 bg-slate-800/50 text-slate-300 hover:border-slate-600 hover:bg-slate-800'
+                              }`}
+                          >
+                            {area}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Additional Preferences */}
+                  <div>
+                    <label htmlFor="preferences" className="block text-sm font-medium text-slate-300 mb-2">
+                      Additional Preferences
+                    </label>
+                    <textarea
+                      id="preferences"
+                      value={preferences}
+                      onChange={(e) => setPreferences(e.target.value)}
+                      placeholder="e.g., Prefer indoor training on weekdays, avoid back-to-back hard days, include recovery rides..."
+                      rows={3}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-slate-50 placeholder-slate-500"
+                    />
+                  </div>
+
+                  {error && (
+                    <div className="bg-red-500/10 border border-red-500/20 rounded-md p-3">
+                      <p className="text-red-400 text-sm">{error}</p>
+                    </div>
+                  )}
+
+                  {/* Form Actions */}
+                  <div className="flex space-x-3">
+                    <Button
+                      type="submit"
+                      loading={generating}
+                      className="flex items-center space-x-2"
                     >
-                      {area}
+                      <Target className="w-4 h-4" />
+                      <span>{generating ? 'Generating...' : 'Generate Plan'}</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="bg-transparent border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-slate-200"
+                      onClick={() => setShowForm(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </>
+            )}
+
+            {generatorMode === 'template' && (
+              <div className="space-y-6">
+                {isLoadingTemplates ? (
+                  <div className="flex justify-center items-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500" />
+                  </div>
+                ) : !selectedTemplateId ? (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {planTemplates.map((template) => (
+                      <div
+                        key={template.id}
+                        onClick={() => {
+                          setSelectedTemplateId(template.id);
+                          setCustomPlanName(`My ${template.name}`);
+                        }}
+                        className="bg-slate-800/40 hover:bg-slate-800/80 border border-slate-800 hover:border-orange-500/50 rounded-xl p-5 cursor-pointer transition-all duration-300 flex flex-col justify-between group"
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="bg-orange-500/10 text-orange-400 text-xs px-2 py-0.5 rounded-full border border-orange-500/20 font-semibold uppercase tracking-wider">
+                              {template.goal}
+                            </span>
+                            <span className="text-slate-400 text-xs font-medium">
+                              {template.duration_weeks} {template.duration_weeks === 1 ? 'Week' : 'Weeks'}
+                            </span>
+                          </div>
+                          <h4 className="text-slate-50 font-semibold group-hover:text-orange-400 transition-colors mb-2">
+                            {template.name}
+                          </h4>
+                          <p className="text-slate-400 text-xs line-clamp-3 leading-relaxed">
+                            {template.description}
+                          </p>
+                        </div>
+                        <div className="text-orange-400 text-xs font-semibold mt-4 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                          <span>Select Template</span>
+                          <span>→</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTemplateId(null)}
+                      className="text-slate-400 hover:text-white flex items-center gap-2 mb-6 text-sm font-medium transition-colors"
+                    >
+                      <span>←</span>
+                      <span>Back to Templates</span>
                     </button>
-                  ))}
-                </div>
-              </div>
-              )}
 
-              {/* Additional Preferences */}
-              <div>
-                <label htmlFor="preferences" className="block text-sm font-medium text-slate-300 mb-2">
-                  Additional Preferences
-                </label>
-                <textarea
-                  id="preferences"
-                  value={preferences}
-                  onChange={(e) => setPreferences(e.target.value)}
-                  placeholder="e.g., Prefer indoor training on weekdays, avoid back-to-back hard days, include recovery rides..."
-                  rows={3}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-slate-50 placeholder-slate-500"
-                />
-              </div>
+                    {(() => {
+                      const selectedTemplate = planTemplates.find(t => t.id === selectedTemplateId);
+                      if (!selectedTemplate) return null;
 
-              {error && (
-                <div className="bg-red-500/10 border border-red-500/20 rounded-md p-3">
-                  <p className="text-red-400 text-sm">{error}</p>
-                </div>
-              )}
+                      // Group workouts by week
+                      const workoutsByWeek = (selectedTemplate.workouts || []).reduce((acc, w) => {
+                        const wk = w.week || 1;
+                        if (!acc[wk]) acc[wk] = [];
+                        acc[wk].push(w);
+                        return acc;
+                      }, {} as Record<number, any[]>);
 
-              {/* Form Actions */}
-              <div className="flex space-x-3">
-                <Button
-                  type="submit"
-                  loading={generating}
-                  className="flex items-center space-x-2"
-                >
-                  <Target className="w-4 h-4" />
-                  <span>{generating ? 'Generating...' : 'Generate Plan'}</span>
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="bg-transparent border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-slate-200"
-                  onClick={() => setShowForm(false)}
-                >
-                  Cancel
-                </Button>
+                      // Sort workouts inside each week by dayOfWeek
+                      Object.keys(workoutsByWeek).forEach(wk => {
+                        workoutsByWeek[Number(wk)].sort((a, b) => a.dayOfWeek - b.dayOfWeek);
+                      });
+
+                      const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+                      return (
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                          {/* Config Pane */}
+                          <div className="lg:col-span-5 space-y-6">
+                            <div>
+                              <div className="flex items-center gap-2 mb-3">
+                                <span className="bg-orange-500/10 text-orange-400 text-xs px-2 py-0.5 rounded-full border border-orange-500/20 font-semibold uppercase tracking-wider">
+                                  {selectedTemplate.goal}
+                                </span>
+                                <span className="bg-slate-800 text-slate-300 text-xs px-2 py-0.5 rounded-full border border-slate-700">
+                                  {selectedTemplate.duration_weeks} {selectedTemplate.duration_weeks === 1 ? 'Week' : 'Weeks'}
+                                </span>
+                              </div>
+                              <h4 className="text-xl font-bold text-slate-50 mb-2">
+                                {selectedTemplate.name}
+                              </h4>
+                              <p className="text-slate-300 text-sm leading-relaxed">
+                                {selectedTemplate.description}
+                              </p>
+                            </div>
+
+                            <form onSubmit={handleInstantiateTemplate} className="space-y-4 pt-4 border-t border-slate-800">
+                              <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">
+                                  Start Date
+                                </label>
+                                <input
+                                  type="date"
+                                  title="Template start date"
+                                  value={templateStartDate}
+                                  onChange={(e) => setTemplateStartDate(e.target.value)}
+                                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-50"
+                                  required
+                                />
+                                <p className="text-xs text-slate-500 mt-1">
+                                  The plan workouts will be mapped starting from the week of this date.
+                                </p>
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">
+                                  Plan Name (Optional)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={customPlanName}
+                                  onChange={(e) => setCustomPlanName(e.target.value)}
+                                  placeholder={`e.g., My ${selectedTemplate.name}`}
+                                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-50 placeholder-slate-500"
+                                />
+                              </div>
+
+                              {error && (
+                                <div className="bg-red-500/10 border border-red-500/20 rounded-md p-3">
+                                  <p className="text-red-400 text-sm">{error}</p>
+                                </div>
+                              )}
+
+                              <div className="flex gap-3 pt-2">
+                                <Button
+                                  type="submit"
+                                  loading={instantiating}
+                                  className="flex-1 flex items-center justify-center space-x-2"
+                                >
+                                  <Plus className="w-4 h-4" />
+                                  <span>{instantiating ? 'Instantiating...' : 'Instantiate Plan'}</span>
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="bg-transparent border-slate-600 text-slate-300 hover:bg-slate-800"
+                                  onClick={() => setSelectedTemplateId(null)}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </form>
+                          </div>
+
+                          {/* Preview Pane */}
+                          <div className="lg:col-span-7 space-y-4">
+                            <h5 className="text-sm font-medium text-slate-400 uppercase tracking-wider">
+                              Workout Schedule Preview
+                            </h5>
+                            <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                              {Object.keys(workoutsByWeek).map(weekStr => {
+                                const weekNum = Number(weekStr);
+                                const weekWorkouts = workoutsByWeek[weekNum];
+
+                                return (
+                                  <div key={weekNum} className="border border-slate-800 bg-slate-900/40 rounded-xl p-4">
+                                    <h6 className="text-sm font-bold text-slate-300 mb-3 pb-1 border-b border-slate-800">
+                                      Week {weekNum}
+                                    </h6>
+                                    <div className="space-y-2">
+                                      {weekWorkouts.map((w, wIdx) => (
+                                        <div key={wIdx} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg bg-slate-800/30 border border-slate-800/50 hover:bg-slate-800/50 transition-colors gap-2">
+                                          <div className="flex items-start gap-3">
+                                            <span className="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded font-mono shrink-0 mt-0.5">
+                                              {DAY_NAMES[w.dayOfWeek - 1] || `Day ${w.dayOfWeek}`}
+                                            </span>
+                                            <div>
+                                              <p className="text-sm font-semibold text-slate-100">{w.name}</p>
+                                              <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">{w.description}</p>
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                            <span className="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded border border-slate-700 font-mono">
+                                              {w.duration} min
+                                            </span>
+                                            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded tracking-wider ${
+                                              w.intensity === 'hard' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                                              w.intensity === 'moderate' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' :
+                                              w.intensity === 'easy' ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
+                                              'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                            }`}>
+                                              {w.intensity}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
-            </form>
+            )}
           </div>
         )}
 

@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import type { TrainingPlan, Workout } from '../types';
+import type { TrainingPlan, Workout, PlanTemplate } from '../types';
 import { STORAGE_KEYS } from '../utils/constants';
 
 interface DbTrainingPlan {
@@ -1277,6 +1277,135 @@ class TrainingPlansService {
     } catch (error) {
       console.error('Error in getPendingSuggestions:', error);
       return [];
+    }
+  }
+
+  async getPlanTemplates(): Promise<PlanTemplate[]> {
+    try {
+      const { data, error } = await supabase
+        .from('plan_templates')
+        .select('*')
+        .order('name', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching plan templates:', error);
+        return [];
+      }
+
+      return (data || []).map(t => ({
+        id: t.id,
+        name: t.name,
+        description: t.description,
+        goal: t.goal,
+        duration_weeks: t.duration_weeks,
+        workouts: t.workouts,
+        created_at: t.created_at
+      }));
+    } catch (error) {
+      console.error('Error in getPlanTemplates:', error);
+      return [];
+    }
+  }
+
+  async createPlanFromTemplate(templateId: string, startDate: Date, customName?: string): Promise<TrainingPlan> {
+    try {
+      const userId = await this.getCurrentUserId();
+      if (!userId) {
+        throw new Error('User must be logged in to instantiate a template plan');
+      }
+
+      // 1. Fetch template
+      const { data: template, error: templateError } = await supabase
+        .from('plan_templates')
+        .select('*')
+        .eq('id', templateId)
+        .single();
+
+      if (templateError || !template) {
+        throw new Error(templateError?.message || 'Template not found');
+      }
+
+      // 2. Calculate dates
+      const startDayOfWeek = startDate.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+      const startDayNormalized = startDayOfWeek === 0 ? 7 : startDayOfWeek;
+      
+      const mondayOfStartWeek = new Date(startDate.getTime());
+      mondayOfStartWeek.setDate(mondayOfStartWeek.getDate() - (startDayNormalized - 1));
+
+      // Calculate end date based on duration
+      const endDate = new Date(mondayOfStartWeek.getTime());
+      endDate.setDate(endDate.getDate() + (template.duration_weeks * 7) - 1);
+
+      const planName = customName || `My ${template.name}`;
+
+      // 3. Create training plan record
+      const { data: newPlan, error: planError } = await supabase
+        .from('training_plans')
+        .insert({
+          name: planName,
+          description: template.description,
+          goal: template.goal,
+          start_date: startDate.toISOString().split('T')[0],
+          end_date: endDate.toISOString().split('T')[0],
+          user_id: userId
+        })
+        .select()
+        .single();
+
+      if (planError || !newPlan) {
+        throw planError || new Error('Failed to create plan record');
+      }
+
+      // 4. Create workouts
+      const templateWorkouts = template.workouts as any[];
+      if (templateWorkouts && templateWorkouts.length > 0) {
+        const workoutsToInsert = templateWorkouts.map(w => {
+          const workoutDate = new Date(mondayOfStartWeek.getTime());
+          workoutDate.setDate(workoutDate.getDate() + (w.week - 1) * 7 + (w.dayOfWeek - 1));
+          
+          return {
+             plan_id: newPlan.id,
+             user_id: userId,
+             name: w.name,
+             type: w.type,
+             description: w.description,
+             duration: w.duration,
+             distance: w.distance || 0,
+             intensity: this.sanitizeIntensity(w.intensity),
+             scheduled_date: workoutDate.toISOString().split('T')[0],
+             completed: false,
+             activity_metadata: w.activity_metadata || null
+          };
+        });
+
+        const { error: workoutsError } = await supabase
+          .from('workouts')
+          .insert(workoutsToInsert);
+
+        if (workoutsError) {
+          console.error('Error inserting template workouts:', workoutsError);
+        }
+      }
+
+      // Fetch fully created plan
+      const { data: createdPlan, error: fetchError } = await supabase
+        .from('training_plans')
+        .select('*, workouts(*)')
+        .eq('id', newPlan.id)
+        .single();
+
+      if (fetchError || !createdPlan) {
+        throw fetchError || new Error('Failed to fetch newly created plan');
+      }
+
+      const sortedWorkouts = (createdPlan.workouts || []).sort((a: any, b: any) => 
+        new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime()
+      );
+
+      return this.dbPlanToTrainingPlan(createdPlan, sortedWorkouts);
+    } catch (error) {
+      console.error('Error in createPlanFromTemplate:', error);
+      throw error;
     }
   }
 }

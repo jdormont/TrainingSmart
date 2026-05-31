@@ -406,3 +406,26 @@ export interface PlanReasoning {
     keyWorkoutLogic: string;
   }>;
 }
+
+export interface TemplateWorkout {
+  week: number;
+  dayOfWeek: number;
+  name: string;
+  type: ActivityType;
+  duration: number; // minutes
+  distance?: number; // meters
+  intensity: 'easy' | 'moderate' | 'hard' | 'recovery';
+  description: string;
+  activity_metadata?: ActivityMetadata;
+}
+
+export interface PlanTemplate {
+  id: string;
+  name: string;
+  description: string;
+  goal: string;
+  duration_weeks: number;
+  workouts: TemplateWorkout[];
+  created_at: string;
+}
+
