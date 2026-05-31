@@ -26,6 +26,9 @@ export interface WeeklyInsight {
 interface WeeklyInsightCache {
   insight: WeeklyInsight;
   dateOf: string; // ISO date YYYY-MM-DD — refreshes daily not weekly
+  readinessScore?: number;
+  pacingProgress?: number;
+  activityCount?: number;
 }
 
 interface Correlation {
@@ -78,7 +81,11 @@ interface TrainingPatterns {
 class WeeklyInsightService {
   private readonly CACHE_KEY = 'weekly_insight_cache';
 
-  private getCachedInsight(): WeeklyInsight | null {
+  private getCachedInsight(
+    currentScore?: number,
+    currentProgress?: number,
+    currentActivityCount?: number
+  ): WeeklyInsight | null {
     try {
       const cached = localStorage.getItem(this.CACHE_KEY);
       if (!cached) return null;
@@ -86,26 +93,58 @@ class WeeklyInsightService {
       const cache: WeeklyInsightCache = JSON.parse(cached);
       const today = format(new Date(), 'yyyy-MM-dd');
 
-      if (cache.dateOf === today) {
-        return {
-          ...cache.insight,
-          generatedAt: new Date(cache.insight.generatedAt),
-          weekOf: new Date(cache.insight.weekOf)
-        };
+      if (cache.dateOf !== today) {
+        return null;
       }
 
-      return null;
+      // Check if critical metrics have changed since this was cached.
+      // If we are missing metadata from an older version or the metrics don't match, invalidate.
+      const hasMetadata = cache.readinessScore !== undefined && 
+                          cache.pacingProgress !== undefined && 
+                          cache.activityCount !== undefined;
+
+      if (!hasMetadata) {
+        console.log('Weekly insight cache invalidated: missing metadata');
+        return null;
+      }
+
+      if (currentScore !== undefined && cache.readinessScore !== currentScore) {
+        console.log(`Weekly insight cache invalidated: readiness score changed from ${cache.readinessScore} to ${currentScore}`);
+        return null;
+      }
+
+      if (currentProgress !== undefined && cache.pacingProgress !== Math.round(currentProgress)) {
+        console.log(`Weekly insight cache invalidated: pacing progress changed from ${cache.pacingProgress} to ${Math.round(currentProgress)}`);
+        return null;
+      }
+
+      if (currentActivityCount !== undefined && cache.activityCount !== currentActivityCount) {
+        console.log(`Weekly insight cache invalidated: activity count changed from ${cache.activityCount} to ${currentActivityCount}`);
+        return null;
+      }
+
+      return {
+        ...cache.insight,
+        generatedAt: new Date(cache.insight.generatedAt),
+        weekOf: new Date(cache.insight.weekOf)
+      };
     } catch (error) {
       console.warn('Failed to load cached insight:', error);
       return null;
     }
   }
 
-  private cacheInsight(insight: WeeklyInsight): void {
+  private cacheInsight(
+    insight: WeeklyInsight,
+    metadata: { readinessScore?: number; pacingProgress?: number; activityCount?: number }
+  ): void {
     try {
       const cache: WeeklyInsightCache = {
         insight,
-        dateOf: format(new Date(), 'yyyy-MM-dd')
+        dateOf: format(new Date(), 'yyyy-MM-dd'),
+        readinessScore: metadata.readinessScore,
+        pacingProgress: metadata.pacingProgress !== undefined ? Math.round(metadata.pacingProgress) : undefined,
+        activityCount: metadata.activityCount
       };
       localStorage.setItem(this.CACHE_KEY, JSON.stringify(cache));
     } catch (error) {
@@ -384,16 +423,26 @@ Generate a JSON response with:
   ): Promise<WeeklyInsight> {
     console.log('Generating weekly insight...');
 
-    const cached = this.getCachedInsight();
+    // Analyze current Bio-Aware metrics first to get latest scores for cache validation
+    const recoveryStatus = this.analyzeRecoveryStatus(dailyMetrics, readinessData);
+    const pacingStatus = this.analyzePacingStatus(activities);
+
+    const cached = this.getCachedInsight(
+      recoveryStatus.score,
+      pacingStatus.progress,
+      activities.length
+    );
     if (cached) {
       return cached;
     }
 
-    try {
-      // Analyze new Bio-Aware metrics
-      const recoveryStatus = this.analyzeRecoveryStatus(dailyMetrics, readinessData);
-      const pacingStatus = this.analyzePacingStatus(activities);
+    const metadata = {
+      readinessScore: recoveryStatus.score,
+      pacingProgress: pacingStatus.progress,
+      activityCount: activities.length
+    };
 
+    try {
       // Generate Matrix Insight based on the intersection
       const matrixInsight = this.generateInsightMatrix(pacingStatus, recoveryStatus, recoveryStatus.daysAvailable);
 
@@ -407,7 +456,7 @@ Generate a JSON response with:
           weekOf: startOfWeek(new Date(), { weekStartsOn: 1 })
         };
 
-        this.cacheInsight(insight);
+        this.cacheInsight(insight, metadata);
         return insight;
       }
 
@@ -483,7 +532,7 @@ Generate a JSON response with:
       };
 
       // Cache the insight
-      this.cacheInsight(insight);
+      this.cacheInsight(insight, metadata);
       console.log('Generated and cached weekly insight:', insight);
 
       return insight;
@@ -508,7 +557,7 @@ Generate a JSON response with:
         weekOf: startOfWeek(new Date(), { weekStartsOn: 1 })
       };
 
-      this.cacheInsight(insight);
+      this.cacheInsight(insight, metadata);
       return insight;
     }
   }
