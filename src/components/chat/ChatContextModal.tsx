@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, CheckCircle, AlertCircle, HelpCircle, Calendar, ChevronDown, ChevronUp, Zap } from 'lucide-react';
+import { X, CheckCircle, AlertCircle, HelpCircle, ChevronDown, ChevronUp, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { ChatContextSnapshot, StravaAthlete, StravaActivity, StravaStats } from '../../types';
 
@@ -13,7 +13,6 @@ interface PlanUserProfile {
   weekly_availability_days?: number;
   weekly_availability_duration?: number;
 }
-import { Button } from '../common/Button';
 import { openaiService } from '../../services/openaiApi';
 import { trainingPlansService } from '../../services/trainingPlansService';
 import { supabaseChatService } from '../../services/supabaseChatService';
@@ -279,7 +278,11 @@ Intensity Preference: ${context.preferences.intensityPreference || 'Balanced'}${
   const toggleWeek = (wk: number) => {
     setExpandedWeeks(prev => {
       const next = new Set(prev);
-      next.has(wk) ? next.delete(wk) : next.add(wk);
+      if (next.has(wk)) {
+        next.delete(wk);
+      } else {
+        next.add(wk);
+      }
       return next;
     });
   };
