@@ -287,6 +287,7 @@ Small team — 1 full-stack developer (Josh), 1 AI/prompt engineer (roles may ov
 **Phase 3: Apple Watch & Polish (2 weeks)**
 
 * Key Deliverables:
+  * ✅ **Plan-Wide Cumulative Stats** — Added high-level cumulative stats (completed miles, completed hours, total feet climbed, and calories burned) to the collapsible "Plan Info" drawer on the plans page, complete with visual progress bars relative to planned targets and dynamic calorie fallback estimation.
   * Apple Watch shortcut updates for daily activity capture
   * daily_metrics expansion; dashboard “Daily Activity” card
   * Coach specialization badge in chat header
