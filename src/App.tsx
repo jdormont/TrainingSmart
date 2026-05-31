@@ -21,8 +21,10 @@ import PrivacyPage from './pages/PrivacyPage';
 import { ConversationalOnboarding } from './components/onboarding/ConversationalOnboarding';
 import { ROUTES } from './utils/constants';
 import { PostHogPageView } from './components/common/PostHogPageView';
+import { useBackgroundSync } from './hooks/useBackgroundSync';
 
 function App() {
+  useBackgroundSync();
   return (
     <Router>
       <PostHogPageView />

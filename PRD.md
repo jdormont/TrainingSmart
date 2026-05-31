@@ -75,8 +75,8 @@ Consistent notation is used to represent current development status.
 - `[x] COMPLETE` - Coggan 7-zone Power Analysis & manual FTP configuration.
 - `[x] COMPLETE` - Manual Strava activity linking and automatic workout completion updates.
 - `[x] COMPLETE` - Apple Watch "Daily Activity" rings card (calories, stand hours, steps, exercise minutes).
-- `[ ] INCOMPLETE` - Heuristic-based automatic activity matching suggestions with confidence scores.
-- `[ ] INCOMPLETE` - Automated background sync polling (currently syncs on manual refresh or page load).
+- `[x] COMPLETE` - Heuristic-based automatic activity matching suggestions with confidence scores.
+- `[x] COMPLETE` - Automated background sync polling on window/tab focus.
 
 ### 3.5. AI Chat Interface & Curation Loop
 - `[x] COMPLETE` - Message history maintenance and context snapshot storage.

@@ -31,6 +31,11 @@ interface DbWorkout {
   activity_metadata?: Record<string, unknown> | null;
   plan_id: string;
   user_id: string;
+  strava_activity_id?: number | null;
+  activity_match_score?: number | null;
+  auto_matched?: boolean;
+  match_metadata?: Record<string, any> | null;
+  linked_at?: string | null;
 }
 
 class TrainingPlansService {
@@ -108,6 +113,11 @@ class TrainingPlansService {
         status: w.completed ? 'completed' : (w.status || 'planned'),
         google_calendar_event_id: w.google_calendar_event_id,
         activity_metadata: w.activity_metadata ?? undefined,
+        strava_activity_id: w.strava_activity_id,
+        activity_match_score: w.activity_match_score ? Number(w.activity_match_score) : undefined,
+        auto_matched: w.auto_matched,
+        match_metadata: w.match_metadata ?? undefined,
+        linked_at: w.linked_at,
       }))
     };
 
@@ -722,7 +732,12 @@ class TrainingPlansService {
         scheduledDate: new Date(data.scheduled_date + 'T00:00:00'),
         completed: data.completed,
         status: data.completed ? 'completed' : (data.status || 'planned'),
-        google_calendar_event_id: data.google_calendar_event_id
+        google_calendar_event_id: data.google_calendar_event_id,
+        strava_activity_id: data.strava_activity_id,
+        activity_match_score: data.activity_match_score ? Number(data.activity_match_score) : undefined,
+        auto_matched: data.auto_matched,
+        match_metadata: data.match_metadata ?? undefined,
+        linked_at: data.linked_at,
       };
     } catch (error) {
       console.error('Error in getNextUpcomingWorkout:', error);
@@ -778,7 +793,12 @@ class TrainingPlansService {
         scheduledDate: new Date(data.scheduled_date),
         completed: data.completed,
         status: data.status as Workout['status'],
-        google_calendar_event_id: data.google_calendar_event_id
+        google_calendar_event_id: data.google_calendar_event_id,
+        strava_activity_id: data.strava_activity_id,
+        activity_match_score: data.activity_match_score ? Number(data.activity_match_score) : undefined,
+        auto_matched: data.auto_matched,
+        match_metadata: data.match_metadata ?? undefined,
+        linked_at: data.linked_at,
       };
     } catch (error) {
       console.error('Error adding workout to plan:', error);
@@ -852,6 +872,11 @@ class TrainingPlansService {
         status: (row.status || 'planned') as Workout['status'],
         google_calendar_event_id: row.google_calendar_event_id,
         activity_metadata: row.activity_metadata,
+        strava_activity_id: row.strava_activity_id,
+        activity_match_score: row.activity_match_score ? Number(row.activity_match_score) : undefined,
+        auto_matched: row.auto_matched,
+        match_metadata: row.match_metadata ?? undefined,
+        linked_at: row.linked_at,
       }));
     } catch (error) {
       console.error('Error bulk-inserting workouts:', error);
@@ -924,6 +949,335 @@ class TrainingPlansService {
 
   async reduceWeekIntensity(planId: string, weekStart: Date): Promise<void> {
     console.log('[Mock] Reduce week intensity not implemented yet');
+  }
+
+  calculateMatchConfidence(workout: Workout, activity: any): number {
+    // 1. Date Closeness (40%): Max score if dates match. Reduce score by 10 points per day of difference (up to ±3 days).
+    const workoutDate = new Date(workout.scheduledDate);
+    const activityDate = new Date(activity.start_date_local || activity.start_date);
+    
+    // Set both to midnight in their local timezone for calendar days comparison
+    const wMidnight = new Date(workoutDate.getFullYear(), workoutDate.getMonth(), workoutDate.getDate());
+    const aMidnight = new Date(activityDate.getFullYear(), activityDate.getMonth(), activityDate.getDate());
+    
+    const diffTime = Math.abs(wMidnight.getTime() - aMidnight.getTime());
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    
+    let dateScore = 0;
+    if (diffDays === 0) {
+      dateScore = 40;
+    } else if (diffDays <= 3) {
+      dateScore = 40 - (diffDays * 10);
+    }
+    
+    // 2. Activity Type Match (30%): 30 points if types match.
+    const normalizeType = (t: string): string => {
+      const typeLower = t.toLowerCase().trim();
+      if (['ride', 'virtualride', 'gravelride', 'mountainbikeride', 'ebikeride', 'bike'].includes(typeLower)) return 'bike';
+      if (['run', 'trailrun', 'jog'].includes(typeLower)) return 'run';
+      if (['swim'].includes(typeLower)) return 'swim';
+      if (['weighttraining', 'workout', 'strength', 'calisthenics'].includes(typeLower)) return 'strength';
+      if (['yoga', 'pilates'].includes(typeLower)) return 'yoga';
+      if (['hike', 'walk', 'hiking'].includes(typeLower)) return 'hiking';
+      return typeLower;
+    };
+    
+    const typeMatches = normalizeType(workout.type) === normalizeType(activity.type || activity.sport_type || '');
+    const typeScore = typeMatches ? 30 : 0;
+    
+    // 3. Duration Similarity (15%):
+    // diff = abs(activity.moving_time - workout.duration * 60)
+    // Score = 15 * (1 - diff / (workout.duration * 60)), capped at 0.
+    let durationScore = 0;
+    if (workout.duration && workout.duration > 0) {
+      const plannedSec = workout.duration * 60;
+      const actualSec = activity.moving_time || activity.elapsed_time || 0;
+      const durationDiff = Math.abs(actualSec - plannedSec);
+      const ratio = durationDiff / plannedSec;
+      durationScore = Math.max(0, 15 * (1 - ratio));
+    }
+    
+    // 4. Distance Similarity (15%):
+    // For distance-based workouts, score is scaled by similarity within a 20% tolerance.
+    // For non-distance-based workouts, distance is not evaluated (we give default 15 points).
+    let distanceScore = 15;
+    if (workout.distance && workout.distance > 0) {
+      const plannedMeters = workout.distance;
+      const actualMeters = activity.distance || 0;
+      const distanceDiff = Math.abs(actualMeters - plannedMeters);
+      const ratio = distanceDiff / plannedMeters;
+      // scaled by similarity within a 20% tolerance: ratio / 0.2
+      distanceScore = Math.max(0, 15 * (1 - ratio / 0.2));
+    }
+    
+    const totalScore = dateScore + typeScore + durationScore + distanceScore;
+    return Math.min(100, Math.max(0, Math.round(totalScore * 100) / 100));
+  }
+
+  async reconcileWorkoutsWithStrava(): Promise<{ autoLinkedCount: number; suggestedCount: number }> {
+    try {
+      const userId = await this.getCurrentUserId();
+      if (!userId) return { autoLinkedCount: 0, suggestedCount: 0 };
+
+      // 1. Get recent cached activities (say, last 30 days)
+      const { data: cachedRows, error: activitiesError } = await supabase
+        .from('strava_activities_cache')
+        .select('id, activity_data, start_date')
+        .eq('user_id', userId)
+        .order('start_date', { ascending: false });
+
+      if (activitiesError) {
+        console.error('Error fetching cached activities for reconciliation:', activitiesError);
+        return { autoLinkedCount: 0, suggestedCount: 0 };
+      }
+
+      const activities = (cachedRows || []).map(row => row.activity_data as any);
+      if (activities.length === 0) {
+        return { autoLinkedCount: 0, suggestedCount: 0 };
+      }
+
+      // 2. Fetch workouts that are in the active training plan or simply all workouts of the user
+      const { data: dbWorkouts, error: workoutsError } = await supabase
+        .from('workouts')
+        .select('*')
+        .eq('user_id', userId);
+
+      if (workoutsError) {
+        console.error('Error fetching workouts for reconciliation:', workoutsError);
+        return { autoLinkedCount: 0, suggestedCount: 0 };
+      }
+
+      // Map to Workout client type
+      const workouts: Workout[] = (dbWorkouts || []).map(w => ({
+        id: w.id,
+        name: w.name,
+        type: w.type as Workout['type'],
+        description: w.description,
+        duration: w.duration,
+        distance: w.distance,
+        intensity: w.intensity as Workout['intensity'],
+        scheduledDate: new Date(w.scheduled_date + 'T00:00:00'),
+        completed: w.completed,
+        status: w.completed ? 'completed' : (w.status || 'planned'),
+        google_calendar_event_id: w.google_calendar_event_id,
+        activity_metadata: w.activity_metadata ?? undefined,
+        strava_activity_id: w.strava_activity_id,
+        activity_match_score: w.activity_match_score ? Number(w.activity_match_score) : undefined,
+        auto_matched: w.auto_matched,
+        match_metadata: w.match_metadata ?? undefined,
+        linked_at: w.linked_at,
+      }));
+
+      // Identify already linked activity IDs (only count finalized links, i.e., completed = true)
+      const linkedActivityIds = new Set<number>(
+        workouts
+          .filter(w => w.completed && w.strava_activity_id)
+          .map(w => w.strava_activity_id!)
+      );
+
+      // Find workouts that are uncompleted and do not have a finalized link
+      const unlinkedWorkouts = workouts.filter(w => !w.completed);
+
+      let autoLinkedCount = 0;
+      let suggestedCount = 0;
+
+      for (const workout of unlinkedWorkouts) {
+        // Find the best matching activity for this workout
+        let bestActivity: any = null;
+        let bestScore = 0;
+
+        for (const activity of activities) {
+          // Skip activities that are already linked to another completed workout
+          if (linkedActivityIds.has(activity.id)) continue;
+
+          const score = this.calculateMatchConfidence(workout, activity);
+          if (score > bestScore) {
+            bestScore = score;
+            bestActivity = activity;
+          }
+        }
+
+        // If we found a match above our threshold
+        if (bestScore >= 70 && bestActivity) {
+          const matchMetadata = {
+            id: bestActivity.id,
+            name: bestActivity.name,
+            distance: bestActivity.distance,
+            moving_time: bestActivity.moving_time,
+            start_date: bestActivity.start_date_local || bestActivity.start_date,
+            type: bestActivity.type,
+          };
+
+          if (bestScore >= 85) {
+            // Auto-link: mark workout as completed, update database
+            console.log(`Auto-linking workout ${workout.name} (${workout.id}) to Strava activity ${bestActivity.name} with score ${bestScore}`);
+            
+            const { error: updateError } = await supabase
+              .from('workouts')
+              .update({
+                completed: true,
+                strava_activity_id: bestActivity.id,
+                activity_match_score: bestScore,
+                auto_matched: true,
+                match_metadata: matchMetadata,
+                linked_at: new Date().toISOString()
+              })
+              .eq('id', workout.id);
+
+            if (!updateError) {
+              autoLinkedCount++;
+              // Add to linked set so other workouts don't steal it in this loop pass
+              linkedActivityIds.add(bestActivity.id);
+            } else {
+              console.error(`Error auto-linking workout ${workout.id}:`, updateError);
+            }
+          } else {
+            // Suggestion: store match details, but keep completed = false, auto_matched = false
+            console.log(`Suggesting link for workout ${workout.name} (${workout.id}) with Strava activity ${bestActivity.name} (score ${bestScore})`);
+            
+            // Only update if it's new or the match score is different/better
+            if (workout.strava_activity_id !== bestActivity.id || workout.activity_match_score !== bestScore) {
+              const { error: updateError } = await supabase
+                .from('workouts')
+                .update({
+                  strava_activity_id: bestActivity.id,
+                  activity_match_score: bestScore,
+                  auto_matched: false,
+                  match_metadata: matchMetadata,
+                  linked_at: new Date().toISOString()
+                })
+                .eq('id', workout.id);
+
+              if (!updateError) {
+                suggestedCount++;
+              } else {
+                console.error(`Error updating suggestion for workout ${workout.id}:`, updateError);
+              }
+            }
+          }
+        } else {
+          // If the workout had a suggestion previously but no longer matches >= 70, clear it
+          if (workout.strava_activity_id && !workout.completed) {
+            console.log(`Clearing stale suggestion for workout ${workout.name} (${workout.id})`);
+            await supabase
+              .from('workouts')
+              .update({
+                strava_activity_id: null,
+                activity_match_score: null,
+                auto_matched: false,
+                match_metadata: null,
+                linked_at: null
+              })
+              .eq('id', workout.id);
+          }
+        }
+      }
+
+      return { autoLinkedCount, suggestedCount };
+    } catch (error) {
+      console.error('Error in reconcileWorkoutsWithStrava:', error);
+      return { autoLinkedCount: 0, suggestedCount: 0 };
+    }
+  }
+
+  async confirmActivityLink(workoutId: string): Promise<void> {
+    try {
+      const userId = await this.getCurrentUserId();
+      if (!userId) return;
+
+      const { error } = await supabase
+        .from('workouts')
+        .update({
+          completed: true,
+          linked_at: new Date().toISOString(),
+          auto_matched: false // Since the user manually confirmed it
+        })
+        .eq('id', workoutId)
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('Error confirming activity link:', error);
+        throw error;
+      }
+
+      await this.touchPlanUpdatedAt(workoutId);
+    } catch (error) {
+      console.error('Error in confirmActivityLink:', error);
+      throw error;
+    }
+  }
+
+  async rejectActivityLink(workoutId: string): Promise<void> {
+    try {
+      const userId = await this.getCurrentUserId();
+      if (!userId) return;
+
+      const { error } = await supabase
+        .from('workouts')
+        .update({
+          strava_activity_id: null,
+          activity_match_score: null,
+          auto_matched: false,
+          match_metadata: null,
+          linked_at: null
+        })
+        .eq('id', workoutId)
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('Error rejecting activity link:', error);
+        throw error;
+      }
+
+      await this.touchPlanUpdatedAt(workoutId);
+    } catch (error) {
+      console.error('Error in rejectActivityLink:', error);
+      throw error;
+    }
+  }
+
+  async getPendingSuggestions(): Promise<Workout[]> {
+    try {
+      const userId = await this.getCurrentUserId();
+      if (!userId) return [];
+
+      const { data, error } = await supabase
+        .from('workouts')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('completed', false)
+        .gte('activity_match_score', 70)
+        .lt('activity_match_score', 85)
+        .not('strava_activity_id', 'is', null);
+
+      if (error) {
+        console.error('Error fetching pending suggestions:', error);
+        return [];
+      }
+
+      return (data || []).map(row => ({
+        id: row.id,
+        name: row.name,
+        type: row.type as Workout['type'],
+        description: row.description,
+        duration: row.duration,
+        distance: row.distance,
+        intensity: row.intensity as Workout['intensity'],
+        scheduledDate: new Date(row.scheduled_date + 'T00:00:00'),
+        completed: row.completed,
+        status: (row.status || 'planned') as Workout['status'],
+        google_calendar_event_id: row.google_calendar_event_id,
+        activity_metadata: row.activity_metadata,
+        strava_activity_id: row.strava_activity_id,
+        activity_match_score: row.activity_match_score ? Number(row.activity_match_score) : undefined,
+        auto_matched: row.auto_matched,
+        match_metadata: row.match_metadata ?? undefined,
+        linked_at: row.linked_at,
+      }));
+    } catch (error) {
+      console.error('Error in getPendingSuggestions:', error);
+      return [];
+    }
   }
 }
 

@@ -121,6 +121,7 @@ export const DashboardPage: React.FC = () => {
     weeklyInsight = null,
     healthMetrics = null,
     nextWorkout = null,
+    pendingSuggestions = [],
     userStreak = null,
     isStravaConnected = false,
     isDemoMode = false,
@@ -205,6 +206,24 @@ export const DashboardPage: React.FC = () => {
   // Helper to refresh next workout after adjustment
   const refreshNextWorkout = async () => {
       await queryClient.invalidateQueries({ queryKey: ['dashboard-data'] });
+  };
+
+  const handleConfirmLink = async (workoutId: string) => {
+    try {
+      await trainingPlansService.confirmActivityLink(workoutId);
+      queryClient.invalidateQueries({ queryKey: ['dashboard-data'] });
+    } catch (err) {
+      console.error('Failed to confirm activity link:', err);
+    }
+  };
+
+  const handleRejectLink = async (workoutId: string) => {
+    try {
+      await trainingPlansService.rejectActivityLink(workoutId);
+      queryClient.invalidateQueries({ queryKey: ['dashboard-data'] });
+    } catch (err) {
+      console.error('Failed to reject activity link:', err);
+    }
   };
 
   // Find similar activities for comparison
@@ -446,6 +465,63 @@ export const DashboardPage: React.FC = () => {
               <span>{COACH_BADGE[coachSpecialization].emoji}</span>
               {COACH_BADGE[coachSpecialization].label}
             </span>
+          </div>
+        )}
+
+        {/* Suggested Activity Link banner queue */}
+        {pendingSuggestions && pendingSuggestions.length > 0 && (
+          <div className="mb-6 space-y-4">
+            {pendingSuggestions.map((workout) => {
+              const metadata = workout.match_metadata as any;
+              if (!metadata) return null;
+              
+              const activityName = metadata.name || 'Strava Activity';
+              const formattedDistance = metadata.distance 
+                ? `${(metadata.distance / 1609.34).toFixed(1)} miles` 
+                : '';
+              const formattedDuration = metadata.moving_time
+                ? `${Math.round(metadata.moving_time / 60)} mins`
+                : '';
+              const score = workout.activity_match_score || 0;
+
+              return (
+                <div key={workout.id} className="bg-slate-900 border border-amber-500/30 rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-lg shadow-amber-500/5">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-amber-500/10 rounded-lg text-amber-500 mt-1">
+                      <Sparkles className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-slate-100">Suggested Activity Link</h3>
+                      <p className="text-sm text-slate-300">
+                        Did you mean to link <span className="font-semibold text-amber-400">"{activityName}"</span> ({formattedDistance && `${formattedDistance}, `}{formattedDuration}) to your planned workout <span className="font-semibold text-slate-100">"{workout.name}"</span>?
+                      </p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className="text-xs px-2 py-0.5 bg-slate-800 text-amber-400 border border-amber-500/20 rounded">
+                          Match Confidence: {Math.round(score)}%
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          Scheduled: {new Date(workout.scheduledDate).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 w-full md:w-auto">
+                    <button
+                      onClick={() => handleConfirmLink(workout.id)}
+                      className="flex-1 md:flex-none px-4 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold rounded-lg text-sm transition-colors"
+                    >
+                      Yes, link it
+                    </button>
+                    <button
+                      onClick={() => handleRejectLink(workout.id)}
+                      className="flex-1 md:flex-none px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg text-sm transition-colors"
+                    >
+                      No
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 

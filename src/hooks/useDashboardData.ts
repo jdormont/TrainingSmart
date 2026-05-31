@@ -34,6 +34,7 @@ interface DashboardData {
   weeklyInsight: WeeklyInsight | null;
   healthMetrics: HealthMetrics | null;
   nextWorkout: Workout | null;
+  pendingSuggestions: Workout[];
   userStreak: UserStreak | null;
   isStravaConnected: boolean;
   isDemoMode: boolean;
@@ -60,6 +61,7 @@ export const useDashboardData = () => {
         weeklyInsight: MOCK_WEEKLY_INSIGHT,
         healthMetrics: MOCK_HEALTH_METRICS,
         nextWorkout: MOCK_NEXT_WORKOUT,
+        pendingSuggestions: [],
         userStreak: {
           user_id: 'demo',
           current_streak: 5,
@@ -107,6 +109,7 @@ export const useDashboardData = () => {
         return {
            athlete: null, activities: [], weeklyStats: null, sleepData: null, sleepHistory: [], readinessData: null,
            dailyMetric: null, dailyMetrics: [], weeklyInsight: null, healthMetrics: null, nextWorkout: null,
+           pendingSuggestions: [],
            userStreak: null, isStravaConnected: false, isDemoMode: false, currentUserId: user.id
         };
       }
@@ -315,11 +318,17 @@ export const useDashboardData = () => {
     } catch(e) { console.warn('Health metrics failed', e); }
 
 
-    // 6. Next Workout
+    // 6. Next Workout & Suggestions
     let nextWorkout: Workout | null = null;
+    let pendingSuggestions: Workout[] = [];
     try {
-      nextWorkout = await trainingPlansService.getNextUpcomingWorkout();
-    } catch(e) { console.warn('Next workout failed', e); }
+      const [nextW, suggestions] = await Promise.all([
+        trainingPlansService.getNextUpcomingWorkout(),
+        trainingPlansService.getPendingSuggestions()
+      ]);
+      nextWorkout = nextW;
+      pendingSuggestions = suggestions;
+    } catch(e) { console.warn('Next workout / suggestions failed', e); }
 
 
     return {
@@ -334,6 +343,7 @@ export const useDashboardData = () => {
       weeklyInsight,
       healthMetrics,
       nextWorkout,
+      pendingSuggestions,
       userStreak: streakData,
       isStravaConnected: true,
       isDemoMode: false,

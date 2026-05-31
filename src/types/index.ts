@@ -196,6 +196,11 @@ export interface Workout {
   status: 'planned' | 'completed' | 'skipped';
   google_calendar_event_id?: string;
   activity_metadata?: ActivityMetadata;
+  strava_activity_id?: number | null;
+  activity_match_score?: number | null;
+  auto_matched?: boolean;
+  match_metadata?: Record<string, any> | null;
+  linked_at?: string | null;
 }
 
 export interface ContentItem {
