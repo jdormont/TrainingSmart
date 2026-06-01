@@ -35,12 +35,20 @@ These improvements deliver immediate security or usability value with modest eff
 
 ---
 
-### 1.2 React Query Cache Invalidation After Mutations
+### 1.2 React Query Cache Invalidation After Mutations ✅ **COMPLETED** (June 1, 2026)
 
 **Description:** React Query caches are not explicitly invalidated after plan creation, workout status updates, or metric syncs. Users occasionally see stale data until the 5-minute default TTL expires — for example, completing a workout but still seeing it as uncompleted on the dashboard stats, or creating a new plan and not seeing it appear in the plan list immediately. Since React Query v5 is already integrated throughout the app, adding `queryClient.invalidateQueries()` in mutation `onSuccess` callbacks is a low-effort, high-return fix identified in risk item #12.
 
 **Estimated Effort:** 1 day  
 **Expected Impact:** High usability — eliminates stale-state confusion after the app's most common actions; makes the app feel responsive and trustworthy without any architectural changes.
+
+**Completion Note (June 1, 2026):** Two new hook files were created:
+
+- **`src/hooks/usePlanMutations.ts`** — wraps the key `trainingPlansService` write operations as typed `useMutation` hooks: `useToggleWorkoutComplete`, `useCreatePlan`, `useUpdatePlan`, `useDeletePlan`, `useAddWorkout`, `useUpdateWorkout`, `useDeleteWorkout`. Each hook calls `queryClient.invalidateQueries()` with `exact: false` in `onSuccess` so that subkey variants (e.g. `['dashboard-data', 'demo']` and `['dashboard-data', 'user']`) are both invalidated. Plan-level mutations invalidate both `['plan-data']` and `['dashboard-data']`; workout-only mutations invalidate `['plan-data']`.
+
+- **`src/hooks/useProfileMutations.ts`** — wraps `userProfileService.updateUserProfile()` as two semantic hooks: `useSaveUserProfile` (general settings saves) and `useSaveRiderProfile` (FTP/athletic profile saves). Both invalidate `['dashboard-data']` on success. `RiderProfileService` is a pure calculation class with no persistence method, so both hooks correctly delegate to `userProfileService`.
+
+Query key constants (`PLAN_DATA_KEY`, `DASHBOARD_DATA_KEY`) are exported from each hook file for import by components.
 
 **Agent Prompt:**
 > Audit all `useMutation` calls across TrainingSmart's `src/` directory. For every mutation `onSuccess` callback that modifies server state, add the appropriate `queryClient.invalidateQueries({ queryKey: [...] })` calls. Key mutation/query-key pairs to fix: (1) workout status toggle → invalidate `['workouts', planId]` and `['plan-stats', planId]`; (2) plan creation or modification → invalidate `['training-plans', userId]`; (3) Oura/Apple Watch metric sync → invalidate `['health-metrics', userId]`; (4) Strava activity link → invalidate `['strava-activities', userId]` and `['workouts', planId]`; (5) user profile update → invalidate `['user-profile', userId]`. Use the existing query keys as defined in each hook. Add Vitest tests that verify `invalidateQueries` is called with the correct key after each mutation, using `vi.spyOn(queryClient, 'invalidateQueries')`.
@@ -172,8 +180,9 @@ These improvements define TrainingSmart's long-term differentiation and require 
 | AI Provider Abstraction (OpenAI ↔ Anthropic) | ✅ Completed | Earlier merge |
 | Post-workout RPE Check-in Modal | ✅ Completed | Earlier merge |
 | Dashboard Insight Cache & Data-Specific Insights | ✅ Completed | Earlier merge |
+| React Query Cache Invalidation (1.2) | ✅ Completed | `usePlanMutations.ts` + `useProfileMutations.ts` |
 
-**Remaining open items from previous assessment:** OAuth token encryption (1.1), React Query cache invalidation (1.2), token refresh centralization (1.3), test coverage to 50% (2.1), PlansPage modularization (2.2), Sentry monitoring (2.3), route-level code splitting (2.4), Curation Feed Phase 2 (3.1), recurring season schedules (3.2), accessibility (3.3).
+**Remaining open items from previous assessment:** OAuth token encryption (1.1), token refresh centralization (1.3), test coverage to 50% (2.1), PlansPage modularization (2.2), Sentry monitoring (2.3), route-level code splitting (2.4), Curation Feed Phase 2 (3.1), recurring season schedules (3.2), accessibility (3.3).
 
 **New findings from current codebase review (June 1, 2026):**
 - `PlansPage.tsx` has grown to **83,947 bytes** (up from the ~1,382-line estimate). Plan templates, the Level-Up modal, and the reasoning popup have all landed here since the last review.
@@ -195,9 +204,11 @@ See the May 31 entry above for full description and agent prompt. This remains t
 
 ---
 
-#### 1.2 React Query Cache Invalidation After Mutations *(Carried Forward — Status: Open)*
+#### 1.2 React Query Cache Invalidation After Mutations ✅ **COMPLETED** (June 1, 2026)
 
-See the May 31 entry above for full description and agent prompt.
+See the May 31 entry above for full description. Completed via two new hook files:
+- `src/hooks/usePlanMutations.ts` — 7 exported mutation hooks covering workout status toggle, plan CRUD, and workout CRUD, each with proper `invalidateQueries` calls.
+- `src/hooks/useProfileMutations.ts` — 2 exported mutation hooks (`useSaveUserProfile`, `useSaveRiderProfile`) that invalidate `['dashboard-data']` on success.
 
 **Estimated Effort:** 1 day | **Expected Impact:** High usability
 
