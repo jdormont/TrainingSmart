@@ -152,3 +152,131 @@ These improvements define TrainingSmart's long-term differentiation and require 
 
 **Agent Prompt:**
 > Conduct and remediate an accessibility audit for TrainingSmart. First, install `eslint-plugin-jsx-a11y` and add it to `eslint.config.js`; fix all auto-fixable violations reported by `npx eslint src/ --fix`. Then manually address these high-priority areas: (1) all modal/dialog overlays — add `role="dialog"`, `aria-modal="true"`, `aria-labelledby`, and implement focus trapping using a `useFocusTrap` custom hook that returns focus to the trigger element on close; (2) drag-and-drop workout cards — add `role="button"`, `aria-grabbed` state, and keyboard arrow-key support (up/down to reorder when a card has focus); (3) all icon-only `<button>` elements — add descriptive `aria-label` attributes; (4) the Recharts Coggan power zone chart — wrap in a `<figure>` with `aria-label` providing a text summary of the power distribution. Install `@axe-core/react` in development mode only to catch regressions automatically.
+
+---
+
+## Reassessment — June 1, 2026
+
+*Assessment Date: June 1, 2026*
+
+---
+
+### Progress Since May 31 Assessment
+
+| Item | Status | Notes |
+|------|--------|-------|
+| CI/CD Pipeline (GitHub Actions) | ✅ Completed | PR #15 |
+| Vitest Test Suite (142 tests, 11 files) | ✅ Completed | PR #15 |
+| Plan Templates Library (Phase 2) | ✅ Completed | Direct push |
+| Heuristic Activity Matching | ✅ Completed | Direct push |
+| AI Provider Abstraction (OpenAI ↔ Anthropic) | ✅ Completed | Earlier merge |
+| Post-workout RPE Check-in Modal | ✅ Completed | Earlier merge |
+| Dashboard Insight Cache & Data-Specific Insights | ✅ Completed | Earlier merge |
+
+**Remaining open items from previous assessment:** OAuth token encryption (1.1), React Query cache invalidation (1.2), token refresh centralization (1.3), test coverage to 50% (2.1), PlansPage modularization (2.2), Sentry monitoring (2.3), route-level code splitting (2.4), Curation Feed Phase 2 (3.1), recurring season schedules (3.2), accessibility (3.3).
+
+**New findings from current codebase review (June 1, 2026):**
+- `PlansPage.tsx` has grown to **83,947 bytes** (up from the ~1,382-line estimate). Plan templates, the Level-Up modal, and the reasoning popup have all landed here since the last review.
+- `SettingsPage.tsx` is **53,624 bytes** — the second-largest file in the codebase, managing Strava OAuth, Google Calendar, Oura, Apple Health, rider profile, and notification settings in a single component.
+- `ChatPage.tsx` (36,141 bytes) and `DashboardPage.tsx` (33,996 bytes) are both individually large enough to warrant future extraction.
+- The 142-test suite covers utility functions well but critical service layer files (`trainingPlansService.ts`, `healthMetricsService.ts`) remain largely untested.
+
+---
+
+### Updated Tier 1 — High-Impact, Quick Wins
+
+---
+
+#### 1.1 Encrypt OAuth Tokens at Rest *(Carried Forward — Status: Open)*
+
+See the May 31 entry above for full description and agent prompt. This remains the highest-priority open security item.
+
+**Estimated Effort:** 2–3 days | **Expected Impact:** High security
+
+---
+
+#### 1.2 React Query Cache Invalidation After Mutations *(Carried Forward — Status: Open)*
+
+See the May 31 entry above for full description and agent prompt.
+
+**Estimated Effort:** 1 day | **Expected Impact:** High usability
+
+---
+
+#### 1.3 SettingsPage Modularization (53 KB)
+
+**Description:** `SettingsPage.tsx` at 53,624 bytes is effectively a second monolith alongside `PlansPage.tsx`. It manages six entirely separate concerns in one file: Strava OAuth connection, Google Calendar integration, Oura Ring setup, Apple Health sync, rider profile (FTP, weight, zones), and notification preferences. Each section involves its own Edge Function calls, form state, and mutation logic. Splitting these into focused sub-components reduces merge-conflict risk and makes each integration independently testable — a prerequisite for safely adding the OAuth token encryption work from 1.1.
+
+**Estimated Effort:** 2–3 days  
+**Expected Impact:** Medium — reduces the second-largest source of merge conflicts; unblocks component-level testing of OAuth flows; improves code review quality on all future settings changes.
+
+**Agent Prompt:**
+> Refactor `src/pages/SettingsPage.tsx` in TrainingSmart without changing any visible behavior or styling. Extract the following self-contained sections into `src/components/settings/` sub-components: (1) `StravaConnectionCard.tsx` — Strava OAuth connect/disconnect UI and token status; (2) `GoogleCalendarCard.tsx` — Google Calendar sync enable/disable; (3) `OuraIntegrationCard.tsx` — Oura Ring token entry and sync status; (4) `AppleHealthCard.tsx` — Apple Health sync toggle and last-sync display; (5) `RiderProfileForm.tsx` — FTP, weight, training zones form with save mutation; (6) `NotificationPrefsCard.tsx` — notification toggles. `SettingsPage.tsx` should become a thin layout component under 150 lines that composes these sub-components. Pass shared state (userId, queryClient) via props. Verify CI passes and all 142 existing tests still pass after the refactor.
+
+---
+
+### Updated Tier 2 — Medium-Impact, Moderate Effort
+
+---
+
+#### 2.1 Increase Test Coverage to 50%+ on Core Services *(Carried Forward — Status: Open)*
+
+See the May 31 entry above for full description and agent prompt. The CI pipeline is now in place, making this work immediately runnable and measurable.
+
+**Estimated Effort:** 1–2 weeks | **Expected Impact:** High long-term
+
+---
+
+#### 2.2 Split Monolithic PlansPage.tsx (Now 83 KB) *(Carried Forward — Status: Open, Worsened)*
+
+See the May 31 entry above for full description and agent prompt. The file has grown from the ~1,382-line estimate to 83,947 bytes. Priority is elevated — this is now the most urgent maintainability issue in the codebase.
+
+**Estimated Effort:** 3–5 days | **Expected Impact:** Medium-High
+
+---
+
+#### 2.3 Structured Error Monitoring with Sentry *(Carried Forward — Status: Open)*
+
+See the May 31 entry above for full description and agent prompt.
+
+**Estimated Effort:** 2 days | **Expected Impact:** Medium
+
+---
+
+#### 2.4 Eliminate TypeScript `any` in Critical Service Files
+
+**Description:** The previous risk review identified 214 `any` instances across the codebase. In service files like `trainingPlansService.ts` (930 lines), `any` types mask incorrect data shapes passed between AI plan generation and database inserts — a source of hard-to-debug runtime errors. Eliminating `any` in the three highest-traffic service files by replacing with proper interface types (from the Supabase-generated schema types) will surface existing type mismatches and prevent new ones from landing silently.
+
+**Estimated Effort:** 2–3 days  
+**Expected Impact:** Medium — prevents a class of silent runtime errors in the plan generation flow; improves IDE autocompletion quality; contributes meaningfully to the overall ~214-instance technical debt reduction.
+
+**Agent Prompt:**
+> Eliminate TypeScript `any` types from the three highest-priority service files in TrainingSmart: `src/services/trainingPlansService.ts`, `src/services/healthMetricsService.ts`, and `src/services/stravaApi.ts`. For each file: (1) run `npx tsc --noEmit` and note existing `any`-related suppressions; (2) replace explicit `any` parameter and return types with proper interfaces imported from `src/types/index.ts` or from the Supabase-generated `database.types.ts` (for database row types); (3) where the correct type is genuinely unknown (e.g., raw JSON from an external API), use `unknown` with a type guard or a narrow inline type assertion. Do not change any runtime logic — only type annotations. Enable `"strict": true` in `tsconfig.app.json` if not already set and fix any newly surfaced errors in these three files only. Verify `npx tsc --noEmit` exits clean and CI passes.
+
+---
+
+### Updated Tier 3 — Strategic, Longer-Term
+
+---
+
+#### 3.1 Curation Feed Phase 2 — RSS/Article Integration *(Carried Forward — Status: Open)*
+
+See the May 31 entry above for full description and agent prompt.
+
+**Estimated Effort:** 2–3 weeks | **Expected Impact:** High long-term
+
+---
+
+#### 3.2 Recurring Season Schedules *(Carried Forward — Status: Open)*
+
+See the May 31 entry above for full description and agent prompt.
+
+**Estimated Effort:** 2–3 weeks | **Expected Impact:** High long-term
+
+---
+
+#### 3.3 Accessibility Audit and WCAG 2.1 AA Remediation *(Carried Forward — Status: Open)*
+
+See the May 31 entry above for full description and agent prompt.
+
+**Estimated Effort:** 1–2 weeks | **Expected Impact:** Medium
