@@ -249,18 +249,6 @@ See the May 31 entry above for full description and agent prompt.
 
 ---
 
-#### 2.4 Eliminate TypeScript `any` in Critical Service Files
-
-**Description:** The previous risk review identified 214 `any` instances across the codebase. In service files like `trainingPlansService.ts` (930 lines), `any` types mask incorrect data shapes passed between AI plan generation and database inserts — a source of hard-to-debug runtime errors. Eliminating `any` in the three highest-traffic service files by replacing with proper interface types (from the Supabase-generated schema types) will surface existing type mismatches and prevent new ones from landing silently.
-
-**Estimated Effort:** 2–3 days  
-**Expected Impact:** Medium — prevents a class of silent runtime errors in the plan generation flow; improves IDE autocompletion quality; contributes meaningfully to the overall ~214-instance technical debt reduction.
-
-**Agent Prompt:**
-> Eliminate TypeScript `any` types from the three highest-priority service files in TrainingSmart: `src/services/trainingPlansService.ts`, `src/services/healthMetricsService.ts`, and `src/services/stravaApi.ts`. For each file: (1) run `npx tsc --noEmit` and note existing `any`-related suppressions; (2) replace explicit `any` parameter and return types with proper interfaces imported from `src/types/index.ts` or from the Supabase-generated `database.types.ts` (for database row types); (3) where the correct type is genuinely unknown (e.g., raw JSON from an external API), use `unknown` with a type guard or a narrow inline type assertion. Do not change any runtime logic — only type annotations. Enable `"strict": true` in `tsconfig.app.json` if not already set and fix any newly surfaced errors in these three files only. Verify `npx tsc --noEmit` exits clean and CI passes.
-
----
-
 ### Updated Tier 3 — Strategic, Longer-Term
 
 ---
@@ -301,6 +289,7 @@ See the May 31 entry above for full description and agent prompt.
 | Item | Status | Notes |
 |------|--------|-------|
 | React Query Cache Invalidation (Tier 1.2) | ✅ Confirmed Complete | PR #18, merged June 1 — already captured in June 1 docs |
+| Route-Level Code Splitting (Tier 2.4) | ✅ COMPLETE (2026-06-02) | Implemented React.lazy() + Suspense for all page components in App.tsx |
 
 No additional items completed since the June 1 IMPROVEMENTS.md was written. PR #18 (React Query mutation hooks) landed on June 1 at 18:50 UTC, after the docs update at 14:21 UTC, and was correctly pre-captured in the June 1 progress table.
 
@@ -364,11 +353,13 @@ See the May 31 entry above.
 
 ---
 
-#### 2.4 Route-Level Code Splitting *(Restored — Was Silently Dropped from June 1 Tracking)*
+#### 2.4 Route-Level Code Splitting ✅ **COMPLETE (2026-06-02)**
 
-This item appeared as Tier 2.4 in the May 31 assessment but was absent from the June 1 updated tier list without being completed or explicitly deprioritized. With `PlansPage.tsx` (83 KB), `SettingsPage.tsx` (53 KB), `ChatPage.tsx` (36 KB), and `DashboardPage.tsx` (34 KB) all eagerly loaded, splitting routes remains a valid 1-day win that reduces Time-To-Interactive for unauthenticated first visits while the larger refactors are in progress.
+✅ COMPLETE (2026-06-02): Implemented React.lazy() + Suspense for all page components in App.tsx.
 
-See the May 31 entry above for the full agent prompt.
+This item appeared as Tier 2.4 in the May 31 assessment but was absent from the June 1 updated tier list without being completed or explicitly deprioritized. It has now been implemented: all 7 page-level route components (`HomePage`, `DashboardPage`, `ChatPage`, `SettingsPage`, `PlansPage`, `LearnPage`, `PrivacyPage`) in `src/App.tsx` are now loaded via `React.lazy()`, and the entire `<Routes>` block is wrapped in a `<Suspense>` fallback that shows a dark-themed loading indicator consistent with the app's slate-900 theme. This reduces Time-To-Interactive for unauthenticated first visits while the larger refactors are in progress.
+
+See the May 31 entry above for the original agent prompt.
 
 **Estimated Effort:** 1 day | **Expected Impact:** Medium performance — estimated 30–40% initial bundle reduction
 
