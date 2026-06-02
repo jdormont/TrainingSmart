@@ -39,19 +39,14 @@ These improvements deliver immediate security or usability value with modest eff
 
 **Description:** React Query caches are not explicitly invalidated after plan creation, workout status updates, or metric syncs. Users occasionally see stale data until the 5-minute default TTL expires — for example, completing a workout but still seeing it as uncompleted on the dashboard stats, or creating a new plan and not seeing it appear in the plan list immediately. Since React Query v5 is already integrated throughout the app, adding `queryClient.invalidateQueries()` in mutation `onSuccess` callbacks is a low-effort, high-return fix identified in risk item #12.
 
-**Estimated Effort:** 1 day  
-**Expected Impact:** High usability — eliminates stale-state confusion after the app's most common actions; makes the app feel responsive and trustworthy without any architectural changes.
-
-**Completion Note (June 1, 2026):** Two new hook files were created:
+**Completion Note (June 1, 2026 — PR #18):** Two new hook files were created:
 
 - **`src/hooks/usePlanMutations.ts`** — wraps the key `trainingPlansService` write operations as typed `useMutation` hooks: `useToggleWorkoutComplete`, `useCreatePlan`, `useUpdatePlan`, `useDeletePlan`, `useAddWorkout`, `useUpdateWorkout`, `useDeleteWorkout`. Each hook calls `queryClient.invalidateQueries()` with `exact: false` in `onSuccess` so that subkey variants (e.g. `['dashboard-data', 'demo']` and `['dashboard-data', 'user']`) are both invalidated. Plan-level mutations invalidate both `['plan-data']` and `['dashboard-data']`; workout-only mutations invalidate `['plan-data']`.
 
-- **`src/hooks/useProfileMutations.ts`** — wraps `userProfileService.updateUserProfile()` as two semantic hooks: `useSaveUserProfile` (general settings saves) and `useSaveRiderProfile` (FTP/athletic profile saves). Both invalidate `['dashboard-data']` on success. `RiderProfileService` is a pure calculation class with no persistence method, so both hooks correctly delegate to `userProfileService`.
+- **`src/hooks/useProfileMutations.ts`** — wraps `userProfileService.updateUserProfile()` as two semantic hooks: `useSaveUserProfile` (general settings saves) and `useSaveRiderProfile` (FTP/athletic profile saves). Both invalidate `['dashboard-data']` on success.
 
-Query key constants (`PLAN_DATA_KEY`, `DASHBOARD_DATA_KEY`) are exported from each hook file for import by components.
-
-**Agent Prompt:**
-> Audit all `useMutation` calls across TrainingSmart's `src/` directory. For every mutation `onSuccess` callback that modifies server state, add the appropriate `queryClient.invalidateQueries({ queryKey: [...] })` calls. Key mutation/query-key pairs to fix: (1) workout status toggle → invalidate `['workouts', planId]` and `['plan-stats', planId]`; (2) plan creation or modification → invalidate `['training-plans', userId]`; (3) Oura/Apple Watch metric sync → invalidate `['health-metrics', userId]`; (4) Strava activity link → invalidate `['strava-activities', userId]` and `['workouts', planId]`; (5) user profile update → invalidate `['user-profile', userId]`. Use the existing query keys as defined in each hook. Add Vitest tests that verify `invalidateQueries` is called with the correct key after each mutation, using `vi.spyOn(queryClient, 'invalidateQueries')`.
+**Estimated Effort:** 1 day (Completed)  
+**Expected Impact:** High usability — eliminates stale-state confusion after the app's most common actions.
 
 ---
 
@@ -291,3 +286,114 @@ See the May 31 entry above for full description and agent prompt.
 See the May 31 entry above for full description and agent prompt.
 
 **Estimated Effort:** 1–2 weeks | **Expected Impact:** Medium
+
+---
+
+## Reassessment — June 2, 2026
+
+*Assessment Date: June 2, 2026*
+*Assessment based on: full review of 30 most recent commits, repo file listing, component size signals from commit history, and IMPROVEMENTS.md history.*
+
+---
+
+### Progress Since June 1 Assessment
+
+| Item | Status | Notes |
+|------|--------|-------|
+| React Query Cache Invalidation (Tier 1.2) | ✅ Confirmed Complete | PR #18, merged June 1 — already captured in June 1 docs |
+
+No additional items completed since the June 1 IMPROVEMENTS.md was written. PR #18 (React Query mutation hooks) landed on June 1 at 18:50 UTC, after the docs update at 14:21 UTC, and was correctly pre-captured in the June 1 progress table.
+
+**Tracking gap identified:** Tier 2.4 (Route-Level Code Splitting) from the May 31 assessment was silently dropped from the June 1 updated tier list without having been completed or explicitly deprioritized. It has been restored below as Tier 2.4.
+
+**Remaining open items from June 1:** OAuth token encryption (1.1), token refresh centralization (1.3), test coverage 50%+ (2.1), PlansPage split 83KB (2.2), SettingsPage split 53KB (1.3/2.3), Sentry monitoring (2.6), TypeScript `any` elimination (2.5), Curation Feed Phase 2 (3.1), Recurring Season Schedules (3.2), Accessibility (3.3).
+
+---
+
+### Updated Tier 1 — Quick Wins (June 2, 2026)
+
+No changes from June 1. Items carried forward in the same priority order:
+
+#### 1.1 Encrypt OAuth Tokens at Rest *(Carried Forward — Still Open — Highest Security Priority)*
+
+See the May 31 entry above for full description and agent prompt.
+
+**Estimated Effort:** 2–3 days | **Expected Impact:** High security
+
+---
+
+#### 1.2 React Query Cache Invalidation ✅ **CONFIRMED COMPLETE** (June 1, 2026)
+
+PR #18 merged. See the June 1 completion note above.
+
+---
+
+#### 1.3 SettingsPage Modularization (53 KB) *(Carried Forward — Status: Open)*
+
+See the June 1 entry above for full description and agent prompt.
+
+**Estimated Effort:** 2–3 days | **Expected Impact:** Medium
+
+---
+
+### Updated Tier 2 — Moderate Effort (June 2, 2026)
+
+---
+
+#### 2.1 Increase Test Coverage to 50%+ on Core Services *(Carried Forward — Status: Open)*
+
+See the May 31 entry above.
+
+**Estimated Effort:** 1–2 weeks | **Expected Impact:** High long-term
+
+---
+
+#### 2.2 Split Monolithic PlansPage.tsx (83 KB) *(Carried Forward — Status: Open — Elevated Priority)*
+
+No progress since June 1. At 83,947 bytes this remains the most urgent maintainability item in the codebase. See the May 31 entry for full description and agent prompt.
+
+**Estimated Effort:** 3–5 days | **Expected Impact:** Medium-High
+
+---
+
+#### 2.3 Structured Error Monitoring with Sentry *(Carried Forward — Status: Open)*
+
+See the May 31 entry above.
+
+**Estimated Effort:** 2 days | **Expected Impact:** Medium
+
+---
+
+#### 2.4 Route-Level Code Splitting *(Restored — Was Silently Dropped from June 1 Tracking)*
+
+This item appeared as Tier 2.4 in the May 31 assessment but was absent from the June 1 updated tier list without being completed or explicitly deprioritized. With `PlansPage.tsx` (83 KB), `SettingsPage.tsx` (53 KB), `ChatPage.tsx` (36 KB), and `DashboardPage.tsx` (34 KB) all eagerly loaded, splitting routes remains a valid 1-day win that reduces Time-To-Interactive for unauthenticated first visits while the larger refactors are in progress.
+
+See the May 31 entry above for the full agent prompt.
+
+**Estimated Effort:** 1 day | **Expected Impact:** Medium performance — estimated 30–40% initial bundle reduction
+
+---
+
+#### 2.5 Eliminate TypeScript `any` in Critical Service Files *(Carried Forward — Status: Open)*
+
+See the June 1 entry above for full description and agent prompt.
+
+**Estimated Effort:** 2–3 days | **Expected Impact:** Medium
+
+---
+
+#### 2.6 Token Refresh Centralization *(Carried Forward — Status: Open)*
+
+See the May 31 entry above (originally Tier 1.3).
+
+**Estimated Effort:** 1–2 days | **Expected Impact:** Medium reliability
+
+---
+
+### Updated Tier 3 — Strategic (June 2, 2026)
+
+Carried forward unchanged:
+
+- **3.1 Curation Feed Phase 2** — see May 31 entry. **Effort:** L | **Impact:** High long-term
+- **3.2 Recurring Season Schedules** — see May 31 entry. **Effort:** XL | **Impact:** High long-term
+- **3.3 Accessibility Audit** — see May 31 entry. **Effort:** L | **Impact:** Medium
