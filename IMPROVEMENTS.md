@@ -1,7 +1,7 @@
 # Improvements
-_Last assessment: 2026-06-03_
-_Last knowledge sync: 2026-06-03_
-_Assessment based on: git log (30 commits), all PRs #1–#20, full file-size survey of src/, manual read of PlansPage.tsx, SettingsPage.tsx, ErrorBoundary.tsx, strava-oauth-exchange, strava-refresh-token, usePlanMutations.ts, trainingPlansService.test.ts, App.tsx; grep scans for TypeScript `any`, console.error, React.lazy, Sentry, pgsodium references._
+_Last assessment: 2026-06-04_
+_Last knowledge sync: 2026-06-04_
+_Assessment based on: fresh code read of `src/pages/PlansPage.tsx` (imports verified — usePlanMutations not imported), `src/hooks/usePlanMutations.ts` (hooks confirmed production-ready), `src/components/common/ErrorBoundary.tsx` (Sentry stub comment confirmed), `src/App.tsx` (lazy loading confirmed for all 7 pages); git log (last 30 commits), all PRs #1–#21 (none open), open issues (none). No commits since June 3 assessment._
 
 ---
 
@@ -23,7 +23,7 @@ None — ready for next implementation run
 
 ### 1.1 Encrypt OAuth Tokens at Rest — OPEN
 - **What:** Strava access/refresh tokens are stored as plaintext `text` columns in `user_tokens` (confirmed in `20251030151139_*` migration). The `strava-oauth-exchange` function returns them directly to the client and the frontend writes them back without encryption. `pgsodium`/Supabase Vault is not enabled. This is the highest-priority open security item and has appeared in every assessment since May 31.
-- **Why now:** Three assessments have passed without movement. This is the only P2 security risk remaining unmitigated. If the Supabase project credentials were exposed, every user's Strava and Google Calendar access would be immediately compromised.
+- **Why now:** Four assessments have passed without movement. This is the only P2 security risk remaining unmitigated. If the Supabase project credentials were exposed, every user's Strava and Google Calendar access would be immediately compromised.
 - **Effort estimate:** M (2–3 days)
 - **Actual effort:** —
 - **Agent prompt:** "In `supabase/functions/strava-oauth-exchange/index.ts` and `supabase/functions/strava-refresh-token/index.ts`, add token encryption using Supabase Vault (`pgsodium`). Create a new migration that: (1) enables `create extension if not exists pgsodium`; (2) creates a named encryption key via `pgsodium.create_key('oauth_tokens')`; (3) alters `user_tokens` to add `refresh_token_enc bytea` and `access_token_enc bytea` alongside the existing text columns. Update `strava-oauth-exchange` to call `pgsodium.crypto_aead_det_encrypt()` before writing tokens to Supabase (the Edge Function has Vault access; the browser never touches the key). Update `strava-refresh-token` to decrypt on read using `pgsodium.crypto_aead_det_decrypt()`. Write a one-time backfill migration that encrypts existing plaintext rows and then drops the old text columns. Acceptance criteria: `user_tokens.access_token` text column no longer exists; tokens returned to the browser during OAuth exchange are still functional access tokens (not ciphertext); `strava-refresh-token` successfully refreshes a live token end-to-end."
@@ -31,17 +31,17 @@ None — ready for next implementation run
 ---
 
 ### 1.2 Wire Mutation Hooks Into PlansPage (Orphaned Code) — OPEN
-- **What:** `usePlanMutations.ts` and `useProfileMutations.ts` (created in PR #18) are not imported by any component. `PlansPage.tsx` still calls `trainingPlansService` directly and manually fires `queryClient.invalidateQueries()` inline at five separate call sites. The hooks are production-ready but simply not wired in — a day's work to complete the original PR #18 intent.
+- **What:** `usePlanMutations.ts` and `useProfileMutations.ts` (created in PR #18) are not imported by any component. Confirmed: `PlansPage.tsx` imports `trainingPlansService` directly (verified June 4 — no import from `usePlanMutations`). `PlansPage.tsx` still calls service methods directly and manually fires `queryClient.invalidateQueries()` inline at five separate call sites. The hooks are production-ready but simply not wired in — a day's work to complete the original PR #18 intent.
 - **Why now:** The mutation hook work was shipped to solve stale-cache bugs, but because components were never updated to use the hooks, users are still relying on the ad-hoc inline invalidation, which is inconsistent and misses some paths (e.g., workout deletion in certain flows). This is a low-effort fix with direct reliability payoff.
 - **Effort estimate:** S (half day)
 - **Actual effort:** —
-- **Agent prompt:** "In `src/pages/PlansPage.tsx`, replace all direct `trainingPlansService.updateWorkoutStatus()`, `trainingPlansService.createPlan()`, `trainingPlansService.deletePlan()`, `trainingPlansService.addWorkout()`, `trainingPlansService.updateWorkout()`, and `trainingPlansService.deleteWorkout()` call sites with the corresponding hooks from `src/hooks/usePlanMutations.ts` (`useToggleWorkoutComplete`, `useCreatePlan`, `useDeletePlan`, `useAddWorkout`, `useUpdateWorkout`, `useDeleteWorkout`). Remove the five manual `queryClient.invalidateQueries({ queryKey: ['plan-data'] })` inline calls — cache invalidation is now handled by each hook's `onSuccess`. Similarly, update `src/pages/SettingsPage.tsx` to use `useSaveUserProfile` and `useSaveRiderProfile` from `src/hooks/useProfileMutations.ts` instead of direct service calls. Verify all 142 existing tests still pass and that toggling a workout completion in the UI immediately updates the plan list without a manual refresh."
+- **Agent prompt:** "In `src/pages/PlansPage.tsx`, replace all direct `trainingPlansService.updateWorkoutStatus()`, `trainingPlansService.createPlan()`, `trainingPlansService.deletePlan()`, `trainingPlansService.addWorkoutToPlan()`, `trainingPlansService.updateWorkout()`, and `trainingPlansService.deleteWorkout()` call sites with the corresponding hooks from `src/hooks/usePlanMutations.ts` (`useToggleWorkoutComplete`, `useCreatePlan`, `useDeletePlan`, `useAddWorkout`, `useUpdateWorkout`, `useDeleteWorkout`). Remove the five manual `queryClient.invalidateQueries({ queryKey: ['plan-data'] })` inline calls — cache invalidation is now handled by each hook's `onSuccess`. Similarly, update `src/pages/SettingsPage.tsx` to use `useSaveUserProfile` and `useSaveRiderProfile` from `src/hooks/useProfileMutations.ts` instead of direct service calls. Verify all 142 existing tests still pass and that toggling a workout completion in the UI immediately updates the plan list without a manual refresh."
 
 ---
 
 ### 1.3 Integrate Sentry Error Monitoring — OPEN
-- **What:** `ErrorBoundary.tsx` has a code comment explicitly noting "replace with Sentry/monitoring in production (item #14)" — Sentry has never been added. There are 203 `console.error`/`console.warn` calls across 49 files that are invisible in production. When an Edge Function fails, a Strava sync crashes, or a render error is caught, there is zero alerting.
-- **Why now:** With code splitting now live (PR #20), lazy-loaded chunks that fail to load will be silently caught by `ErrorBoundary` with no visibility. Sentry installation is mechanical and the codebase already has the `ErrorBoundary` integration point stubbed.
+- **What:** `ErrorBoundary.tsx` has a code comment explicitly noting "replace with Sentry/monitoring in production (item #14)" — Sentry has never been added (confirmed June 4: comment still present in `componentDidCatch`). There are 200+ `console.error`/`console.warn` calls across 49 files that are invisible in production. When an Edge Function fails, a Strava sync crashes, or a render error is caught, there is zero alerting.
+- **Why now:** With code splitting now live (PR #20), lazy-loaded chunks that fail to load will be silently caught by `ErrorBoundary` with no visibility. Sentry installation is mechanical and the codebase already has the `ErrorBoundary` integration point explicitly stubbed.
 - **Effort estimate:** S (1 day)
 - **Actual effort:** —
 - **Agent prompt:** "Integrate Sentry into TrainingSmart. Run `npm install @sentry/react`. Initialize Sentry in `src/main.tsx` with `Sentry.init({ dsn: import.meta.env.VITE_SENTRY_DSN, environment: import.meta.env.MODE, tracesSampleRate: 0.1, integrations: [Sentry.browserTracingIntegration()] })`. In `src/components/common/ErrorBoundary.tsx`, replace the `console.error` in `componentDidCatch` with `Sentry.captureException(error, { contexts: { react: { componentStack: info.componentStack } } })` — keep the console.error as a secondary call for local dev. In the top 10 files by `console.error` count (start with `trainingPlansService.ts`, `openaiApi.ts`, `stravaApi.ts`), add `Sentry.captureException(error, { extra: { context: '<service>/<operation>' } })` alongside existing console calls. Add `VITE_SENTRY_DSN=` to `.env.example` with a comment. Do not add Sentry to Edge Functions — their errors are surfaced via Supabase logs. Acceptance criteria: a deliberate `throw new Error('test')` in `ErrorBoundary` dev mode appears in the Sentry dashboard."
@@ -52,7 +52,7 @@ None — ready for next implementation run
 
 ### 2.1 Split Monolithic PlansPage.tsx (83 KB) — OPEN
 - **What:** `PlansPage.tsx` is 83,947 bytes and growing. Despite several sub-components being in `src/components/plans/` (WorkoutCard, WeeklyPlanView, etc.), the main page file still owns plan list rendering, plan creation flow, workout status management, drag-and-drop orchestration, the Level-Up modal, the Plan Logic Viewer, the Post-Workout Check-in modal, and all Strava activity matching. It is the most-changed file in the repo and the largest source of merge conflicts.
-- **Why now:** The file has grown across all three previous assessments without extraction. Every new feature (plan templates, activity matching, Level-Up) landed in this file because there was no better abstraction. Splitting it is a prerequisite for safely adding component-level tests.
+- **Why now:** The file has grown across all four previous assessments without extraction. Every new feature (plan templates, activity matching, Level-Up) landed in this file because there was no better abstraction. Splitting it is a prerequisite for safely adding component-level tests.
 - **Effort estimate:** L (3–5 days)
 - **Actual effort:** —
 - **Agent prompt:** "Refactor `src/pages/PlansPage.tsx` into focused sub-components without changing any visible behavior or styling. The `src/components/plans/` directory already has DraggableWorkoutCard, DroppableDayColumn, WeeklyPlanView, PlanLogicViewer, etc. — extract the remaining inline sections: (1) `src/components/plans/PlanListSidebar.tsx` — the left-rail list of training plans with expand/collapse and delete actions; (2) `src/components/plans/LevelUpModal.tsx` — the consistency milestone celebration modal; (3) `src/components/plans/PlanStatsDrawer.tsx` — the collapsible cumulative plan stats panel; (4) `src/components/plans/CreatePlanForm.tsx` — the plan creation flow including AI generation prompt and template picker. Move associated state and handlers into each sub-component or a new `src/hooks/usePlanPage.ts` hook that `PlansPage.tsx` uses. Target: `PlansPage.tsx` under 300 lines, orchestrating composition only. Verify CI passes and all 142 existing tests still pass."
@@ -78,8 +78,8 @@ None — ready for next implementation run
 ---
 
 ### 2.4 Eliminate TypeScript `any` in Critical Service Files — OPEN
-- **What:** There are 34 `: any` usages across `src/` (8 in `trainingPlansService.ts`, plus scattered usage in `openaiApi.ts`, `DashboardPage.tsx`, `PlansPage.tsx`). The most dangerous ones are `dbPayload: any` (line 753 of `trainingPlansService.ts`) and `data as any[]` patterns that can silently mask DB response shape mismatches.
-- **Why now:** Every new feature that touches the plan or dashboard code perpetuates `any` by copying existing patterns. Fixing the 8 in `trainingPlansService.ts` first establishes the correct typing for the highest-risk file and has a multiplying effect on type safety across the codebase.
+- **What:** There are 34 `: any` usages across `src/` (8 in `trainingPlansService.ts`, plus scattered usage in `openaiApi.ts`, `DashboardPage.tsx`, `PlansPage.tsx`). The most dangerous ones are `dbPayload: any` and `data as any[]` patterns that can silently mask DB response shape mismatches.
+- **Why now:** Every new feature that touches the plan or dashboard code perpetuates `any` by copying existing patterns. Fixing the 8 in `trainingPlansService.ts` first establishes the correct typing for the highest-risk file.
 - **Effort estimate:** M (2–3 days)
 - **Actual effort:** —
 - **Agent prompt:** "Eliminate all TypeScript `any` usages in `src/services/trainingPlansService.ts`. Run `grep -n ': any' src/services/trainingPlansService.ts` to get the full list (currently 8 occurrences). For each: replace `dbPayload: any` with a typed `DbWorkoutInsert` interface matching the Supabase table schema; replace `(data as any[]).map(row => ...)` with a typed `DbPlanRow` interface derived from the migration columns; replace `(workout as any).scheduledDate` with a proper union type or type guard. After the service is clean, run the same process on `src/services/openaiApi.ts` (1 occurrence) and the `any` usages in `src/pages/PlansPage.tsx` (inline `queryClient.setQueryData` cast). Run `npm run typecheck` with `strict: true` to verify zero `any` errors in these files. Do not touch other files in this PR."
@@ -90,7 +90,7 @@ None — ready for next implementation run
 
 ### 3.1 Centralize Token Refresh Logic — OPEN
 - **What:** Token refresh is duplicated across `stravaApi.ts` and the Strava Edge Functions. The duplication has caused at least one production bug (per git history). A single `tokenRefreshService.ts` that both callers delegate to makes the refresh logic testable and simplifies adding future OAuth integrations.
-- **Why now:** Escalated from Tier 1 in June 1 assessment to Tier 3 here because the immediate priority is completing the encryption work (1.1) first — there is no value in centralizing plaintext token logic that will be fundamentally restructured by the encryption migration.
+- **Why now:** Blocked behind item 1.1 (OAuth token encryption) — there is no value in centralizing plaintext token logic that will be fundamentally restructured by the encryption migration. Do not start until 1.1 is merged.
 - **Effort estimate:** M (1–2 days, after 1.1 is done)
 - **Actual effort:** —
 - **Agent prompt:** "After OAuth token encryption (item 1.1) is complete, create `src/services/tokenRefreshService.ts` that exports a single `refreshOAuthToken({ provider: 'strava' | 'google', userId: string }): Promise<string>` function. It should: (1) call the appropriate Edge Function proxy to get a new token; (2) store the encrypted token back to Supabase via the Edge Function (not directly from the browser); (3) return the fresh access token string. Remove duplicate refresh logic from `src/services/stravaApi.ts`. Add Vitest unit tests for the happy path and the expired-token case (expect a typed `TokenExpiredError`)."
@@ -99,7 +99,7 @@ None — ready for next implementation run
 
 ### 3.2 Curation Feed Phase 2 — RSS/Article Integration — OPEN
 - **What:** The Curation Feed shows YouTube videos (Phase 1 complete). Phase 2 (RSS-parsed article feeds from cycling/running publications) and Phase 3 (ML affinity recommendations) are listed as incomplete in the PRD. `contentFeedService.ts` is already 38KB, indicating Phase 1 was substantial.
-- **Why now:** This has appeared in three consecutive assessments. It is not being dropped because it has genuine product value (increases session depth) and a clear starting point. However, Tier 1 and Tier 2 items must clear first — this is not blocking anything.
+- **Why now:** This has appeared in four consecutive assessments. It is not being dropped because it has genuine product value (increases session depth) and a clear starting point. However, Tier 1 and Tier 2 items must clear first.
 - **Effort estimate:** L (2–3 weeks)
 - **Actual effort:** —
 - **Agent prompt:** "Implement Curation Feed Phase 2. Create a Supabase Edge Function `rss-feed-proxy` that accepts `?tag=cycling|running|triathlon`, fetches and parses RSS/Atom feeds from a hardcoded list of publications (VeloNews, Outside, TrainingPeaks Blog, Canadian Cycling Magazine), and returns normalized `{title, url, imageUrl, source, publishedAt, tags}` objects. Cache results in a new `content_cache(tag text, payload jsonb, cached_at timestamptz)` table for 1 hour. In the frontend, add an 'Articles' tab to the existing `ContentFeed` component alongside 'Videos'. Add a `liked_content(user_id uuid, content_url text, signal text, created_at timestamptz)` table as Phase 3 foundation; add thumbs up/down buttons to article cards."
@@ -108,7 +108,7 @@ None — ready for next implementation run
 
 ### 3.3 Recurring Season Schedules — OPEN
 - **What:** The PRD lists "Recurring season schedules" as incomplete. For performance-mode cyclists and triathletes, annual periodized planning (Base → Build → Peak → Taper → Race) is a core workflow. This would differentiate TrainingSmart for the high-retention performance athlete segment.
-- **Why now:** This has appeared in three consecutive assessments. Not dropping it because the performance-athlete use case is the target audience for Performance Mode, which is already built. The effort is substantial (XL) and no prior work has started, so it stays Tier 3.
+- **Why now:** Four consecutive assessments — not dropping it because the performance-athlete use case is the target audience for Performance Mode. Effort is substantial (XL) and no prior work has started, so it stays Tier 3.
 - **Effort estimate:** XL (3–4 weeks)
 - **Actual effort:** —
 - **Agent prompt:** "Design and implement recurring season schedules. Create a `season_plans(id uuid, user_id uuid, name text, start_date date, target_event_date date, target_event_name text, phases jsonb, created_at timestamptz)` Supabase table. Create `src/pages/SeasonPlannerPage.tsx` with: (1) a year-view timeline divided into training phases; (2) auto-calculated phase durations working backward from the target event (Taper=2wk, Peak=2wk, Build=8wk, Base=remainder); (3) per-phase plan generation via the `openai-training-plan` Edge Function with phase-specific context in the prompt. Add a 'Season' nav tab. Training plans linked to a season should show a breadcrumb back to the parent season."
@@ -117,7 +117,7 @@ None — ready for next implementation run
 
 ### 3.4 Accessibility Audit and WCAG 2.1 AA Remediation — OPEN
 - **What:** No ARIA labels, keyboard navigation, or focus management were observed. The drag-and-drop workout cards and Recharts power zone chart are the highest-risk areas for screen readers and keyboard-only users. This is risk item #19 from the original risk review.
-- **Why now:** This has appeared in three consecutive assessments. Not dropping it — accessibility is a correctness concern. However, it requires dedicated focus (1–2 weeks) and is lower urgency than the security and reliability items above.
+- **Why now:** Four consecutive assessments. Not dropping — accessibility is a correctness concern. Requires dedicated focus (1–2 weeks) and is lower urgency than the security and reliability items above.
 - **Effort estimate:** L (1–2 weeks)
 - **Actual effort:** —
 - **Agent prompt:** "Conduct and remediate an accessibility audit for TrainingSmart. Install `eslint-plugin-jsx-a11y` and add it to `eslint.config.js`; run `npx eslint src/ --fix` and fix all auto-fixable violations. Then manually address: (1) all modal overlays — add `role='dialog'`, `aria-modal='true'`, `aria-labelledby`, and focus trapping via a `useFocusTrap` hook; (2) drag-and-drop workout cards — add `role='button'`, `aria-grabbed` state, and arrow-key keyboard support; (3) icon-only buttons — add descriptive `aria-label`; (4) Recharts charts — wrap in `<figure>` with `aria-label` text summary. Install `@axe-core/react` in dev mode only for regression catching."
@@ -126,4 +126,4 @@ None — ready for next implementation run
 
 ## Dropped / Stale
 
-_Nothing dropped this cycle. Items 3.1–3.3 from previous assessments were retained in Tier 3 with escalation notes. Item 3.4 (Accessibility) is new to Tier 3 this cycle, replacing the previous numbering._
+_Nothing dropped this cycle. Items 3.1–3.4 retained in Tier 3 with escalation notes after four consecutive appearances._
