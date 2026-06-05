@@ -18,6 +18,7 @@ import {
   SKILL_LEVELS,
   AVAILABLE_INTERESTS
 } from '../services/userProfileService';
+import { useSaveUserProfile } from '../hooks/useProfileMutations';
 import type { StravaAthlete } from '../types';
 import { analytics } from '../lib/analytics';
 
@@ -73,6 +74,7 @@ RESPONSE GUIDELINES:
 
 export const SettingsPage: React.FC = () => {
   const { userProfile, reloadProfile } = useAuth();
+  const saveUserProfile = useSaveUserProfile();
   const [activeTab, setActiveTab] = useState<Tab>('coach');
 
   // --- My Coach tab state ---
@@ -183,7 +185,7 @@ export const SettingsPage: React.FC = () => {
   const handleSaveCoachPreferences = async () => {
     setSavingCoachPrefs(true);
     try {
-      await userProfileService.updateUserProfile({
+      await saveUserProfile.mutateAsync({
         training_goal: trainingGoal || undefined,
         coach_persona: coachPersona || undefined,
       });
@@ -201,7 +203,7 @@ export const SettingsPage: React.FC = () => {
     setSavingProfile(true);
     try {
       await Promise.all([
-        userProfileService.updateUserProfile({
+        saveUserProfile.mutateAsync({
           gender: gender || undefined,
           age_bucket: ageBucket || undefined,
           ftp: ftp ? Number(ftp) : undefined,

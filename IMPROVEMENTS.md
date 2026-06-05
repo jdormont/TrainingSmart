@@ -6,7 +6,7 @@ _Assessment based on: git log (last 30 commits), all PRs (none open), open issue
 ---
 
 ## Current Sprint
-None — ready for next implementation run
+**1.2 Wire Mutation Hooks Into PlansPage** — [IN PROGRESS — PR: #25, branch: claude/nice-ramanujan-geySJ, started: 2026-06-05]
 
 ---
 
@@ -30,11 +30,11 @@ None — ready for next implementation run
 
 ---
 
-### 1.2 Wire Mutation Hooks Into PlansPage (Orphaned Code) — OPEN
+### 1.2 Wire Mutation Hooks Into PlansPage (Orphaned Code) — [IN PROGRESS — PR: #25]
 - **What:** `usePlanMutations.ts` and `useProfileMutations.ts` (created in PR #18) are not imported by any component. Confirmed: `PlansPage.tsx` imports `trainingPlansService` directly (verified June 4 — no import from `usePlanMutations`). `PlansPage.tsx` still calls service methods directly and manually fires `queryClient.invalidateQueries()` inline at five separate call sites. The hooks are production-ready but simply not wired in — a day's work to complete the original PR #18 intent.
 - **Why now:** The mutation hook work was shipped to solve stale-cache bugs, but because components were never updated to use the hooks, users are still relying on the ad-hoc inline invalidation, which is inconsistent and misses some paths (e.g., workout deletion in certain flows). This is a low-effort fix with direct reliability payoff.
 - **Effort estimate:** S (half day)
-- **Actual effort:** —
+- **Actual effort:** S — as estimated; 10 call sites replaced across PlansPage + 2 in SettingsPage
 - **Agent prompt:** "In `src/pages/PlansPage.tsx`, replace all direct `trainingPlansService.updateWorkoutStatus()`, `trainingPlansService.createPlan()`, `trainingPlansService.deletePlan()`, `trainingPlansService.addWorkoutToPlan()`, `trainingPlansService.updateWorkout()`, and `trainingPlansService.deleteWorkout()` call sites with the corresponding hooks from `src/hooks/usePlanMutations.ts` (`useToggleWorkoutComplete`, `useCreatePlan`, `useDeletePlan`, `useAddWorkout`, `useUpdateWorkout`, `useDeleteWorkout`). Remove the five manual `queryClient.invalidateQueries({ queryKey: ['plan-data'] })` inline calls — cache invalidation is now handled by each hook's `onSuccess`. Similarly, update `src/pages/SettingsPage.tsx` to use `useSaveUserProfile` and `useSaveRiderProfile` from `src/hooks/useProfileMutations.ts` instead of direct service calls. Verify all 142 existing tests still pass and that toggling a workout completion in the UI immediately updates the plan list without a manual refresh."
 
 ---

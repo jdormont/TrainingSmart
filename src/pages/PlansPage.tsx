@@ -37,6 +37,14 @@ import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { usePlanData } from '../hooks/usePlanData';
 import { PlansSkeleton } from '../components/skeletons/PlansSkeleton';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  useToggleWorkoutComplete,
+  useCreatePlan,
+  useDeletePlan,
+  useAddWorkout,
+  useUpdateWorkout,
+  useDeleteWorkout,
+} from '../hooks/usePlanMutations';
 import type { ActivityMixItem } from '../types';
 
 const ACTIVITY_DISPLAY: Record<string, string> = {
@@ -60,7 +68,14 @@ export const PlansPage: React.FC = () => {
   // Removed local savedPlans state, using usePlanData
   const { data: planData } = usePlanData();
   const savedPlans = planData?.plans || [];
-  
+
+  const toggleWorkoutComplete = useToggleWorkoutComplete();
+  const createPlanMutation = useCreatePlan();
+  const deletePlanMutation = useDeletePlan();
+  const addWorkoutMutation = useAddWorkout();
+  const updateWorkoutMutation = useUpdateWorkout();
+  const deleteWorkoutMutation = useDeleteWorkout();
+
   const [loading, setLoading] = useState(true); // Keep for Strava data loading
   const [generating, setGenerating] = useState(false);
   const [isLogicViewerOpen, setIsLogicViewerOpen] = useState(false);
@@ -407,8 +422,8 @@ Additional Preferences: ${preferences || 'None'}
         workouts: structuredWorkouts as Workout[],
         reasoning: reasoning // Pass reasoning to service
       };
-      const newPlan = await trainingPlansService.createPlan(planToCreate);
-      
+      const newPlan = await createPlanMutation.mutateAsync(planToCreate);
+
       await queryClient.cancelQueries({ queryKey: ['plan-data'] });
       queryClient.setQueryData(['plan-data'], (oldData: any) => {
           if (!oldData) return { plans: [newPlan], isAuthenticated: true };
@@ -468,8 +483,8 @@ Additional Preferences: ${preferences || 'None'}
 
   const deletePlan = async (planId: string) => {
     try {
-      await trainingPlansService.deletePlan(planId);
-      
+      await deletePlanMutation.mutateAsync(planId);
+
       queryClient.setQueryData(['plan-data'], (oldData: any) => {
           if (!oldData) return oldData;
           return {
@@ -532,7 +547,7 @@ Additional Preferences: ${preferences || 'None'}
     });
 
     try {
-      await trainingPlansService.updateWorkoutStatus(workoutId, newStatus);
+      await toggleWorkoutComplete.mutateAsync({ workoutId, status: newStatus });
       await refreshStreak();
 
       if (newStatus === 'completed') {
@@ -571,7 +586,7 @@ Additional Preferences: ${preferences || 'None'}
     });
 
     try {
-      await trainingPlansService.deleteWorkout(workoutId);
+      await deleteWorkoutMutation.mutateAsync(workoutId);
     } catch (err) {
       console.error('Failed to delete workout:', err);
       // Revert
@@ -592,13 +607,13 @@ Additional Preferences: ${preferences || 'None'}
     if (!pickerTargetPlanId || !pickerDate) return;
 
     try {
-      await trainingPlansService.addWorkoutToPlan(pickerTargetPlanId, {
-        ...workout,
-        scheduled_date: pickerDate.toISOString().split('T')[0]
+      await addWorkoutMutation.mutateAsync({
+        planId: pickerTargetPlanId,
+        workout: {
+          ...workout,
+          scheduled_date: pickerDate.toISOString().split('T')[0]
+        }
       });
-
-      // Invalidate to refresh the view
-      queryClient.invalidateQueries({ queryKey: ['plan-data'] });
     } catch (err) {
       console.error('Failed to add smart workout', err);
       setError('Failed to add workout');
@@ -734,15 +749,15 @@ Additional Preferences: ${preferences || 'None'}
       });
 
       for (const workout of updatedWorkoutsWithDates) {
-        await trainingPlansService.updateWorkout(
-          workout.id,
-          workout.name,
-          workout.description,
-          workout.duration,
-          workout.distance,
-          workout.intensity,
-          workout.scheduledDate
-        );
+        await updateWorkoutMutation.mutateAsync({
+          workoutId: workout.id,
+          name: workout.name,
+          description: workout.description,
+          duration: workout.duration,
+          distance: workout.distance,
+          intensity: workout.intensity,
+          scheduledDate: workout.scheduledDate,
+        });
       }
 
     } catch (err) {
@@ -832,39 +847,39 @@ Additional Preferences: ${preferences || 'None'}
       if (!originalWorkout) return; // Should exist
 
       if (strategy === 'move') {
-        await trainingPlansService.updateWorkout(
-          originalWorkout.id,
-          originalWorkout.name,
-          originalWorkout.description,
-          originalWorkout.duration,
-          originalWorkout.distance,
-          originalWorkout.intensity,
-          newDate
-        );
+        await updateWorkoutMutation.mutateAsync({
+          workoutId: originalWorkout.id,
+          name: originalWorkout.name,
+          description: originalWorkout.description,
+          duration: originalWorkout.duration,
+          distance: originalWorkout.distance,
+          intensity: originalWorkout.intensity,
+          scheduledDate: newDate,
+        });
       } else if (strategy === 'swap') {
         const targetWorkout = plan.workouts.find((w: Workout) =>
           isSameDay(new Date(w.scheduledDate), newDate)
         );
         if (targetWorkout) {
           await Promise.all([
-            trainingPlansService.updateWorkout(
-              originalWorkout.id,
-              originalWorkout.name,
-              originalWorkout.description,
-              originalWorkout.duration,
-              originalWorkout.distance,
-              originalWorkout.intensity,
-              newDate
-            ),
-            trainingPlansService.updateWorkout(
-              targetWorkout.id,
-              targetWorkout.name,
-              targetWorkout.description,
-              targetWorkout.duration,
-              targetWorkout.distance,
-              targetWorkout.intensity,
-              originalWorkout.scheduledDate
-            )
+            updateWorkoutMutation.mutateAsync({
+              workoutId: originalWorkout.id,
+              name: originalWorkout.name,
+              description: originalWorkout.description,
+              duration: originalWorkout.duration,
+              distance: originalWorkout.distance,
+              intensity: originalWorkout.intensity,
+              scheduledDate: newDate,
+            }),
+            updateWorkoutMutation.mutateAsync({
+              workoutId: targetWorkout.id,
+              name: targetWorkout.name,
+              description: targetWorkout.description,
+              duration: targetWorkout.duration,
+              distance: targetWorkout.distance,
+              intensity: targetWorkout.intensity,
+              scheduledDate: originalWorkout.scheduledDate,
+            }),
           ]);
         }
       } else if (strategy === 'replace') {
@@ -872,16 +887,16 @@ Additional Preferences: ${preferences || 'None'}
           isSameDay(new Date(w.scheduledDate), newDate)
         );
         if (targetWorkout) {
-          await trainingPlansService.deleteWorkout(targetWorkout.id);
-          await trainingPlansService.updateWorkout(
-            originalWorkout.id,
-            originalWorkout.name,
-            originalWorkout.description,
-            originalWorkout.duration,
-            originalWorkout.distance,
-            originalWorkout.intensity,
-            newDate
-          );
+          await deleteWorkoutMutation.mutateAsync(targetWorkout.id);
+          await updateWorkoutMutation.mutateAsync({
+            workoutId: originalWorkout.id,
+            name: originalWorkout.name,
+            description: originalWorkout.description,
+            duration: originalWorkout.duration,
+            distance: originalWorkout.distance,
+            intensity: originalWorkout.intensity,
+            scheduledDate: newDate,
+          });
         }
       }
     } catch (error) {
