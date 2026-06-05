@@ -6,7 +6,7 @@ _Assessment based on: git log (last 30 commits), all PRs (none open), open issue
 ---
 
 ## Current Sprint
-None — ready for next implementation run
+**1.2 Wire Mutation Hooks Into PlansPage** — [IN PROGRESS — branch: claude/nice-ramanujan-geySJ, started: 2026-06-05]
 
 ---
 
