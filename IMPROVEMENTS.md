@@ -1,12 +1,12 @@
 # Improvements
-_Last assessment: 2026-06-05_
-_Last knowledge sync: 2026-06-05_
-_Assessment based on: git log (last 30 commits), all PRs (none open), open issues (none). No commits since June 4 assessment. Tier 3 staleness decisions applied this cycle (all 4 items appeared in 5+ consecutive assessments): 3.1 (Token Refresh) dropped — blocked by 1.1, consolidated into 1.1's agent prompt; 3.2 (Curation Feed) escalated to Tier 2 — genuine session-depth value; 3.3 (Season Schedules) dropped as stale — XL effort, zero traction across 5 assessments; 3.4 (Accessibility) escalated to Tier 2 — correctness concern, can no longer defer._
+_Last assessment: 2026-06-06_
+_Last knowledge sync: 2026-06-06_
+_Assessment based on: git log (last 30 commits), all PRs (PRs #24 and #25 merged June 5 — no others open), open issues (none), code inspection of PlansPage.tsx (84,727 bytes — mutation hooks confirmed wired), ErrorBoundary.tsx (Sentry stub confirmed), SettingsPage.tsx (53,721 bytes — settings/ directory still only 2 components)._
 
 ---
 
 ## Current Sprint
-**1.2 Wire Mutation Hooks Into PlansPage** — [IN PROGRESS — PR: #25, branch: claude/nice-ramanujan-geySJ, started: 2026-06-05]
+None — ready for next implementation run
 
 ---
 
@@ -14,6 +14,8 @@ _Assessment based on: git log (last 30 commits), all PRs (none open), open issue
 
 | Item | Done | Reference |
 |------|------|-----------|
+| Wire Mutation Hooks Into PlansPage and SettingsPage (Tier 1.2) | 2026-06-05 | PR #25 merged — all 6 plan mutation hooks wired into PlansPage; `useSaveUserProfile` wired into SettingsPage; dashboard now invalidated on profile saves |
+| Pause OAuth Encryption (document blockers) | 2026-06-05 | PR #24 merged — architectural blockers documented; token-write ownership must move to Edge Functions before encryption; pgsodium availability must be verified |
 | React Query Cache Invalidation | 2026-06-01 | PR #18 merged — `usePlanMutations.ts` + `useProfileMutations.ts` created |
 | Route-Level Code Splitting | 2026-06-02 | PR #20 merged (`ed6eaad`) — all 7 pages lazy-loaded via `React.lazy()` + `Suspense` |
 
@@ -22,7 +24,7 @@ _Assessment based on: git log (last 30 commits), all PRs (none open), open issue
 ## Tier 1 — Quick Wins
 
 ### 1.1 Encrypt OAuth Tokens at Rest — PAUSED
-- **What:** Strava access/refresh tokens are stored as plaintext `text` columns in `user_tokens` (confirmed in `20251030151139_*` migration). The `strava-oauth-exchange` function returns them directly to the client and the frontend writes them back without encryption. `pgsodium`/Supabase Vault is not enabled. **This item has appeared in every assessment since May 31 — 5 consecutive assessments without movement. It is the only P2 security risk remaining unmitigated in this codebase.**
+- **What:** Strava access/refresh tokens are stored as plaintext `text` columns in `user_tokens` (confirmed in `20251030151139_*` migration). The `strava-oauth-exchange` function returns them directly to the client and the frontend writes them back without encryption. **This item has appeared in every assessment since May 31 — 6 consecutive assessments without movement. It is the only P2 security risk remaining unmitigated in this codebase.**
 - **Why now:** If the Supabase project credentials were exposed, every user's Strava and Google Calendar access would be immediately compromised. Once complete, token refresh centralization (see Dropped/Stale) should be batched into the same PR or done immediately after.
 - **Pause reason (2026-06-05):** Implementation plan written and reviewed. Two blockers identified: (1) the correct approach requires an **architectural change** first — moving all token DB writes from the browser into Edge Functions (the browser currently owns `tokenStorageService.setTokens()` writes for all providers); pgsodium column encryption is layered on top of that, not a standalone change. (2) **pgsodium availability** cannot be confirmed without running the migration against the live Supabase project — `CREATE EXTENSION IF NOT EXISTS pgsodium` will silently succeed but subsequent `pgsodium.create_key()` calls will fail if the extension isn't in `pg_available_extensions`. Resume when (a) the architectural decision on token ownership has been confirmed, and (b) pgsodium / Supabase Vault availability has been verified in the Supabase Dashboard.
 - **Effort estimate:** M (2–3 days)
@@ -31,18 +33,9 @@ _Assessment based on: git log (last 30 commits), all PRs (none open), open issue
 
 ---
 
-### 1.2 Wire Mutation Hooks Into PlansPage (Orphaned Code) — [IN PROGRESS — PR: #25]
-- **What:** `usePlanMutations.ts` and `useProfileMutations.ts` (created in PR #18) are not imported by any component. Confirmed: `PlansPage.tsx` imports `trainingPlansService` directly (verified June 4 — no import from `usePlanMutations`). `PlansPage.tsx` still calls service methods directly and manually fires `queryClient.invalidateQueries()` inline at five separate call sites. The hooks are production-ready but simply not wired in — a day's work to complete the original PR #18 intent.
-- **Why now:** The mutation hook work was shipped to solve stale-cache bugs, but because components were never updated to use the hooks, users are still relying on the ad-hoc inline invalidation, which is inconsistent and misses some paths (e.g., workout deletion in certain flows). This is a low-effort fix with direct reliability payoff.
-- **Effort estimate:** S (half day)
-- **Actual effort:** S — as estimated; 10 call sites replaced across PlansPage + 2 in SettingsPage
-- **Agent prompt:** "In `src/pages/PlansPage.tsx`, replace all direct `trainingPlansService.updateWorkoutStatus()`, `trainingPlansService.createPlan()`, `trainingPlansService.deletePlan()`, `trainingPlansService.addWorkoutToPlan()`, `trainingPlansService.updateWorkout()`, and `trainingPlansService.deleteWorkout()` call sites with the corresponding hooks from `src/hooks/usePlanMutations.ts` (`useToggleWorkoutComplete`, `useCreatePlan`, `useDeletePlan`, `useAddWorkout`, `useUpdateWorkout`, `useDeleteWorkout`). Remove the five manual `queryClient.invalidateQueries({ queryKey: ['plan-data'] })` inline calls — cache invalidation is now handled by each hook's `onSuccess`. Similarly, update `src/pages/SettingsPage.tsx` to use `useSaveUserProfile` and `useSaveRiderProfile` from `src/hooks/useProfileMutations.ts` instead of direct service calls. Verify all 142 existing tests still pass and that toggling a workout completion in the UI immediately updates the plan list without a manual refresh."
-
----
-
 ### 1.3 Integrate Sentry Error Monitoring — OPEN
-- **What:** `ErrorBoundary.tsx` has a code comment explicitly noting "replace with Sentry/monitoring in production (item #14)" — Sentry has never been added (confirmed June 4: comment still present in `componentDidCatch`). There are 200+ `console.error`/`console.warn` calls across 49 files that are invisible in production. When an Edge Function fails, a Strava sync crashes, or a render error is caught, there is zero alerting.
-- **Why now:** With code splitting now live (PR #20), lazy-loaded chunks that fail to load will be silently caught by `ErrorBoundary` with no visibility. Sentry installation is mechanical and the codebase already has the `ErrorBoundary` integration point explicitly stubbed.
+- **What:** `ErrorBoundary.tsx` has a code comment explicitly noting "replace with Sentry/monitoring in production (item #14)" — Sentry has never been added (confirmed June 6: comment still present in `componentDidCatch`). There are 200+ `console.error`/`console.warn` calls across 49 files that are invisible in production. When an Edge Function fails, a Strava sync crashes, or a render error is caught, there is zero alerting.
+- **Why now:** With code splitting live (PR #20) and mutation hooks now wired (PR #25), lazy-loaded chunks that fail to load and mutation failures that hit error boundaries are silently swallowed with no production visibility. The `ErrorBoundary` integration point is explicitly stubbed — install is mechanical. This is the clear next T1 sprint item.
 - **Effort estimate:** S (1 day)
 - **Actual effort:** —
 - **Agent prompt:** "Integrate Sentry into TrainingSmart. Run `npm install @sentry/react`. Initialize Sentry in `src/main.tsx` with `Sentry.init({ dsn: import.meta.env.VITE_SENTRY_DSN, environment: import.meta.env.MODE, tracesSampleRate: 0.1, integrations: [Sentry.browserTracingIntegration()] })`. In `src/components/common/ErrorBoundary.tsx`, replace the `console.error` in `componentDidCatch` with `Sentry.captureException(error, { contexts: { react: { componentStack: info.componentStack } } })` — keep the console.error as a secondary call for local dev. In the top 10 files by `console.error` count (start with `trainingPlansService.ts`, `openaiApi.ts`, `stravaApi.ts`), add `Sentry.captureException(error, { extra: { context: '<service>/<operation>' } })` alongside existing console calls. Add `VITE_SENTRY_DSN=` to `.env.example` with a comment. Do not add Sentry to Edge Functions — their errors are surfaced via Supabase logs. Acceptance criteria: a deliberate `throw new Error('test')` in `ErrorBoundary` dev mode appears in the Sentry dashboard."
@@ -51,9 +44,9 @@ _Assessment based on: git log (last 30 commits), all PRs (none open), open issue
 
 ## Tier 2 — Next Sprint
 
-### 2.1 Split Monolithic PlansPage.tsx (83 KB) — OPEN
-- **What:** `PlansPage.tsx` is 83,947 bytes and growing. Despite several sub-components being in `src/components/plans/` (WorkoutCard, WeeklyPlanView, etc.), the main page file still owns plan list rendering, plan creation flow, workout status management, drag-and-drop orchestration, the Level-Up modal, the Plan Logic Viewer, the Post-Workout Check-in modal, and all Strava activity matching. It is the most-changed file in the repo and the largest source of merge conflicts.
-- **Why now:** The file has grown across all five previous assessments without extraction. Every new feature (plan templates, activity matching, Level-Up) landed in this file because there was no better abstraction. Splitting it is a prerequisite for safely adding component-level tests.
+### 2.1 Split Monolithic PlansPage.tsx (84 KB) — OPEN
+- **What:** `PlansPage.tsx` is 84,727 bytes (confirmed June 6 — slightly grown since June 5 despite mutation hook extraction in PR #25). Despite several sub-components in `src/components/plans/`, the main page file still owns plan list rendering, plan creation flow, workout status management, drag-and-drop orchestration, the Level-Up modal, the Plan Logic Viewer, and the Post-Workout Check-in modal. It is the most-changed file in the repo.
+- **Why now:** The file has grown across all six previous assessments without extraction. Every new feature landed here because there was no better abstraction. Splitting it is a prerequisite for safely adding component-level tests.
 - **Effort estimate:** L (3–5 days)
 - **Actual effort:** —
 - **Agent prompt:** "Refactor `src/pages/PlansPage.tsx` into focused sub-components without changing any visible behavior or styling. The `src/components/plans/` directory already has DraggableWorkoutCard, DroppableDayColumn, WeeklyPlanView, PlanLogicViewer, etc. — extract the remaining inline sections: (1) `src/components/plans/PlanListSidebar.tsx` — the left-rail list of training plans with expand/collapse and delete actions; (2) `src/components/plans/LevelUpModal.tsx` — the consistency milestone celebration modal; (3) `src/components/plans/PlanStatsDrawer.tsx` — the collapsible cumulative plan stats panel; (4) `src/components/plans/CreatePlanForm.tsx` — the plan creation flow including AI generation prompt and template picker. Move associated state and handlers into each sub-component or a new `src/hooks/usePlanPage.ts` hook that `PlansPage.tsx` uses. Target: `PlansPage.tsx` under 300 lines, orchestrating composition only. Verify CI passes and all 142 existing tests still pass."
@@ -70,8 +63,8 @@ _Assessment based on: git log (last 30 commits), all PRs (none open), open issue
 ---
 
 ### 2.3 SettingsPage Modularization (1,118 Lines, 53 KB) — OPEN
-- **What:** `SettingsPage.tsx` is 1,118 lines managing six independent concerns in one file: Strava OAuth, Oura Ring integration, coach prompt customization, content interests, rider profile, and notification settings. `src/components/settings/` currently only contains `CoachSpecializationSelector.tsx` and `Integrations.tsx` — partial prior extraction did not complete the job.
-- **Why now:** Every integration addition (Oura, Google Calendar, Apple Health) has landed in this one file. It is the second-largest file in the codebase and blocks safe testing of OAuth flows. Completing modularization is also a prerequisite for cleanly wiring in the `useProfileMutations` hooks from item 1.2.
+- **What:** `SettingsPage.tsx` is 53,721 bytes (confirmed June 6 — unchanged) managing six independent concerns in one file: Strava OAuth, Oura Ring integration, coach prompt customization, content interests, rider profile, and notification settings. `src/components/settings/` currently only contains `CoachSpecializationSelector.tsx` and `Integrations.tsx` — partial prior extraction did not complete the job.
+- **Why now:** Every integration addition (Oura, Google Calendar, Apple Health) has landed in this one file. It blocks safe testing of OAuth flows and is the second-largest file in the codebase. With `useSaveUserProfile` now wired (PR #25), hooks are available — modularization can proceed cleanly.
 - **Effort estimate:** M (2–3 days)
 - **Actual effort:** —
 - **Agent prompt:** "Complete the modularization of `src/pages/SettingsPage.tsx`. The `src/components/settings/` directory already has `CoachSpecializationSelector.tsx` and `Integrations.tsx` — extract the remaining sections: (1) `StravaConnectionCard.tsx` — Strava OAuth connect/disconnect UI, athlete display, cache refresh; (2) `OuraIntegrationCard.tsx` — Oura token entry, connection status, disconnect; (3) `RiderProfileForm.tsx` — FTP, weight, training zones with save button; use `useSaveRiderProfile` from `useProfileMutations.ts`; (4) `ContentInterestsCard.tsx` — the interest tag grid with save. `SettingsPage.tsx` should become a layout shell under 150 lines composing these sub-components. Pass shared auth state (userId) via props. Run `npm run typecheck` and verify all 142 tests still pass."
@@ -98,7 +91,7 @@ _Assessment based on: git log (last 30 commits), all PRs (none open), open issue
 
 ### 2.6 Accessibility Audit and WCAG 2.1 AA Remediation — OPEN _(escalated from Tier 3)_
 - **What:** No ARIA labels, keyboard navigation, or focus management were observed. The drag-and-drop workout cards and Recharts power zone chart are the highest-risk areas for screen readers and keyboard-only users. This is risk item #19 from the original risk review.
-- **Why now:** Escalated from Tier 3 after 5 consecutive assessments. Accessibility is a correctness concern, not just a quality concern — it cannot be deferred indefinitely. Schedule after PlansPage split (2.1) is complete, since that refactor is a prerequisite for per-component ARIA work.
+- **Why now:** Escalated from Tier 3 after 5 consecutive assessments. Accessibility is a correctness concern — schedule after PlansPage split (2.1) is complete, since that refactor is a prerequisite for per-component ARIA work.
 - **Effort estimate:** L (1–2 weeks)
 - **Actual effort:** —
 - **Agent prompt:** "Conduct and remediate an accessibility audit for TrainingSmart. Install `eslint-plugin-jsx-a11y` and add it to `eslint.config.js`; run `npx eslint src/ --fix` and fix all auto-fixable violations. Then manually address: (1) all modal overlays — add `role='dialog'`, `aria-modal='true'`, `aria-labelledby`, and focus trapping via a `useFocusTrap` hook; (2) drag-and-drop workout cards — add `role='button'`, `aria-grabbed` state, and arrow-key keyboard support; (3) icon-only buttons — add descriptive `aria-label`; (4) Recharts charts — wrap in `<figure>` with `aria-label` text summary. Install `@axe-core/react` in dev mode only for regression catching."
@@ -107,7 +100,7 @@ _Assessment based on: git log (last 30 commits), all PRs (none open), open issue
 
 ## Tier 3 — Strategic
 
-_No active Tier 3 items. Previous items were either escalated to Tier 2 or dropped this cycle._
+_No active Tier 3 items. All previous items were either escalated to Tier 2 or dropped._
 
 ---
 
@@ -115,5 +108,5 @@ _No active Tier 3 items. Previous items were either escalated to Tier 2 or dropp
 
 | Item | Reason |
 |------|--------|
-| **Centralize Token Refresh Logic (was 3.1)** | Blocked by 1.1 (OAuth token encryption) which has itself been open for 5 assessments. Removed as a standalone item — consolidated into 1.1's agent prompt as a mandatory follow-on. Will re-emerge as a discrete Tier 1 item the moment 1.1 merges. |
+| **Centralize Token Refresh Logic (was 3.1)** | Blocked by 1.1 (OAuth token encryption) which itself is PAUSED. Removed as a standalone item — consolidated into 1.1's agent prompt as a mandatory follow-on. Will re-emerge as a discrete Tier 1 item the moment 1.1 merges. |
 | **Recurring Season Schedules (was 3.3)** | XL effort (3–4 weeks), appeared 5 consecutive assessments with zero traction and no start. Revisit when performance athlete segment reaches scale warranting the investment. |
