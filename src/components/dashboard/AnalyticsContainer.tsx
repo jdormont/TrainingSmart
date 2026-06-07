@@ -6,8 +6,9 @@ import { RiderProfileChart } from './RiderProfileChart';
 import { RecoveryCard } from './RecoveryCard';
 import { ConsistencyHeatmap } from './ConsistencyHeatmap';
 import { DailyActivityCard } from './DailyActivityCard';
-import type { StravaActivity, StravaAthlete, OuraSleepData, OuraReadinessData, DailyMetric } from '../../types';
+import type { StravaActivity, StravaAthlete, OuraSleepData, OuraReadinessData, DailyMetric, Workout } from '../../types';
 import type { HealthMetrics } from '../../services/weeklyInsightService';
+import type { UserStreak } from '../../services/streakService';
 
 interface AnalyticsContainerProps {
     activities: StravaActivity[];
@@ -18,6 +19,10 @@ interface AnalyticsContainerProps {
     readinessData: OuraReadinessData | null;
     dailyMetric: DailyMetric | null;
     loading?: boolean;
+    streak?: UserStreak | null;
+    userId?: string;
+    onStreakUpdate?: (newStreak: UserStreak) => void;
+    onWorkoutClick?: (workout: Workout) => void;
 }
 
 type TabType = 'trends' | 'activity' | 'health' | 'recovery' | 'consistency';
@@ -30,7 +35,11 @@ export const AnalyticsContainer: React.FC<AnalyticsContainerProps> = ({
     sleepHistory = [],
     readinessData,
     dailyMetric,
-    loading = false
+    loading = false,
+    streak,
+    userId,
+    onStreakUpdate,
+    onWorkoutClick
 }) => {
     const [activeTab, setActiveTab] = useState<TabType>('trends');
     const location = useLocation();
@@ -121,6 +130,11 @@ export const AnalyticsContainer: React.FC<AnalyticsContainerProps> = ({
                 <div className={activeTab === 'consistency' ? 'block' : 'hidden'}>
                     <ConsistencyHeatmap
                         isDemoMode={new URLSearchParams(location.search).get('demo') === 'true'}
+                        activities={activities}
+                        streak={streak}
+                        userId={userId}
+                        onStreakUpdate={onStreakUpdate}
+                        onWorkoutClick={onWorkoutClick}
                     />
                 </div>
             </div>
