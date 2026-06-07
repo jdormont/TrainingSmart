@@ -240,6 +240,17 @@ export const DashboardPage: React.FC = () => {
     setSelectedActivity(activity);
   };
 
+  const handleWorkoutClick = (workout: Workout) => {
+    if (workout.strava_activity_id) {
+      const activity = activities.find(a => a.id === workout.strava_activity_id);
+      if (activity) {
+        handleActivityClick(activity);
+        return;
+      }
+    }
+    setSelectedWorkout(workout);
+  };
+
   const handleCloseModal = () => {
     setSelectedActivity(null);
   };
@@ -545,7 +556,6 @@ export const DashboardPage: React.FC = () => {
                 <SmartWorkoutPreview
                   nextWorkout={nextWorkout}
                   dailyMetrics={dailyMetric}
-                  onWorkoutGenerated={() => refreshNextWorkout()}
                   onViewDetails={setSelectedWorkout}
                   onOpenPicker={handleOpenPicker}
                 />
@@ -570,6 +580,7 @@ export const DashboardPage: React.FC = () => {
                 <ConsistencyHeatmap 
                   isDemoMode={isDemoMode}
                   streak={userStreak}
+                  activities={activities}
                   isRestDay={(() => {
                     if (!nextWorkout) return true;
                     const todayStr = new Date().toLocaleDateString('en-CA');
@@ -579,6 +590,7 @@ export const DashboardPage: React.FC = () => {
                   })()}
                   onStreakUpdate={() => queryClient.invalidateQueries({ queryKey: ['dashboard-data'] })}
                   userId={currentUserId || 'demo'}
+                  onWorkoutClick={handleWorkoutClick}
                 />
               </div>
             </div>
@@ -626,14 +638,11 @@ export const DashboardPage: React.FC = () => {
                   <SmartWorkoutPreview
                     nextWorkout={nextWorkout}
                     dailyMetrics={dailyMetric}
-                    onWorkoutGenerated={(workout) => {
-                      refreshNextWorkout();
-                    }}
                     onViewDetails={setSelectedWorkout}
                     onOpenPicker={handleOpenPicker}
                   />
                 )}
-                <TodaysFocusCard 
+                <TodaysFocusCard
                   dailyMetric={dailyMetric}
                   coachSpecialization={coachSpecialization}
                   isDemoMode={isDemoMode}
@@ -644,6 +653,7 @@ export const DashboardPage: React.FC = () => {
                   <WorkoutAdjustmentChips
                     workout={nextWorkout}
                     onWorkoutUpdated={refreshNextWorkout}
+                    recoveryScore={dailyMetric?.recovery_score ?? undefined}
                   />
                 )}
               </div>
@@ -655,7 +665,7 @@ export const DashboardPage: React.FC = () => {
                 insightLoading={insightLoading}
               />
 
-            <AnalyticsContainer
+             <AnalyticsContainer
               activities={activities}
               athlete={athlete}
               healthMetrics={healthMetrics}
@@ -663,6 +673,10 @@ export const DashboardPage: React.FC = () => {
               readinessData={readinessData}
               dailyMetric={dailyMetric}
               loading={loading}
+              streak={userStreak}
+              userId={currentUserId}
+              onStreakUpdate={() => queryClient.invalidateQueries({ queryKey: ['dashboard-data'] })}
+              onWorkoutClick={handleWorkoutClick}
             />
           </div>
 
@@ -674,9 +688,6 @@ export const DashboardPage: React.FC = () => {
                 <SmartWorkoutPreview
                   nextWorkout={nextWorkout}
                   dailyMetrics={dailyMetric}
-                  onWorkoutGenerated={(workout) => {
-                    refreshNextWorkout();
-                  }}
                   onViewDetails={setSelectedWorkout}
                   onOpenPicker={handleOpenPicker}
                 />

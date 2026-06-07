@@ -90,6 +90,16 @@ export const TodaysFocusCard: React.FC<TodaysFocusCardProps> = ({
     );
   }
 
+  // Gate: if a workout is already scheduled for today, SmartWorkoutPreview owns
+  // today's context — hide this card so the two don't overlap or contradict.
+  const todayStr = new Date().toLocaleDateString('en-CA');
+  const nextWorkoutDateStr = nextWorkout?.scheduledDate instanceof Date
+    ? nextWorkout.scheduledDate.toISOString().split('T')[0]
+    : nextWorkout?.scheduledDate
+      ? String(nextWorkout.scheduledDate).split('T')[0]
+      : null;
+  if (nextWorkout && nextWorkoutDateStr === todayStr) return null;
+
   // Synthesis Logic
   const recoveryScore = dailyMetric?.recovery_score ?? null;
   const dayOfWeek = new Date().getDay(); // 0 = Sunday, 1 = Monday...
@@ -113,7 +123,6 @@ export const TodaysFocusCard: React.FC<TodaysFocusCardProps> = ({
   let suggestion = "20-30 min session of your choice";
   let Icon = Sparkles;
   let iconColor = "text-blue-400";
-  let shouldHide = false;
 
   if (isLowRecovery) {
     headline = "Take it easy today";
@@ -145,23 +154,10 @@ export const TodaysFocusCard: React.FC<TodaysFocusCardProps> = ({
     suggestion = "Long unstructured activity (e.g., hiking or long ride)";
     Icon = Map;
     iconColor = "text-purple-400";
-  } else {
-    const todayStr = new Date().toLocaleDateString('en-CA');
-    const workoutDateStr = nextWorkout?.scheduledDate instanceof Date
-      ? nextWorkout.scheduledDate.toISOString().split('T')[0]
-      : nextWorkout?.scheduledDate
-        ? String(nextWorkout.scheduledDate).split('T')[0]
-        : null;
-    if (nextWorkout && workoutDateStr === todayStr) {
-      // SmartWorkoutPreview already covers today's workout context
-      shouldHide = true;
-    } else if (recoveryScore) {
-      explanation = `Your recovery is steady at ${recoveryScore}%.`;
-      suggestion = "A 20-30 min session of your choice";
-    }
+  } else if (recoveryScore) {
+    explanation = `Your recovery is steady at ${recoveryScore}%.`;
+    suggestion = "A 20-30 min session of your choice";
   }
-
-  if (shouldHide) return null;
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-4 shadow-sm relative overflow-hidden">

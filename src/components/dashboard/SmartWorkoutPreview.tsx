@@ -1,33 +1,30 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format, isTomorrow, isToday } from 'date-fns';
 import { Calendar, Timer, Activity, Zap, Sparkles, CheckCircle2 } from 'lucide-react';
 import { Workout, DailyMetric } from '../../types';
 import { ROUTES } from '../../utils/constants';
-import { recommendationService } from '../../services/recommendationService';
-import { useAuth } from '../../contexts/AuthContext';
 
 interface SmartWorkoutPreviewProps {
     nextWorkout: Workout | null;
-    dailyMetrics?: DailyMetric | null; // Changed from recoveryScore number to full object for service
-    onWorkoutGenerated?: (workout: Workout) => void;
+    dailyMetrics?: DailyMetric | null; // Full metric object for the bio-check band
     onViewDetails?: (workout: Workout) => void;
-    onOpenPicker?: () => void; // New prop for modal
+    onOpenPicker?: () => void; // Opens the Smart Workout Picker modal
 }
 
 export const SmartWorkoutPreview: React.FC<SmartWorkoutPreviewProps> = ({
     nextWorkout,
     dailyMetrics,
-    onWorkoutGenerated,
     onViewDetails,
     onOpenPicker
 }) => {
     const navigate = useNavigate();
-    const { userProfile } = useAuth();
-    const [isGenerating, setIsGenerating] = useState(false);
 
-    // --- State A: Planned (Workout Exists) ---
-    if (nextWorkout) {
+    // This card only renders the planned-workout state. The "no workout" surface
+    // is owned by TodaysFocusCard; callers gate this with {nextWorkout && ...}.
+    if (!nextWorkout) return null;
+
+    {
         // formatting
         const workoutDate = new Date(nextWorkout.scheduledDate);
         let dateDisplay = format(workoutDate, 'MMM d');
@@ -154,83 +151,5 @@ export const SmartWorkoutPreview: React.FC<SmartWorkoutPreviewProps> = ({
             </div>
         );
     }
-
-    // --- State B: Unplanned (Schedule Clear) ---
-    const recoveryScore = dailyMetrics?.recovery_score;
-    let bioInsight = "Good day for a steady ride."; // Default
-    let recommendationType = "Endurance"; // For button label
-    let gradientClass = 'bg-gradient-to-br from-gray-800 to-gray-700';
-
-    if (recoveryScore !== undefined && recoveryScore !== null) {
-        if (recoveryScore >= 70) {
-            bioInsight = "You're primed for intensity. Let's build.";
-            recommendationType = "Intervals";
-            gradientClass = 'bg-gradient-to-br from-indigo-900 to-slate-800'; // Slightly more "active" dark
-        } else if (recoveryScore < 40) {
-            bioInsight = "Recovery is key today. Keep it light.";
-            recommendationType = "Recovery Spin";
-             gradientClass = 'bg-gradient-to-br from-slate-800 to-slate-700';
-        }
-    }
-
-    const handleGenerate = async () => {
-        // If onOpenPicker is provided, prioritize that flow (UI Modal)
-        if (onOpenPicker) {
-            onOpenPicker();
-            return;
-        }
-
-        if (!userProfile || !dailyMetrics) return;
-        setIsGenerating(true);
-        try {
-            const workout = await recommendationService.generateInstantWorkout(userProfile, dailyMetrics);
-            if (workout && onWorkoutGenerated) {
-                onWorkoutGenerated(workout);
-            }
-        } catch (error) {
-            console.error("Failed to generate workout", error);
-        } finally {
-            setIsGenerating(false);
-        }
-    };
-
-    return (
-        <div className={`relative w-full rounded-2xl shadow-md overflow-hidden flex flex-col ${gradientClass} text-white mb-6`}>
-             <div className="p-6 flex flex-col h-full">
-                <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-2xl font-bold">Schedule Clear</h3>
-                    <Calendar className="w-6 h-6 text-white/40" />
-                </div>
-                
-                <p className="text-white/80 mb-6 text-lg leading-relaxed">
-                    {bioInsight}
-                </p>
-
-                <div className="mt-auto">
-                    <button
-                        onClick={handleGenerate}
-                        disabled={isGenerating || !dailyMetrics}
-                        className="w-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white active:scale-[0.98] transition-all font-semibold py-3.5 px-4 rounded-xl flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {isGenerating ? (
-                            <span className="flex items-center">
-                                <span className="animate-spin mr-2">•</span> Generating...
-                            </span>
-                        ) : (
-                            <>
-                                <Sparkles className="w-4 h-4 text-yellow-300 fill-current" />
-                                <span>{onOpenPicker ? 'Smart Workout Picker' : `Generate ${recommendationType}`}</span>
-                            </>
-                        )}
-                    </button>
-                     {!dailyMetrics && (
-                        <p className="text-center text-xs text-white/40 mt-2">
-                            Need metrics to generate recommendation.
-                        </p>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
 };
 
