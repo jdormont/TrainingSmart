@@ -144,17 +144,10 @@ export const DashboardHero: React.FC<DashboardHeroProps> = ({
                             <div className="bg-slate-800 rounded-lg p-3 border border-slate-700 col-span-2 flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <Zap className="w-4 h-4 text-purple-400" />
-                                    <span className="text-xs text-slate-400 font-medium">
-                                        {weeklyInsight?.readinessScore !== undefined ? 'Readiness Score' : 'Activities'}
-                                    </span>
+                                    <span className="text-xs text-slate-400 font-medium">Activities</span>
                                 </div>
                                 <div className="text-xl font-bold text-slate-50">
-                                    {weeklyInsight?.readinessScore !== undefined
-                                        ? weeklyInsight.readinessScore
-                                        : (weeklyStats?.activityCount || 0)}
-                                    {weeklyInsight?.readinessScore !== undefined && (
-                                        <span className="text-xs font-normal text-slate-500 ml-1">/ 100</span>
-                                    )}
+                                    {weeklyStats?.activityCount || 0}
                                 </div>
                             </div>
                         </div>
@@ -164,15 +157,15 @@ export const DashboardHero: React.FC<DashboardHeroProps> = ({
                 {/* Bottom Row: Action Buttons */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Button
-                        variant="primary"
+                        variant="outline"
                         size="lg"
                         onClick={() => {
                             analytics.track('insight_action_taken', { type: 'chat' });
                             navigate(ROUTES.CHAT);
                         }}
-                        className="w-full justify-center shadow-lg shadow-orange-500/20 hover:shadow-orange-500/30 transition-all"
+                        className="w-full justify-center bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700 hover:text-white"
                     >
-                        <MessageCircle className="w-5 h-5 mr-2" />
+                        <MessageCircle className="w-5 h-5 mr-2 text-orange-400" />
                         Chat with AI Coach
                     </Button>
                     <Button

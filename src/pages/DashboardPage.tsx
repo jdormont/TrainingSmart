@@ -556,7 +556,6 @@ export const DashboardPage: React.FC = () => {
                 <SmartWorkoutPreview
                   nextWorkout={nextWorkout}
                   dailyMetrics={dailyMetric}
-                  onWorkoutGenerated={() => refreshNextWorkout()}
                   onViewDetails={setSelectedWorkout}
                   onOpenPicker={handleOpenPicker}
                 />
@@ -639,14 +638,11 @@ export const DashboardPage: React.FC = () => {
                   <SmartWorkoutPreview
                     nextWorkout={nextWorkout}
                     dailyMetrics={dailyMetric}
-                    onWorkoutGenerated={(workout) => {
-                      refreshNextWorkout();
-                    }}
                     onViewDetails={setSelectedWorkout}
                     onOpenPicker={handleOpenPicker}
                   />
                 )}
-                <TodaysFocusCard 
+                <TodaysFocusCard
                   dailyMetric={dailyMetric}
                   coachSpecialization={coachSpecialization}
                   isDemoMode={isDemoMode}
@@ -657,6 +653,7 @@ export const DashboardPage: React.FC = () => {
                   <WorkoutAdjustmentChips
                     workout={nextWorkout}
                     onWorkoutUpdated={refreshNextWorkout}
+                    recoveryScore={dailyMetric?.recovery_score ?? undefined}
                   />
                 )}
               </div>
@@ -691,9 +688,6 @@ export const DashboardPage: React.FC = () => {
                 <SmartWorkoutPreview
                   nextWorkout={nextWorkout}
                   dailyMetrics={dailyMetric}
-                  onWorkoutGenerated={(workout) => {
-                    refreshNextWorkout();
-                  }}
                   onViewDetails={setSelectedWorkout}
                   onOpenPicker={handleOpenPicker}
                 />
