@@ -1,4 +1,5 @@
 // Supabase-based chat session service
+import * as Sentry from '@sentry/react';
 import { supabase } from './supabaseClient';
 import type { ChatSession, ChatMessage } from '../types';
 
@@ -61,6 +62,7 @@ class SupabaseChatService {
 
       return (sessions ?? []).map(s => this.mapDbSession(s));
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'supabaseChatService/getSessions' } });
       console.error('Error in getSessions:', error);
       return this.getLocalStorageSessions();
     }
@@ -133,6 +135,7 @@ class SupabaseChatService {
       
       return chatSession;
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'supabaseChatService/createSession' } });
       console.error('Error in createSession:', error);
       // Fallback to localStorage
       return this.createLocalStorageSession(name, category, description);
@@ -199,6 +202,7 @@ class SupabaseChatService {
         console.error('Error updating session timestamp:', sessionError);
       }
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'supabaseChatService/addMessageToSession' } });
       console.error('Error in addMessageToSession:', error);
       // Fallback to localStorage
       this.addLocalStorageMessage(sessionId, message);
@@ -243,6 +247,7 @@ class SupabaseChatService {
         this.clearActiveSession();
       }
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'supabaseChatService/deleteSession' } });
       console.error('Error in deleteSession:', error);
       // Fallback to localStorage
       this.deleteLocalStorageSession(sessionId);
@@ -286,6 +291,7 @@ class SupabaseChatService {
         throw error;
       }
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'supabaseChatService/updateSession' } });
       console.error('Error in updateSession:', error);
       // Fallback to localStorage
       this.updateLocalStorageSession(sessionId, updates);
@@ -331,6 +337,7 @@ class SupabaseChatService {
 
       return this.mapDbSession(session);
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'supabaseChatService/getSession' } });
       console.error('Error in getSession:', error);
       // Fallback to localStorage
       const sessions = this.getLocalStorageSessions();
