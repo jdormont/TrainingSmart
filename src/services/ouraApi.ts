@@ -1,4 +1,5 @@
 // Oura Ring API service layer
+import * as Sentry from '@sentry/react';
 import axios from 'axios';
 import { format, subDays, addDays } from 'date-fns';
 import { OURA_CONFIG, STORAGE_KEYS } from '../utils/constants';
@@ -263,6 +264,7 @@ class OuraApiService {
       console.log('Successfully refreshed Oura tokens');
       return tokens;
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'ouraApi/refreshTokens' } });
       console.error('Oura token refresh failed:', error);
       throw error;
     }
@@ -286,6 +288,7 @@ class OuraApiService {
       });
       return isAuth;
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'ouraApi/isAuthenticated' } });
       console.error('Error checking Oura authentication:', error);
       return false;
     }
@@ -321,6 +324,7 @@ class OuraApiService {
 
       return response.data.data || [];
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'ouraApi/getSleepData' } });
       console.error('Failed to fetch Oura sleep data:', error);
       if (axios.isAxiosError(error)) {
         console.error('Oura API error details:', {
@@ -363,6 +367,7 @@ class OuraApiService {
 
       return response.data.data || [];
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'ouraApi/getReadinessData' } });
       console.error('Failed to fetch Oura readiness data:', error);
       if (axios.isAxiosError(error)) {
         console.error('Oura API error details:', {
@@ -390,6 +395,7 @@ class OuraApiService {
 
       return response.data.data || [];
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'ouraApi/getDailySleepData' } });
       console.error('Failed to fetch Oura daily sleep data:', error);
       return [];
     }
@@ -585,6 +591,7 @@ class OuraApiService {
       }
 
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'ouraApi/syncOuraToDatabase' } });
       console.error('❌ Failed to sync Oura data to database:', error);
       throw error;
     }

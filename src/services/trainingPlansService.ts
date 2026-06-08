@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/react';
 import { supabase } from './supabaseClient';
 import type { TrainingPlan, Workout, PlanTemplate } from '../types';
 import { STORAGE_KEYS } from '../utils/constants';
@@ -173,6 +174,7 @@ class TrainingPlansService {
       console.log(`Returning ${trainingPlans.length} training plans`);
       return trainingPlans;
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'trainingPlansService/getPlans' } });
       console.error('Error in getPlans:', error);
       return this.getLocalStoragePlans();
     }
@@ -289,6 +291,7 @@ class TrainingPlansService {
 
       return finalPlan;
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'trainingPlansService/createPlan' } });
       console.error('Error in createPlan:', error);
       return this.createLocalStoragePlan(plan);
     }
@@ -326,6 +329,7 @@ class TrainingPlansService {
         throw error;
       }
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'trainingPlansService/deletePlan' } });
       console.error('Error in deletePlan:', error);
       this.deleteLocalStoragePlan(planId);
     }
@@ -363,6 +367,7 @@ class TrainingPlansService {
 
       await this.touchPlanUpdatedAt(workoutId);
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'trainingPlansService/updateWorkoutStatus' } });
       console.error('Error in updateWorkoutStatus:', error);
       this.updateLocalStorageWorkoutStatus(workoutId, status);
     }
@@ -590,6 +595,7 @@ class TrainingPlansService {
             .single()
         ).data?.plan_id);
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'trainingPlansService/updateWorkout' } });
       console.error('Error in updateWorkout:', error);
       this.updateLocalStorageWorkoutFull(workoutId, name, description, duration, distance, intensity, scheduledDate);
     }
@@ -740,6 +746,7 @@ class TrainingPlansService {
         linked_at: data.linked_at,
       };
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'trainingPlansService/getNextUpcomingWorkout' } });
       console.error('Error in getNextUpcomingWorkout:', error);
       return null;
     }
@@ -934,6 +941,7 @@ class TrainingPlansService {
       return newPlan.id;
 
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'trainingPlansService/ensureActivePlan' } });
       console.error('Error in ensureActivePlan:', error);
       throw error;
     }
@@ -1175,6 +1183,7 @@ class TrainingPlansService {
 
       return { autoLinkedCount, suggestedCount };
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'trainingPlansService/reconcileWorkoutsWithStrava' } });
       console.error('Error in reconcileWorkoutsWithStrava:', error);
       return { autoLinkedCount: 0, suggestedCount: 0 };
     }
@@ -1202,6 +1211,7 @@ class TrainingPlansService {
 
       await this.touchPlanUpdatedAt(workoutId);
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'trainingPlansService/confirmActivityLink' } });
       console.error('Error in confirmActivityLink:', error);
       throw error;
     }
@@ -1231,6 +1241,7 @@ class TrainingPlansService {
 
       await this.touchPlanUpdatedAt(workoutId);
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'trainingPlansService/rejectActivityLink' } });
       console.error('Error in rejectActivityLink:', error);
       throw error;
     }
@@ -1275,6 +1286,7 @@ class TrainingPlansService {
         linked_at: row.linked_at,
       }));
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'trainingPlansService/getPendingSuggestions' } });
       console.error('Error in getPendingSuggestions:', error);
       return [];
     }
@@ -1302,6 +1314,7 @@ class TrainingPlansService {
         created_at: t.created_at
       }));
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'trainingPlansService/getPlanTemplates' } });
       console.error('Error in getPlanTemplates:', error);
       return [];
     }
@@ -1404,6 +1417,7 @@ class TrainingPlansService {
 
       return this.dbPlanToTrainingPlan(createdPlan, sortedWorkouts);
     } catch (error) {
+      Sentry.captureException(error, { extra: { context: 'trainingPlansService/createPlanFromTemplate' } });
       console.error('Error in createPlanFromTemplate:', error);
       throw error;
     }
