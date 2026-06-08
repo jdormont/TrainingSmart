@@ -6,7 +6,7 @@ _Assessment based on: git log (last 30 commits — no new commits since the June
 ---
 
 ## Current Sprint
-None — ready for next implementation run
+**1.3 Integrate Sentry Error Monitoring** — [IN PROGRESS — branch: claude/nice-ramanujan-52FtZ, started: 2026-06-07]
 
 ---
 
