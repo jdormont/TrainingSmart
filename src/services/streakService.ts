@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient';
 import { differenceInCalendarDays, parseISO, addDays, format, isSameDay, subDays } from 'date-fns';
-import { StravaActivity } from '../types';
+import { ActivityType, StravaActivity, Workout } from '../types';
 
 export interface UserStreak {
     user_id: string;
@@ -60,6 +60,31 @@ class StreakService {
             return null;
         }
         return data;
+    }
+
+    /**
+     * Fetches completed workouts for a user within an inclusive date range
+     * (YYYY-MM-DD), used to render consistency/heatmap views.
+     */
+    async getWorkoutsInDateRange(userId: string, startDate: string, endDate: string): Promise<Workout[]> {
+        const { data, error } = await supabase
+            .from('workouts')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('completed', true)
+            .gte('scheduled_date', startDate)
+            .lte('scheduled_date', endDate);
+
+        if (error || !data) {
+            console.warn('Failed to fetch workouts for date range:', error);
+            return [];
+        }
+
+        return data.map(d => ({
+            ...d,
+            type: d.type as ActivityType,
+            scheduledDate: new Date(d.scheduled_date + 'T00:00:00'),
+        })) as Workout[];
     }
 
     /**

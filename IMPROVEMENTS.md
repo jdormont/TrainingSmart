@@ -8,7 +8,7 @@ _Note: `npx vitest run` / `npm run lint` / `npm run typecheck` could not be exec
 ---
 
 ## Current Sprint
-None — ready for next implementation run
+None — 1.1 Fix Services-Layer Violation in ConsistencyHeatmap (Tier 1) implemented on branch `claude/nice-ramanujan-jqi1y2`, ready for review.
 
 ---
 
@@ -35,11 +35,11 @@ None — ready for next implementation run
 
 ## Tier 1 — Quick Wins
 
-### 1.1 Fix Services-Layer Violation in ConsistencyHeatmap — OPEN _(new)_
+### 1.1 Fix Services-Layer Violation in ConsistencyHeatmap — DONE
 - **What:** The June 7 dashboard rewrite (`75babea`) introduced a direct `import { supabase } from '../../services/supabaseClient'` and an inline `await supabase...` query inside `src/components/dashboard/ConsistencyHeatmap.tsx` (line 171). Per CLAUDE.md, components should call `src/services/` modules, not Supabase directly — this is the only dashboard component that now breaks that rule, and it's a one-component, one-query fix.
 - **Why now:** This is a fresh regression introduced in the same week as the rewrite, before the pattern spreads to other components that copy this file as a template (the heatmap is one of the most-viewed/most-copied dashboard components). Cheapest possible time to fix is now, while the change is small and isolated.
 - **Effort estimate:** S (a few hours)
-- **Actual effort:** —
+- **Actual effort:** S — added `streakService.getWorkoutsInDateRange(userId, startDate, endDate)` (the existing query + mapping logic, moved verbatim) and replaced the inline `supabase` query/import in `ConsistencyHeatmap.tsx` with a call to it. `npm run lint` (0 new issues), `npm run build` (passes, includes typecheck via `tsc -b`), and `npx vitest run` (142/142 passing) all clean.
 - **Agent prompt:** "In `src/components/dashboard/ConsistencyHeatmap.tsx`, remove the direct `supabase` import and inline query at line ~171. Identify which existing service module owns this query (likely `streakService.ts` or a workouts-fetching function in `trainingPlansService.ts` — check for an existing equivalent before adding a new one) and move the query there as a typed exported function; call that function from the component instead. If no equivalent exists, add a small typed function (e.g. `getWorkoutsForDateRange(userId, startDate, endDate)`) to the most appropriate existing service file rather than creating a new service. Preserve existing loading/error state handling exactly. Run `npm run typecheck` and `npx vitest run` to confirm no regressions (baseline: 142 tests passing)."
 
 ---

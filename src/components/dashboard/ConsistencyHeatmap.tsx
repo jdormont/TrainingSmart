@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { supabase } from '../../services/supabaseClient';
 import { useAuth } from '../../contexts/AuthContext';
 import { ActivityType, Workout, StravaActivity } from '../../types';
 import { Info, Snowflake, CheckCircle } from 'lucide-react';
@@ -168,22 +167,12 @@ export const ConsistencyHeatmap: React.FC<ConsistencyHeatmapProps> = ({
       }
 
       try {
-        const { data, error } = await supabase
-          .from('workouts')
-          .select('*')
-          .eq('user_id', userProfile.user_id)
-          .eq('completed', true)
-          .gte('scheduled_date', startDate.toISOString().split('T')[0])
-          .lte('scheduled_date', endDate.toISOString().split('T')[0]);
-
-        if (data && !error) {
-          const mapped = data.map(d => ({
-            ...d,
-            type: d.type as ActivityType,
-            scheduledDate: new Date(d.scheduled_date + 'T00:00:00'),
-          })) as Workout[];
-          setWorkouts(mapped);
-        }
+        const mapped = await streakService.getWorkoutsInDateRange(
+          userProfile.user_id,
+          startDate.toISOString().split('T')[0],
+          endDate.toISOString().split('T')[0]
+        );
+        setWorkouts(mapped);
       } catch (err) {
         console.warn('Failed to fetch consistency heatmap data:', err);
       } finally {
