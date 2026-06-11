@@ -8,7 +8,7 @@ _Note: `npx vitest run` / `npm run lint` / `npm run typecheck` could not be exec
 ---
 
 ## Current Sprint
-None — ready for next implementation run.
+1.1 Accessibility for ConsistencyHeatmap Grid Cells (Tier 1) — `[IN PROGRESS — PR: #32]`
 
 ---
 
@@ -29,12 +29,11 @@ None — ready for next implementation run.
 
 ## Tier 1 — Quick Wins
 
-### 1.1 Accessibility for New ConsistencyHeatmap Grid Cells — OPEN _(scoped subset of 2.6, recommended next)_
-- **What:** `ConsistencyHeatmap.tsx` renders 112 plain `<div>` grid cells (one per day across 16 weeks, the `gridData.allCells.map(...)` block), each with `onClick`/`onMouseEnter`/`onMouseLeave` handlers wired to `handleCellClick`/tooltip display, but zero `role`, `tabIndex`, `aria-label`, or keyboard handlers. Cells with logged workouts route to a modal on click — that interaction is currently mouse-only and invisible to screen readers. Confirmed still present after PR #30 (which only addressed the services-layer violation in this same component, not accessibility).
-- **Why now:** This is a regression from the June 7 dashboard rewrite (the previous heatmap had no per-cell click routing), so it's adding *new* inaccessible surface area rather than carrying forward old debt. It's also far smaller than the full 2.6 audit — a single component, a well-defined interaction pattern (grid of buttons), and a clear acceptance bar. With the services-layer fix now merged, this is the only remaining open item from the June 7 rewrite and the natural next pickup.
+### 1.1 Accessibility for ConsistencyHeatmap Grid Cells — `[IN PROGRESS — PR: #32]`
+- **What:** `ConsistencyHeatmap.tsx` renders 112 plain `<div>` grid cells (one per day across 16 weeks, the `gridData.allCells.map(...)` block), each with `onClick`/`onMouseEnter`/`onMouseLeave` handlers wired to `handleCellClick`/tooltip display, but had zero `role`, `tabIndex`, `aria-label`, or keyboard handlers. Cells with logged workouts route to a modal on click — that interaction was mouse-only and invisible to screen readers.
+- **Status:** PR #32 adds `role="button"`, `tabIndex` (0 for workout days, -1 for empty days), and an `aria-label` per cell via a new `getCellAriaLabel(cell)` helper (date + workout name/duration, or "No activity"); `onKeyDown` triggers `handleCellClick` on Enter/Space for workout days; the grid container gets `role="group"` with an `aria-label`; focused cells get a visible focus ring matching the existing "today" ring. `npx vitest run` (142 tests), `npm run lint`, `npx tsc --noEmit`, and `npm run build` all clean. Awaiting review/merge.
 - **Effort estimate:** S (1 day)
-- **Actual effort:** —
-- **Agent prompt:** "In `src/components/dashboard/ConsistencyHeatmap.tsx`, make the 112 grid cells (the `gridData.allCells.map(...)` block) keyboard- and screen-reader-accessible without changing visual styling: (1) for cells where `cell.hasWorkout` is true, change the wrapping `<div>` to have `role='button'`, `tabIndex={0}`, an `aria-label` summarizing the date and workout(s) (e.g. 'Tuesday, June 3 — Bike ride, 45 min, completed'), and an `onKeyDown` handler that triggers `handleCellClick` on Enter/Space; (2) for cells with no workout, set `aria-label` to a date + 'No workout logged' and leave them out of the tab order (`tabIndex={-1}` or `aria-hidden` if purely decorative, but keep them focusable if they're meaningful for screen reader users navigating the grid — use your judgement and document the choice); (3) wrap the whole grid in a labelled `role='grid'`/`role='row'` structure or, more simply, a `<div role='group' aria-label='Workout activity heatmap, last 16 weeks'>` if full grid semantics are overkill. Verify with `npx vitest run` (142 tests) and a manual keyboard-only pass (Tab to a workout cell, press Enter, confirm the modal opens)."
+- **Actual effort:** S
 
 ---
 
