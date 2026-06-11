@@ -72,6 +72,22 @@ interface HeatmapCell {
   primaryActivity?: ActivityType | string;
 }
 
+const getCellAriaLabel = (cell: HeatmapCell): string => {
+  const dateLabel = cell.date.toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+
+  if (cell.workouts.length === 0) {
+    return `${dateLabel}: No activity`;
+  }
+
+  const summary = cell.workouts.map(w => `${w.name} (${w.duration}m)`).join(', ');
+  return `${dateLabel}: ${summary}`;
+};
+
 export const ConsistencyHeatmap: React.FC<ConsistencyHeatmapProps> = ({ 
   isDemoMode = false,
   streak,
@@ -354,6 +370,13 @@ export const ConsistencyHeatmap: React.FC<ConsistencyHeatmapProps> = ({
     }
   };
 
+  const handleCellKeyDown = (e: React.KeyboardEvent<HTMLDivElement>, cell: HeatmapCell) => {
+    if ((e.key === 'Enter' || e.key === ' ') && cell.hasWorkout) {
+      e.preventDefault();
+      handleCellClick(cell);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex animate-pulse flex-col p-6 items-center">
@@ -437,7 +460,7 @@ export const ConsistencyHeatmap: React.FC<ConsistencyHeatmapProps> = ({
                  </div>
 
                  {/* Matrix */}
-                 <div className="grid grid-rows-7 grid-flow-col" style={{ gap: `${CELL_GAP}px` }}>
+                 <div className="grid grid-rows-7 grid-flow-col" style={{ gap: `${CELL_GAP}px` }} role="group" aria-label="Workout consistency calendar">
                    {gridData.allCells.map((cell, idx) => {
                        const isFuture = cell.date > gridData.lastValidDate;
                        let bgClass = 'bg-slate-800'; // Default filled empty cell
@@ -458,13 +481,17 @@ export const ConsistencyHeatmap: React.FC<ConsistencyHeatmapProps> = ({
                        }
 
                        return (
-                           <div 
-                             key={idx} 
+                           <div
+                             key={idx}
                              style={{ width: `${CELL_SIZE}px`, height: `${CELL_SIZE}px` }}
                              onMouseEnter={(e) => handleCellMouseEnter(e, cell)}
                              onMouseLeave={handleCellMouseLeave}
                              onClick={() => handleCellClick(cell)}
-                             className={`rounded-[3px] transition-all duration-200 ${cell.hasWorkout ? 'cursor-pointer hover:ring-2 hover:ring-slate-400 hover:ring-offset-1 hover:ring-offset-slate-900' : 'cursor-default'} ${bgClass} ${opacityClass} ${isToday ? 'ring-2 ring-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.4)] animate-pulse z-10' : ''}`}
+                             onKeyDown={(e) => handleCellKeyDown(e, cell)}
+                             role="button"
+                             tabIndex={cell.hasWorkout ? 0 : -1}
+                             aria-label={getCellAriaLabel(cell)}
+                             className={`rounded-[3px] transition-all duration-200 ${cell.hasWorkout ? 'cursor-pointer hover:ring-2 hover:ring-slate-400 hover:ring-offset-1 hover:ring-offset-slate-900' : 'cursor-default'} ${bgClass} ${opacityClass} ${isToday ? 'ring-2 ring-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.4)] animate-pulse z-10' : ''} focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900`}
                            ></div>
                        );
                    })}
