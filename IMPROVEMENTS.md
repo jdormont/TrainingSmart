@@ -50,6 +50,14 @@ None — ready for next implementation run. (1.1 shipped via PR #30, merged 2026
 
 ## Tier 2 — Next Sprint
 
+> **Priority order for this cycle (2.1–2.4), set 2026-06-11 per direct prioritization request:**
+> 1. **2.4 — Eliminate `: any` in `trainingPlansService.ts`** (M, 2–3 days). The smallest and most contained of the four, fully independent, and it establishes correct typing for the service layer that 2.1's refactor will lean on. It also removes the one `PlansPage.tsx` `any` cast (`queryClient.setQueryData`) before that file gets restructured, so the new sub-components inherit clean types instead of propagating `any`.
+> 2. **2.1 — Split `PlansPage.tsx`** (L, 3–5 days). The highest-leverage item in the backlog: it's the prerequisite for 2.6 (accessibility audit, now 7 assessments stale) and for safe component-level testing, and it has gone unstarted across all 8 prior assessments. Sequencing it right after 2.4 means it starts from clean service types.
+> 3. **2.3 — Modularize `SettingsPage.tsx`** (M, 2–3 days). Fully independent of 2.1/2.4 — pick up once capacity frees from 2.1, or run in parallel with it via a second contributor. Its OAuth-card extraction (Strava/Oura) sets up cleaner ground for 2.2's token-storage tests.
+> 4. **2.2 — `tokenStorageService` tests** (S–M, 1–2 days). The smallest item, but formally gated on Tier 1 item 1.2 landing first — treat as the fill-in/closeout task for the cycle once 1.2 ships, ideally alongside or after 2.3's OAuth-adjacent work.
+>
+> If full-cycle capacity doesn't cover all four, **2.4 → 2.1** is the minimum viable slice: it banks the type-safety win and finally unblocks the long-stalled accessibility work (2.6) in a single cycle.
+
 ### 2.1 Split Monolithic PlansPage.tsx (84 KB / 1,803 lines) — OPEN
 - **What:** `PlansPage.tsx` is 84,727 bytes / 1,803 lines — confirmed byte-for-byte unchanged since June 6 (no commits have touched it this cycle). Despite several sub-components in `src/components/plans/`, the main page file still owns plan list rendering, plan creation flow, workout status management, drag-and-drop orchestration, the Level-Up modal, the Plan Logic Viewer, and the Post-Workout Check-in modal. It is the most-changed file in the repo's history.
 - **Why now:** The file has grown across all eight previous assessments without extraction. Every new feature landed here because there was no better abstraction. Splitting it is a prerequisite for safely adding component-level tests and for the full accessibility audit (2.6).
