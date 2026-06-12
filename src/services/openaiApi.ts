@@ -276,7 +276,57 @@ export const buildActivitiesTable = (activities: StravaActivity[], showPowerMetr
     return `| ${dateStr} | ${typeStr} | ${distanceMi} | ${durationStr} | ${elevGain} | ${avgHr} | ${avgPwr} | ${maxPwr} |`;
   });
 
-  return [header, ...rows].join('\n');
+  let output = [header, ...rows].join('\n');
+
+  // Detailed Metrics Appendix
+  const detailedActivities = activities.filter(a => a.detailed_metrics);
+  if (detailedActivities.length > 0) {
+    output += `\n\n### Detailed Activity Metrics (Laps, Power Curve, and Zones):\n`;
+    detailedActivities.slice(0, 5).forEach(a => {
+      const dm = a.detailed_metrics!;
+      output += `\n**Activity:** "${a.name}" on ${formatDate(a.start_date_local)}\n`;
+      
+      if (dm.normalized_power) {
+        output += `- **Normalized Power (NP):** ${dm.normalized_power}W (Avg Power: ${Math.round(a.average_watts || 0)}W, VI: ${dm.variability_index || 'N/A'})\n`;
+      }
+      
+      if (dm.power_curve) {
+        output += `- **Power Curve peaks:** 5s: ${dm.power_curve['5s'] || 0}W, 1m: ${dm.power_curve['1m'] || 0}W, 5m: ${dm.power_curve['5m'] || 0}W, 20m: ${dm.power_curve['20m'] || 0}W\n`;
+      }
+
+      if (dm.time_in_zones?.power && dm.time_in_zones.power.length > 0) {
+        const pzStr = dm.time_in_zones.power
+          .filter(z => z.seconds > 0)
+          .map(z => `Z${z.zone}: ${Math.round(z.percentage)}%`)
+          .join(', ');
+        if (pzStr) output += `- **Power Zones:** ${pzStr}\n`;
+      }
+
+      if (dm.time_in_zones?.heartrate && dm.time_in_zones.heartrate.length > 0) {
+        const hzStr = dm.time_in_zones.heartrate
+          .filter(z => z.seconds > 0)
+          .map(z => `Z${z.zone}: ${Math.round(z.percentage)}%`)
+          .join(', ');
+        if (hzStr) output += `- **Heart Rate Zones:** ${hzStr}\n`;
+      }
+
+      if (dm.laps && dm.laps.length > 0) {
+        output += `- **Laps:**\n`;
+        dm.laps.forEach(l => {
+          const min = Math.floor(l.moving_time / 60);
+          const sec = Math.round(l.moving_time % 60);
+          const durStr = min > 0 ? `${min}m ${sec}s` : `${sec}s`;
+          let lapDetail = `  * Lap ${l.lap_index}: ${durStr}`;
+          if (l.avg_power) lapDetail += `, Avg Power: ${l.avg_power}W`;
+          if (l.avg_hr) lapDetail += `, Avg HR: ${l.avg_hr} bpm`;
+          if (l.elevation_gain > 5) lapDetail += `, +${Math.round(l.elevation_gain * 3.28084)} ft`;
+          output += lapDetail + '\n';
+        });
+      }
+    });
+  }
+
+  return output;
 };
 
 class OpenAIService {
@@ -481,10 +531,16 @@ Use the coaching style and personality defined above, while incorporating this r
     const systemPrompt = this.buildSystemPrompt(context);
 
     try {
+      const payloadMessages = messages.map(msg => ({
+        role: msg.role,
+        content: msg.content,
+        imageUrls: msg.image_urls || []
+      }));
+
       const response = await axios.post(
         `${this.supabaseUrl}/functions/v1/openai-chat`,
         {
-          messages,
+          messages: payloadMessages,
           systemPrompt,
           maxTokens: OPENAI_CONFIG.MAX_TOKENS,
           temperature: OPENAI_CONFIG.TEMPERATURE,

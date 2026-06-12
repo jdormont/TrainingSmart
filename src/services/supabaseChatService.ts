@@ -35,6 +35,7 @@ class SupabaseChatService {
           role: msg.role as 'user' | 'assistant',
           content: msg.content,
           timestamp: new Date(msg.timestamp),
+          image_urls: msg.image_urls || [],
         })),
       createdAt: new Date(dbSession.created_at),
       updatedAt: new Date(dbSession.updated_at),
@@ -183,7 +184,8 @@ class SupabaseChatService {
           role: message.role,
           content: message.content,
           timestamp: message.timestamp.toISOString(),
-          user_id: userId
+          user_id: userId,
+          image_urls: message.image_urls || []
         });
 
       if (messageError) {
@@ -431,7 +433,8 @@ class SupabaseChatService {
             role: msg.role,
             content: msg.content,
             timestamp: msg.timestamp.toISOString(),
-            user_id: userId
+            user_id: userId,
+            image_urls: msg.image_urls || []
           }));
 
           const { error: messagesError } = await supabase

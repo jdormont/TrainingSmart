@@ -102,6 +102,18 @@ export const useDashboardData = () => {
         ...historyStats.filter(a => !recentIds.has(a.id))
       ].sort((a, b) => new Date(b.start_date_local).getTime() - new Date(a.start_date_local).getTime());
 
+      // Background enrichment of recent activities (throttled/cached in sessionStorage to prevent loops)
+      if (activitiesData.length > 0) {
+        stravaCacheService.enrichRecentActivities(activitiesData, 3)
+          .then(didEnrich => {
+            if (didEnrich) {
+              console.log('Recent activities enriched. Invalidating dashboard-data query.');
+              queryClient.invalidateQueries({ queryKey: ['dashboard-data'] });
+            }
+          })
+          .catch(err => console.warn('Background activity enrichment failed:', err));
+      }
+
     } catch (error: any) {
       if (error?.message?.includes('authenticated') || error?.message?.includes('No valid access token') || error?.response?.status === 401) {
         console.log('Strava not connected');

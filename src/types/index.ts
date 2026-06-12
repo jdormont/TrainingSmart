@@ -65,6 +65,31 @@ export interface StravaActivity {
     summary_polyline: string;
     resource_state: number;
   };
+  detailed_metrics?: DetailedWorkoutMetrics;
+}
+
+export interface DetailedWorkoutMetrics {
+  normalized_power?: number;
+  variability_index?: number;
+  power_curve?: {
+    '1s': number;
+    '5s': number;
+    '1m': number;
+    '5m': number;
+    '20m': number;
+  };
+  time_in_zones?: {
+    power?: { zone: number; min: number; max: number; seconds: number; percentage: number }[];
+    heartrate?: { zone: number; min: number; max: number; seconds: number; percentage: number }[];
+  };
+  laps?: {
+    lap_index: number;
+    distance: number;
+    moving_time: number;
+    avg_power?: number;
+    avg_hr?: number;
+    elevation_gain: number;
+  }[];
 }
 
 export interface StravaZoneBucket {
@@ -120,6 +145,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  image_urls?: string[];
 }
 
 export interface ChatSession {

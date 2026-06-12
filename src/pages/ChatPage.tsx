@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Send, Bot, User, Loader2, Menu, X, Calendar, Activity, Heart, Battery, Zap, TrendingUp, HelpCircle, Map, Coffee, Wind, Wrench } from 'lucide-react';
+import { Send, Bot, User, Loader2, Menu, X, Calendar, Activity, Heart, Battery, Zap, TrendingUp, HelpCircle, Map, Coffee, Wind, Wrench, Paperclip } from 'lucide-react';
+import { supabase } from '../services/supabaseClient';
 import { openaiService } from '../services/openaiApi';
 import { supabaseChatService } from '../services/supabaseChatService';
 import { chatContextExtractor } from '../services/chatContextExtractor';
@@ -97,6 +98,77 @@ export const ChatPage: React.FC = () => {
   const [showPlanButton, setShowPlanButton] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // File Upload State & Handlers
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [stagedImages, setStagedImages] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    setUploading(true);
+    setError(null);
+
+    try {
+      const user = authProfile?.user_id || currentUserId;
+      if (!user) {
+        throw new Error('User context not found');
+      }
+
+      if (user === 'demo') {
+        // In demo mode, use local object URLs for previews
+        for (let i = 0; i < files.length; i++) {
+          const objectUrl = URL.createObjectURL(files[i]);
+          setStagedImages(prev => [...prev, objectUrl]);
+        }
+        return;
+      }
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        
+        if (file.size > 5 * 1024 * 1024) {
+          throw new Error(`File "${file.name}" exceeds the 5MB size limit.`);
+        }
+        
+        if (!file.type.startsWith('image/')) {
+          throw new Error(`File "${file.name}" is not an image.`);
+        }
+
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${user}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+        const filePath = `chat/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('chat-attachments')
+          .upload(filePath, file);
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('chat-attachments')
+          .getPublicUrl(filePath);
+
+        setStagedImages(prev => [...prev, publicUrl]);
+      }
+    } catch (err: any) {
+      console.error('Upload error:', err);
+      setError(err.message || 'Failed to upload image');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const removeStagedImage = (index: number) => {
+    setStagedImages(prev => prev.filter((_, i) => i !== index));
+  };
 
   // Handle deep linking
   useEffect(() => {
@@ -264,14 +336,18 @@ export const ChatPage: React.FC = () => {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputMessage.trim() || loadingResponse || !athlete || !activeSession) return;
+    if ((!inputMessage.trim() && stagedImages.length === 0) || loadingResponse || !athlete || !activeSession) return;
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
       content: inputMessage.trim(),
-      timestamp: new Date()
+      timestamp: new Date(),
+      image_urls: stagedImages
     };
+
+    // Clear attachments in UI
+    setStagedImages([]);
 
     // Add message/Track local
     if (currentUserId !== 'demo') {
@@ -727,7 +803,24 @@ export const ChatPage: React.FC = () => {
                           }`}
                       >
                         {message.role === 'user' ? (
-                          <p className="whitespace-pre-wrap">{message.content}</p>
+                          <div>
+                            {message.image_urls && message.image_urls.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mb-2">
+                                {message.image_urls.map((url) => (
+                                  <a
+                                    key={url}
+                                    href={url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="block max-w-[200px] max-h-[150px] rounded-lg overflow-hidden border border-orange-500/30 hover:border-orange-500/60 transition-colors"
+                                  >
+                                    <img src={url} alt="chat attachment" className="w-full h-full object-cover" />
+                                  </a>
+                                ))}
+                              </div>
+                            )}
+                            <p className="whitespace-pre-wrap">{message.content}</p>
+                          </div>
                         ) : (
                           <div
                             className="prose prose-sm max-w-none 
@@ -825,13 +918,52 @@ export const ChatPage: React.FC = () => {
                 </div>
               )}
 
+              {/* Staged Upload Previews */}
+              {stagedImages.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2 p-2 bg-slate-900/40 rounded-xl border border-slate-800">
+                  {stagedImages.map((url, idx) => (
+                    <div key={url} className="relative w-16 h-16 rounded-lg overflow-hidden group border border-slate-700">
+                      <img src={url} alt="staged attachment" className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => removeStagedImage(idx)}
+                        className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                  {uploading && (
+                    <div className="w-16 h-16 rounded-lg bg-slate-800 flex items-center justify-center border border-slate-700">
+                      <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                    </div>
+                  )}
+                </div>
+              )}
+
               <form onSubmit={handleSendMessage} className="relative">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={loadingResponse || !activeSession}
+                  className="absolute left-2 bottom-2 p-2 rounded-xl bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 text-slate-300 disabled:text-slate-600 h-10 w-10 flex items-center justify-center transition-colors"
+                >
+                  <Paperclip className="w-5 h-5" />
+                </button>
                 <textarea
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder={activeSession ? "Ask about your training..." : "Select a session to start chatting..."}
-                  className="w-full px-5 py-4 pr-14 bg-slate-800 backdrop-blur-xl border border-slate-700 text-white rounded-2xl shadow-2xl shadow-black/50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent placeholder-slate-400 resize-none"
+                  className="w-full pl-14 pr-14 py-4 bg-slate-800 backdrop-blur-xl border border-slate-700 text-white rounded-2xl shadow-2xl shadow-black/50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent placeholder-slate-400 resize-none"
                   rows={1}
                   disabled={loadingResponse || !activeSession}
                   onInput={(e) => {
@@ -842,7 +974,7 @@ export const ChatPage: React.FC = () => {
                 />
                 <button
                   type="submit"
-                  disabled={!inputMessage.trim() || loadingResponse || !activeSession}
+                  disabled={(!inputMessage.trim() && stagedImages.length === 0) || loadingResponse || !activeSession}
                   className="absolute right-2 bottom-2 p-2 rounded-xl bg-orange-500 hover:bg-orange-400 text-white disabled:bg-slate-700 disabled:text-slate-500 h-10 w-10 flex items-center justify-center transition-colors"
                 >
                   {loadingResponse ? (

@@ -143,5 +143,39 @@ describe('OpenAIService Prompt Helpers', () => {
       expect(table).toContain('200w');
       expect(table).toContain('300w');
     });
+
+    it('appends detailed metrics appendix when present', () => {
+      const activity = createActivity(getRelativeDateStr(1), 3600, 16093.4, 'Ride', 140, 160, 200, 300);
+      activity.detailed_metrics = {
+        normalized_power: 230,
+        variability_index: 1.15,
+        power_curve: {
+          '1s': 600,
+          '5s': 550,
+          '1m': 380,
+          '5m': 280,
+          '20m': 220
+        },
+        time_in_zones: {
+          power: [
+            { zone: 1, min: 0, max: 100, seconds: 600, percentage: 16.7 },
+            { zone: 2, min: 100, max: 200, seconds: 2400, percentage: 66.7 },
+            { zone: 3, min: 200, max: 300, seconds: 600, percentage: 16.7 },
+          ]
+        },
+        laps: [
+          { lap_index: 1, distance: 8000, moving_time: 1800, avg_power: 190, avg_hr: 135, elevation_gain: 50 },
+          { lap_index: 2, distance: 8093.4, moving_time: 1800, avg_power: 210, avg_hr: 145, elevation_gain: 50 }
+        ]
+      };
+
+      const table = buildActivitiesTable([activity], true);
+      expect(table).toContain('### Detailed Activity Metrics');
+      expect(table).toContain('Normalized Power (NP):** 230W');
+      expect(table).toContain('VI: 1.15');
+      expect(table).toContain('Power Curve peaks:** 5s: 550W, 1m: 380W');
+      expect(table).toContain('Power Zones:** Z1: 17%, Z2: 67%, Z3: 17%');
+      expect(table).toContain('Lap 1: 30m 0s, Avg Power: 190W, Avg HR: 135 bpm');
+    });
   });
 });

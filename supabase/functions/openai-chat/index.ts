@@ -53,7 +53,7 @@ Deno.serve(async (req: Request) => {
       throw new ValidationError("Request body must be valid JSON");
     });
 
-    const messages = requireArray(body.messages, "messages", 100) as Array<{ role: string; content: string }>;
+    const messages = requireArray(body.messages, "messages", 100) as Array<{ role: string; content: string; imageUrls?: string[] }>;
     const systemPrompt = requireString(body.systemPrompt, "systemPrompt", 20_000);
     const maxTokens = optionalNumber(body.maxTokens, "maxTokens", 1, 4000, 1000);
     const temperature = optionalNumber(body.temperature, "temperature", 0, 2, 0.7);
@@ -65,6 +65,16 @@ Deno.serve(async (req: Request) => {
       }
       if (msg.content.length > 50_000) {
         throw new ValidationError(`messages[${i}].content exceeds maximum length`);
+      }
+      if (msg.imageUrls !== undefined) {
+        if (!Array.isArray(msg.imageUrls)) {
+          throw new ValidationError(`messages[${i}].imageUrls must be an array of strings`);
+        }
+        msg.imageUrls.forEach((url, urlIdx) => {
+          if (typeof url !== "string") {
+            throw new ValidationError(`messages[${i}].imageUrls[${urlIdx}] must be a string`);
+          }
+        });
       }
     });
 
@@ -81,7 +91,11 @@ Deno.serve(async (req: Request) => {
 
     const content = await callAI({
       systemPrompt,
-      messages: messages.map(msg => ({ role: msg.role as "user" | "assistant", content: msg.content })),
+      messages: messages.map(msg => ({ 
+        role: msg.role as "user" | "assistant", 
+        content: msg.content,
+        imageUrls: msg.imageUrls 
+      })),
       maxTokens,
       temperature,
     });
