@@ -323,6 +323,36 @@ export const buildActivitiesTable = (activities: StravaActivity[], showPowerMetr
           output += lapDetail + '\n';
         });
       }
+
+      if (dm.segment_efforts && dm.segment_efforts.length > 0) {
+        output += `- **Segment Efforts:**\n`;
+        dm.segment_efforts.forEach(se => {
+          const min = Math.floor(se.moving_time / 60);
+          const sec = Math.round(se.moving_time % 60);
+          const durStr = min > 0 ? `${min}m ${sec}s` : `${sec}s`;
+          let segDetail = `  * "${se.name}": ${durStr}`;
+          if (se.avg_power) segDetail += `, Avg Power: ${Math.round(se.avg_power)}W`;
+          if (se.avg_hr) segDetail += `, Avg HR: ${Math.round(se.avg_hr)} bpm`;
+          if (se.max_hr) segDetail += `, Max HR: ${Math.round(se.max_hr)} bpm`;
+          output += segDetail + '\n';
+        });
+      }
+
+      if (dm.heartrate_efficiency) {
+        const hre = dm.heartrate_efficiency;
+        if (hre.cardiac_decoupling) {
+          const cd = hre.cardiac_decoupling;
+          const ef1 = cd.first_half_avg_hr > 0 ? (cd.first_half_avg_power / cd.first_half_avg_hr).toFixed(2) : 'N/A';
+          const ef2 = cd.second_half_avg_hr > 0 ? (cd.second_half_avg_power / cd.second_half_avg_hr).toFixed(2) : 'N/A';
+          output += `- **Aerobic Decoupling (drift):** ${cd.drift_percentage}% (First half EF: ${ef1}, Second half EF: ${ef2})\n`;
+        }
+        if (hre.avg_hr_at_power_buckets && hre.avg_hr_at_power_buckets.length > 0) {
+          const hbStr = hre.avg_hr_at_power_buckets
+            .map(b => `${b.bucket}: ${b.avg_hr} bpm (EF: ${b.efficiency_factor})`)
+            .join(', ');
+          output += `- **HR at Power Buckets:** ${hbStr}\n`;
+        }
+      }
     });
   }
 

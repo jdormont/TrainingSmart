@@ -243,6 +243,22 @@ class StravaCacheService {
       }));
     }
 
+    // 1b. Segment Efforts
+    if (detailedActivity && (detailedActivity as any).segment_efforts) {
+      const allSegments = (detailedActivity as any).segment_efforts.map((se: any) => ({
+        name: se.name || 'Unknown Segment',
+        moving_time: se.moving_time,
+        avg_power: se.average_watts,
+        avg_hr: se.average_heartrate,
+        max_hr: se.max_heartrate
+      }));
+      // Filter out segments under 60 seconds, sort by moving_time descending, keep top 8
+      detailed_metrics.segment_efforts = allSegments
+        .filter((se: any) => se.moving_time >= 60)
+        .sort((a: any, b: any) => b.moving_time - a.moving_time)
+        .slice(0, 8);
+    }
+
     // 2. Time in zones
     if (zones && zones.length > 0) {
       detailed_metrics.time_in_zones = {};
@@ -271,14 +287,18 @@ class StravaCacheService {
       }
     }
 
-    // 3. Streams (Power Curve & Normalized Power)
+    // 3. Streams (Power Curve, Normalized Power, and HR Efficiency)
     let wattsData: number[] = [];
+    let hrData: number[] = [];
     if (streams) {
       if (Array.isArray(streams)) {
         const wattsStream = streams.find((s: any) => s.type === 'watts');
+        const hrStream = streams.find((s: any) => s.type === 'heartrate');
         if (wattsStream) wattsData = wattsStream.data || [];
+        if (hrStream) hrData = hrStream.data || [];
       } else if (typeof streams === 'object') {
         if (streams.watts) wattsData = streams.watts.data || [];
+        if ((streams as any).heartrate) hrData = (streams as any).heartrate.data || [];
       }
     }
 
@@ -292,6 +312,23 @@ class StravaCacheService {
         }
       }
       detailed_metrics.power_curve = calculatePowerCurve(wattsData) as any;
+
+      // 4. Heart Rate Efficiency and Cardiac Decoupling
+      if (hrData.length > 0 && wattsData.length === hrData.length) {
+        const bucketStats = calculateHeartRateEfficiencyBins(wattsData, hrData);
+        const decoupling = calculateCardiacDecoupling(wattsData, hrData);
+
+        if (decoupling) {
+          detailed_metrics.heartrate_efficiency = {
+            avg_hr_at_power_buckets: bucketStats,
+            cardiac_decoupling: decoupling
+          };
+        } else if (bucketStats.length > 0) {
+          detailed_metrics.heartrate_efficiency = {
+            avg_hr_at_power_buckets: bucketStats
+          };
+        }
+      }
     }
 
     // Merge into activity_data
@@ -495,5 +532,94 @@ export function calculatePowerCurve(watts: number[]): Record<string, number> {
   }
   
   return curve;
+}
+
+export function calculateHeartRateEfficiencyBins(
+  wattsData: number[],
+  hrData: number[]
+): { bucket: string; avg_hr: number; seconds: number; efficiency_factor: number }[] {
+  if (wattsData.length === 0 || hrData.length === 0 || wattsData.length !== hrData.length) {
+    return [];
+  }
+
+  const buckets = [
+    { name: '100-130W', min: 100, max: 130 },
+    { name: '130-160W', min: 130, max: 160 },
+    { name: '160-190W', min: 160, max: 190 },
+    { name: '190-220W', min: 190, max: 220 },
+    { name: '220W+', min: 220, max: 9999 }
+  ];
+
+  return buckets.map(b => {
+    let sumPwr = 0;
+    let sumHr = 0;
+    let count = 0;
+
+    for (let i = 0; i < wattsData.length; i++) {
+      const w = wattsData[i];
+      const hr = hrData[i];
+      if (w >= b.min && w < b.max && hr > 0) {
+        sumPwr += w;
+        sumHr += hr;
+        count++;
+      }
+    }
+
+    if (count >= 30) {
+      const avgPwr = sumPwr / count;
+      const avgHr = sumHr / count;
+      return {
+        bucket: b.name,
+        avg_hr: Math.round(avgHr),
+        seconds: count,
+        efficiency_factor: parseFloat((avgPwr / avgHr).toFixed(2))
+      };
+    }
+    return null;
+  }).filter((b): b is NonNullable<typeof b> => b !== null);
+}
+
+export function calculateCardiacDecoupling(
+  wattsData: number[],
+  hrData: number[]
+): {
+  first_half_avg_hr: number;
+  second_half_avg_hr: number;
+  first_half_avg_power: number;
+  second_half_avg_power: number;
+  drift_percentage: number;
+} | null {
+  if (wattsData.length < 600 || hrData.length === 0 || wattsData.length !== hrData.length) {
+    return null;
+  }
+
+  const mid = Math.floor(wattsData.length / 2);
+
+  const firstHalfPwr = wattsData.slice(0, mid);
+  const firstHalfHr = hrData.slice(0, mid).filter(h => h > 0);
+  const secondHalfPwr = wattsData.slice(mid);
+  const secondHalfHr = hrData.slice(mid).filter(h => h > 0);
+
+  const avgP1 = firstHalfPwr.length > 0 ? firstHalfPwr.reduce((a, b) => a + b, 0) / firstHalfPwr.length : 0;
+  const avgH1 = firstHalfHr.length > 0 ? firstHalfHr.reduce((a, b) => a + b, 0) / firstHalfHr.length : 0;
+
+  const avgP2 = secondHalfPwr.length > 0 ? secondHalfPwr.reduce((a, b) => a + b, 0) / secondHalfPwr.length : 0;
+  const avgH2 = secondHalfHr.length > 0 ? secondHalfHr.reduce((a, b) => a + b, 0) / secondHalfHr.length : 0;
+
+  if (avgH1 > 0 && avgH2 > 0) {
+    const ef1 = avgP1 / avgH1;
+    const ef2 = avgP2 / avgH2;
+    const drift = ef1 > 0 ? parseFloat((((ef1 - ef2) / ef1) * 100).toFixed(1)) : 0;
+
+    return {
+      first_half_avg_hr: Math.round(avgH1),
+      second_half_avg_hr: Math.round(avgH2),
+      first_half_avg_power: Math.round(avgP1),
+      second_half_avg_power: Math.round(avgP2),
+      drift_percentage: drift
+    };
+  }
+
+  return null;
 }
 

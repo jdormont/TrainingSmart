@@ -90,6 +90,28 @@ export interface DetailedWorkoutMetrics {
     avg_hr?: number;
     elevation_gain: number;
   }[];
+  segment_efforts?: {
+    name: string;
+    moving_time: number;
+    avg_power?: number;
+    avg_hr?: number;
+    max_hr?: number;
+  }[];
+  heartrate_efficiency?: {
+    avg_hr_at_power_buckets?: {
+      bucket: string;
+      avg_hr: number;
+      seconds: number;
+      efficiency_factor: number;
+    }[];
+    cardiac_decoupling?: {
+      first_half_avg_hr: number;
+      second_half_avg_hr: number;
+      first_half_avg_power: number;
+      second_half_avg_power: number;
+      drift_percentage: number;
+    };
+  };
 }
 
 export interface StravaZoneBucket {
