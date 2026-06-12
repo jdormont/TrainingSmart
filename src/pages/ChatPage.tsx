@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Send, Bot, User, Loader2, Menu, X, Calendar, Activity, Heart, Battery, Zap, TrendingUp, HelpCircle, Map, Coffee, Wind, Wrench, Paperclip } from 'lucide-react';
+import { Send, Bot, User, Loader2, Menu, X, Calendar, Activity, Heart, Battery, Zap, TrendingUp, HelpCircle, Map, Coffee, Wind, Wrench, Paperclip, Copy, Check } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 import { openaiService } from '../services/openaiApi';
 import { supabaseChatService } from '../services/supabaseChatService';
@@ -103,6 +103,19 @@ export const ChatPage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [stagedImages, setStagedImages] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+
+  const handleCopyMessage = async (messageId: string, content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedMessageId(messageId);
+      setTimeout(() => {
+        setCopiedMessageId(null);
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy text:', err);
+    }
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -778,7 +791,7 @@ export const ChatPage: React.FC = () => {
                 {activeSession.messages.map((message) => (
                   <div
                     key={message.id}
-                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    className={`flex group ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
                       className={`flex items-start space-x-2 max-w-[80%] ${message.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''
@@ -846,12 +859,33 @@ export const ChatPage: React.FC = () => {
                             }}
                           />
                         )}
-                        <p
-                          className={`text-xs mt-2 ${message.role === 'user' ? 'text-orange-200/60' : 'text-slate-500'
+                        <div className="flex items-center justify-between mt-2 space-x-4">
+                          <p
+                            className={`text-xs ${message.role === 'user' ? 'text-orange-200/60' : 'text-slate-500'
+                              }`}
+                          >
+                            {message.timestamp.toLocaleTimeString()}
+                          </p>
+                          <button
+                            onClick={() => handleCopyMessage(message.id, message.content)}
+                            title="Copy message as Markdown"
+                            className={`flex items-center space-x-1 text-xs opacity-0 group-hover:opacity-100 hover:text-white transition-opacity ${
+                              message.role === 'user' ? 'text-orange-200/60' : 'text-slate-500'
                             }`}
-                        >
-                          {message.timestamp.toLocaleTimeString()}
-                        </p>
+                          >
+                            {copiedMessageId === message.id ? (
+                              <>
+                                <Check className="w-3 h-3 text-green-400" />
+                                <span className="text-green-400">Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3" />
+                                <span>Copy Markdown</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
