@@ -950,14 +950,6 @@ export const ChatPage: React.FC = () => {
                   multiple
                   className="hidden"
                 />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={loadingResponse || !activeSession}
-                  className="absolute left-2 bottom-2 p-2 rounded-xl bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 text-slate-300 disabled:text-slate-600 h-10 w-10 flex items-center justify-center transition-colors"
-                >
-                  <Paperclip className="w-5 h-5" />
-                </button>
                 <textarea
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
@@ -973,9 +965,17 @@ export const ChatPage: React.FC = () => {
                   }}
                 />
                 <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={loadingResponse || !activeSession}
+                  className="absolute left-2 bottom-2 z-10 p-2 rounded-xl bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 text-slate-300 disabled:text-slate-600 h-10 w-10 flex items-center justify-center transition-colors"
+                >
+                  <Paperclip className="w-5 h-5" />
+                </button>
+                <button
                   type="submit"
                   disabled={(!inputMessage.trim() && stagedImages.length === 0) || loadingResponse || !activeSession}
-                  className="absolute right-2 bottom-2 p-2 rounded-xl bg-orange-500 hover:bg-orange-400 text-white disabled:bg-slate-700 disabled:text-slate-500 h-10 w-10 flex items-center justify-center transition-colors"
+                  className="absolute right-2 bottom-2 z-10 p-2 rounded-xl bg-orange-500 hover:bg-orange-400 text-white disabled:bg-slate-700 disabled:text-slate-500 h-10 w-10 flex items-center justify-center transition-colors"
                 >
                   {loadingResponse ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
