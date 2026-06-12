@@ -42,14 +42,16 @@ There is no separate `vitest.config`; Vitest reads `vite.config.ts`. Tests live 
 - **Demo mode:** append `?demo=true` to any URL to render with mock data from `src/data/mockDashboardData.ts` (no Strava/login needed). `useDashboardData` branches on this early — preserve the branch when editing dashboard data flow.
 - **Strava ↔ plan reconciliation:** workouts carry `strava_activity_id`, `activity_match_score`, `auto_matched`, `match_metadata`. Heuristic auto-matching of real activities to planned workouts lives in `trainingPlansService.ts`. See `STRAVA_COMPLIANCE.md` — Strava data is inference-only context, never used to train models; keep that invariant.
 - **Health/recovery scoring:** recovery score blends Sleep + HRV + Resting HR (`healthMetricsService`, `sleepScoreCalculator`, `dailyMetricsService`). Calculation details are documented in `HEALTH_METRICS.md`.
+- **Aerobic Decoupling & HR Curves:** computed inside `stravaCacheService.ts` from 1-second telemetry streams, providing average HR by power bins and Joe Friel's cardiac decoupling drift percentage.
 - **Chat → plan:** chat sessions can spawn training plans; `training_plans` rows store `source_chat_session_id` and `chat_context_snapshot`. Context extraction is `openai-extract-context` / `chatContextExtractor.ts`.
 - **Markdown safety:** all LLM markdown is rendered through `src/utils/markdownToHtml.ts` with DOMPurify. Don't bypass it with `dangerouslySetInnerHTML`.
 - **Constants:** routes, storage keys, OAuth scopes, and config live in `src/utils/constants.ts` (`ROUTES`, `STORAGE_KEYS`, `STRAVA_CONFIG`, `OURA_CONFIG`). Use these rather than string literals.
 - **Shared types:** `src/types/index.ts` is the canonical domain model (`Workout`, `StravaActivity`, `DailyMetric`, `PlanReasoning`, `ContentItem`, etc.).
 
-## Database
+## Database & Storage
 
 Migrations are append-only SQL files in `supabase/migrations/` (timestamp-prefixed). Add a new migration rather than editing existing ones. Core tables: `user_profiles`, `training_plans`, `workouts`, `daily_metrics`, `chat_sessions`, `user_streaks`, `strava_activities_cache`, `plan_templates`. RLS policies scope every row to the authenticated `user_id`.
+Storage is managed via Supabase buckets; `chat-attachments` is a public bucket allowing public select and authenticated insert/delete policies to handle user image uploads.
 
 ## Local proxy quirk
 

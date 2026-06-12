@@ -81,6 +81,9 @@ Consistent notation is used to represent current development status.
 ### 3.5. AI Chat Interface & Curation Loop
 - `[x] COMPLETE` - Message history maintenance and context snapshot storage.
 - `[x] COMPLETE` - Chat prompt enrichment (attaching HRV, RHR, recent activities, power/HR zone distributions).
+- `[x] COMPLETE` - Provider-agnostic chat image uploads (multimodal mapping support for OpenAI and Anthropic/Claude).
+- `[x] COMPLETE` - Copy chat messages directly to clipboard as raw Markdown.
+- `[x] COMPLETE` - Advanced Heart Rate Telemetry & Aerobic Efficiency analysis (automatic segment efforts extraction, power-to-HR binning, and Joe Friel standard cardiac decoupling calculations).
 - `[x] COMPLETE` - Custom system prompt editor in Advanced Settings.
 - `[x] COMPLETE` - Curation Feed Phase 1 (YouTube video integration curated by interest tags).
 - `[ ] INCOMPLETE` - Curation Feed Phase 2 (Instagram Basic Display API & RSS parsed magazine feeds).
