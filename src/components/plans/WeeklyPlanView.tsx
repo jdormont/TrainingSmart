@@ -217,6 +217,14 @@ export default function WeeklyPlanView({
     }
   };
 
+  const handleKeepBoth = () => {
+    if (conflictModal.sourceWorkout && conflictModal.targetDate) {
+      onMoveWorkout?.(conflictModal.sourceWorkout.id, conflictModal.targetDate, 'move');
+      analytics.track('workout_rescheduled', { method: 'drag', type: 'move' });
+      closeConflictModal();
+    }
+  };
+
   if (workouts.length === 0) {
     return (
       <div className="bg-slate-900 rounded-lg border border-slate-800 p-8 text-center">
@@ -302,17 +310,29 @@ export default function WeeklyPlanView({
 
                       <div className="space-y-2 flex-1 min-h-[60px] md:min-h-[100px]">
                         {day.workouts.length > 0 ? (
-                          day.workouts.map(workout => (
-                            <div key={workout.id} className="w-full">
-                              <DraggableWorkoutCard
-                                workout={workout}
-                                onToggleComplete={onToggleComplete}
-                                onStatusChange={onStatusChange}
-                                onDelete={onDelete}
-                                onClick={() => onWorkoutClick?.(workout)}
-                              />
-                            </div>
-                          ))
+                          <>
+                            {day.workouts.map(workout => (
+                              <div key={workout.id} className="w-full">
+                                <DraggableWorkoutCard
+                                  workout={workout}
+                                  onToggleComplete={onToggleComplete}
+                                  onStatusChange={onStatusChange}
+                                  onDelete={onDelete}
+                                  onClick={() => onWorkoutClick?.(workout)}
+                                />
+                              </div>
+                            ))}
+                            {onAddWorkout && (
+                              <button
+                                onClick={() => onAddWorkout(day.date)}
+                                className="w-full py-1.5 rounded-lg border border-dashed border-white/10 text-slate-500 hover:text-blue-400 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all duration-200 flex items-center justify-center space-x-1 text-xs"
+                                title="Add Workout"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Add Workout</span>
+                              </button>
+                            )}
+                          </>
                         ) : (
                           <div className="h-full min-h-[60px] md:min-h-[80px] bg-transparent rounded-lg border-2 border-dashed border-white/5 flex flex-col items-center justify-center space-y-2 p-2 group hover:border-blue-500/50 hover:bg-blue-500/5 transition-colors">
                             <span className="text-xs text-slate-500 group-hover:text-blue-400 pointer-events-none">Rest Day</span>
@@ -356,6 +376,7 @@ export default function WeeklyPlanView({
         targetDate={conflictModal.targetDate}
         onSwap={handleSwap}
         onReplace={handleReplace}
+        onKeepBoth={handleKeepBoth}
       />
     </DndContext>
   );

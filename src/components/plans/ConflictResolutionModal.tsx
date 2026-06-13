@@ -1,7 +1,7 @@
 import React from 'react';
 import { Workout } from '../../types';
 import { Button } from '../common/Button';
-import { AlertTriangle, ArrowRightLeft, Trash2, X } from 'lucide-react';
+import { AlertTriangle, ArrowRightLeft, Trash2, X, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface ConflictResolutionModalProps {
@@ -12,6 +12,7 @@ interface ConflictResolutionModalProps {
     targetDate: Date | null;
     onSwap: () => void;
     onReplace: () => void;
+    onKeepBoth: () => void;
 }
 
 export const ConflictResolutionModal: React.FC<ConflictResolutionModalProps> = ({
@@ -22,6 +23,7 @@ export const ConflictResolutionModal: React.FC<ConflictResolutionModalProps> = (
     targetDate,
     onSwap,
     onReplace,
+    onKeepBoth,
 }) => {
     if (!isOpen || !sourceWorkout || !targetWorkout || !targetDate) return null;
 
@@ -54,6 +56,15 @@ export const ConflictResolutionModal: React.FC<ConflictResolutionModalProps> = (
                     </div>
 
                     <div className="space-y-3">
+                        <button
+                            onClick={onKeepBoth}
+                            className="w-full flex items-center justify-center px-4 py-3 border border-transparent rounded-lg text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors"
+                        >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Keep Both Workouts
+                            <span className="ml-2 text-emerald-200 text-xs font-normal">(Add as additional workout)</span>
+                        </button>
+
                         <button
                             onClick={onSwap}
                             className="w-full flex items-center justify-center px-4 py-3 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"

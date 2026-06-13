@@ -698,7 +698,13 @@ class TrainingPlansService {
 
         const upcoming = allWorkouts
           .filter(w => !w.completed && w.status !== 'completed' && w.status !== 'skipped' && new Date(w.scheduledDate) >= now)
-          .sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime());
+          .sort((a, b) => {
+            const dateDiff = new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime();
+            if (dateDiff !== 0) return dateDiff;
+            const aId = a.id || '';
+            const bId = b.id || '';
+            return aId.localeCompare(bId);
+          });
 
         return upcoming.length > 0 ? upcoming[0] : null;
       }
@@ -714,6 +720,7 @@ class TrainingPlansService {
         .eq('completed', false)
         // .neq('status', 'skipped') // status column doesn't exist in DB yet based on previous file analysis
         .order('scheduled_date', { ascending: true })
+        .order('created_at', { ascending: true })
         .limit(1)
         .single();
 
