@@ -1,13 +1,15 @@
-import React from 'react';
-import { BookOpen, Sparkles, Settings } from 'lucide-react';
+import React, { useState } from 'react';
+import { BookOpen, Sparkles, Settings, Newspaper, Video } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { ContentFeed } from '../components/home/ContentFeed';
+import { CyclingDigest } from '../components/learn/CyclingDigest';
 import { useLearnData } from '../hooks/useLearnData';
 import { ROUTES } from '../utils/constants';
 
 export const LearnPage: React.FC = () => {
   const navigate = useNavigate();
+  const [activeSubTab, setActiveSubTab] = useState<'digest' | 'videos'>('digest');
   // Data fetching hook
   const { data, isLoading: loading, error: queryError } = useLearnData();
   
@@ -141,7 +143,39 @@ export const LearnPage: React.FC = () => {
           )}
         </div>
 
-        <ContentFeed activities={activities} />
+        {/* Sub-tabs Navigation */}
+        <div className="flex border-b border-slate-800 mb-6">
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('digest')}
+            className={`px-5 py-3 text-sm font-semibold border-b-2 -mb-px flex items-center gap-2 transition-all ${
+              activeSubTab === 'digest'
+                ? 'border-orange-500 text-orange-400 font-bold'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Newspaper className="w-4 h-4" />
+            <span>Cycling Digest</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('videos')}
+            className={`px-5 py-3 text-sm font-semibold border-b-2 -mb-px flex items-center gap-2 transition-all ${
+              activeSubTab === 'videos'
+                ? 'border-orange-500 text-orange-400 font-bold'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Video className="w-4 h-4" />
+            <span>Curated Feed</span>
+          </button>
+        </div>
+
+        {activeSubTab === 'digest' ? (
+          <CyclingDigest />
+        ) : (
+          <ContentFeed activities={activities} />
+        )}
       </div>
     </div>
   );

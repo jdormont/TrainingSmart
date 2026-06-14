@@ -32,7 +32,7 @@ export const DASHBOARD_DATA_KEY = ['dashboard-data'] as const;
  * Invalidates dashboard-data on success so the dashboard widgets that
  * depend on profile data (power zones, fitness mode layout) refresh.
  */
-export function useSaveUserProfile() {
+export function useSaveUserProfile(userId?: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -40,6 +40,9 @@ export function useSaveUserProfile() {
       userProfileService.updateUserProfile(profile),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: DASHBOARD_DATA_KEY, exact: false });
+      if (userId) {
+        queryClient.invalidateQueries({ queryKey: ['user-profile', userId] });
+      }
     },
   });
 }

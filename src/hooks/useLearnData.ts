@@ -16,6 +16,7 @@ interface UserProfile {
   training_goal?: string;
   coach_persona?: string;
   weekly_hours?: number;
+  cycling_digest_filters?: string[];
 }
 
 interface LearnData {
@@ -39,7 +40,7 @@ export const useLearnData = () => {
     const [profileData, contentData, activitiesData] = await Promise.all([
       supabase
         .from('user_profiles')
-        .select('training_goal, coach_persona, weekly_hours')
+        .select('training_goal, coach_persona, weekly_hours, cycling_digest_filters')
         .eq('user_id', user.id)
         .maybeSingle(),
       supabase

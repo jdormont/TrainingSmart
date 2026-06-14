@@ -429,6 +429,7 @@ export interface UserProfile {
   fitness_mode?: FitnessMode;
   conversational_onboarding_completed: boolean;
   conversational_onboarding_completed_at?: string;
+  cycling_digest_filters?: string[];
   created_at: string;
   updated_at: string;
 }
@@ -475,5 +476,26 @@ export interface PlanTemplate {
   duration_weeks: number;
   workouts: TemplateWorkout[];
   created_at: string;
+}
+
+export interface DigestHeadline {
+  title: string;
+  summary: string;
+  discipline: 'road' | 'gravel' | 'womens' | 'track' | 'cyclocross' | 'other';
+  sourceUrl: string;
+}
+
+export interface ActiveRace {
+  raceName: string;
+  discipline: string;
+  oneLiner: string;
+  overview?: string;
+  keyUpdates?: { label: string; text: string }[];
+}
+
+export interface CyclingDigestPayload {
+  generatedAt: string;
+  headlines: DigestHeadline[];
+  activeRaces: ActiveRace[];
 }
 

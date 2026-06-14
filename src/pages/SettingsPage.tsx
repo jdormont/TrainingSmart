@@ -74,7 +74,7 @@ RESPONSE GUIDELINES:
 
 export const SettingsPage: React.FC = () => {
   const { userProfile, reloadProfile } = useAuth();
-  const saveUserProfile = useSaveUserProfile();
+  const saveUserProfile = useSaveUserProfile(userProfile?.user_id);
   const [activeTab, setActiveTab] = useState<Tab>('coach');
 
   // --- My Coach tab state ---
@@ -100,6 +100,15 @@ export const SettingsPage: React.FC = () => {
   const [weeklyAvailabilityDuration, setWeeklyAvailabilityDuration] = useState<number>(45);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
+  const [cyclingDigestFilters, setCyclingDigestFilters] = useState<string[]>(['road', 'gravel', 'womens', 'track', 'cyclocross', 'other']);
+
+  const toggleDiscipline = (discipline: string) => {
+    setCyclingDigestFilters(prev =>
+      prev.includes(discipline)
+        ? prev.filter(d => d !== discipline)
+        : [...prev, discipline]
+    );
+  };
 
   // --- Integrations tab state ---
   const [athlete, setAthlete] = useState<StravaAthlete | null>(null);
@@ -162,6 +171,7 @@ export const SettingsPage: React.FC = () => {
           setAgeBucket(trainingProfile.age_bucket || '');
           setWeeklyAvailabilityDays(trainingProfile.weekly_availability_days ?? 3);
           setWeeklyAvailabilityDuration(trainingProfile.weekly_availability_duration ?? 45);
+          setCyclingDigestFilters(trainingProfile.cycling_digest_filters ?? ['road', 'gravel', 'womens', 'track', 'cyclocross', 'other']);
         }
 
         if (contentProfile) {
@@ -209,12 +219,14 @@ export const SettingsPage: React.FC = () => {
           ftp: ftp ? Number(ftp) : undefined,
           weekly_availability_days: weeklyAvailabilityDays,
           weekly_availability_duration: weeklyAvailabilityDuration,
+          cycling_digest_filters: cyclingDigestFilters,
         }),
         userProfileService.updateContentProfile({
           skill_level: skillLevel,
           interests: interests,
         }),
       ]);
+      await reloadProfile();
       setProfileSaved(true);
       setTimeout(() => setProfileSaved(false), 3000);
     } catch (error) {
@@ -635,6 +647,37 @@ export const SettingsPage: React.FC = () => {
                         }`}
                       >
                         <div className="font-medium text-sm">{level.label}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Cycling Digest Preferences */}
+                <div className="border-t border-slate-800 pt-6">
+                  <label className="block text-sm font-medium text-slate-400 mb-2">Cycling News Digest Preferences</label>
+                  <p className="text-slate-500 text-xs mb-4">
+                    Filter recent cycling news stories in your Learn tab by your preferred disciplines.
+                  </p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {([
+                      { value: 'road', label: 'Road & WorldTour' },
+                      { value: 'gravel', label: 'Gravel' },
+                      { value: 'womens', label: "Women's Events" },
+                      { value: 'track', label: 'Track' },
+                      { value: 'cyclocross', label: 'Cyclocross' },
+                      { value: 'other', label: 'Other' },
+                    ]).map(discipline => (
+                      <button
+                        key={discipline.value}
+                        type="button"
+                        onClick={() => toggleDiscipline(discipline.value)}
+                        className={`p-3 text-center rounded-lg border transition-colors ${
+                          cyclingDigestFilters.includes(discipline.value)
+                            ? 'border-orange-500 bg-orange-950/20 text-orange-400'
+                            : 'border-slate-700 bg-slate-800/50 text-slate-300 hover:border-slate-600'
+                        }`}
+                      >
+                        <div className="font-medium text-sm">{discipline.label}</div>
                       </button>
                     ))}
                   </div>

@@ -22,6 +22,7 @@ export interface UserProfile {
   fitness_mode?: FitnessMode;
   conversational_onboarding_completed?: boolean;
   conversational_onboarding_completed_at?: string;
+  cycling_digest_filters?: string[];
 }
 export interface ContentProfile {
   interests: string[];
@@ -83,7 +84,8 @@ export const userProfileService = {
         primary_goal, activity_mix, weekly_availability_days,
         weekly_availability_duration, fitness_level,
         coach_specialization, fitness_mode,
-        conversational_onboarding_completed, conversational_onboarding_completed_at
+        conversational_onboarding_completed, conversational_onboarding_completed_at,
+        cycling_digest_filters
       `)
       .eq('user_id', user.id)
       .maybeSingle();
