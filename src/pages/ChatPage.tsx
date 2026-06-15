@@ -818,9 +818,9 @@ export const ChatPage: React.FC = () => {
                         )}
                       </div>
                       <div
-                        className={`rounded-2xl px-5 py-3 backdrop-blur-sm border min-w-0 overflow-x-auto ${message.role === 'user'
-                          ? 'bg-orange-900/40 border-orange-500/30 text-orange-100'
-                          : 'bg-slate-800/60 border-slate-700/60 text-slate-200'
+                        className={`rounded-2xl px-5 py-3 border min-w-0 overflow-x-auto ${message.role === 'user'
+                          ? 'bg-orange-900/80 border-orange-500/40 text-orange-100'
+                          : 'bg-slate-800 border-slate-700 text-slate-200'
                           }`}
                       >
                         {message.role === 'user' ? (
@@ -856,12 +856,12 @@ export const ChatPage: React.FC = () => {
                               [&_*]:text-slate-200
                               [&_strong]:text-white
                               [&_h1]:text-slate-100 [&_h2]:text-slate-100 [&_h3]:text-slate-100
-                              [&>table]:w-full [&>table]:border-collapse [&>table]:border [&>table]:border-slate-700 [&>table]:my-4
-                              [&>thead]:bg-slate-800 [&>thead]:text-slate-200 
-                              [&>thead>tr>th]:border-b [&>thead>tr>th]:border-slate-700 [&>thead>tr>th]:p-3 [&>thead>tr>th]:text-left
-                              [&>tbody>tr]:border-b [&>tbody>tr]:border-slate-800 [&>tbody>tr:last-child]:border-0
-                              [&>tbody>tr:nth-child(odd)]:bg-slate-900/50 [&>tbody>tr:nth-child(even)]:bg-slate-900/30
-                              [&>tbody>tr>td]:p-3 [&>tbody>tr>td]:text-slate-200"
+                              [&_table]:w-full [&_table]:border-collapse [&_table]:border [&_table]:border-slate-700 [&_table]:my-4
+                              [&_thead]:bg-slate-700 [&_thead]:text-slate-100
+                              [&_thead_tr_th]:border-b [&_thead_tr_th]:border-slate-700 [&_thead_tr_th]:p-3 [&_thead_tr_th]:text-left [&_thead_tr_th]:text-slate-100
+                              [&_tbody_tr]:border-b [&_tbody_tr]:border-slate-700 [&_tbody_tr:last-child]:border-0
+                              [&_tbody_tr:nth-child(odd)]:bg-slate-900/60 [&_tbody_tr:nth-child(even)]:bg-slate-800/40
+                              [&_tbody_tr_td]:p-3 [&_tbody_tr_td]:text-slate-200"
                             dangerouslySetInnerHTML={{
                               __html: convertMarkdownToHtml(message.content)
                             }}
@@ -905,7 +905,7 @@ export const ChatPage: React.FC = () => {
                       <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700">
                         <Bot className="w-4 h-4 text-slate-400" />
                       </div>
-                      <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl px-5 py-3">
+                      <div className="bg-slate-800 border border-slate-700 rounded-2xl px-5 py-3">
                         <div className="flex items-center space-x-2">
                           <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
                           <span className="text-slate-400">Thinking...</span>
