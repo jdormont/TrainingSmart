@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Send, Bot, User, Loader2, Menu, X, Calendar, Activity, Heart, Battery, Zap, TrendingUp, HelpCircle, Map, Coffee, Wind, Wrench, Paperclip, Copy, Check } from 'lucide-react';
+import { Send, Bot, User, Loader2, Menu, X, Calendar, Activity, Heart, Battery, Zap, TrendingUp, HelpCircle, Map, Coffee, Wind, Wrench, Paperclip, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 import { openaiService } from '../services/openaiApi';
 import { supabaseChatService } from '../services/supabaseChatService';
@@ -91,6 +91,7 @@ export const ChatPage: React.FC = () => {
   const [loadingResponse, setLoadingResponse] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showMobileStats, setShowMobileStats] = useState(false);
 
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [extractedContext, setExtractedContext] = useState<ChatContextSnapshot | null>(null);
@@ -751,8 +752,15 @@ export const ChatPage: React.FC = () => {
 
           {/* Training Summary */}
           {athlete && activities.length > 0 && (
-            <div className="bg-slate-900/40 border-b border-slate-800 p-4 flex-shrink-0">
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+            <div className="bg-slate-900/40 border-b border-slate-800 flex-shrink-0">
+              <button
+                onClick={() => setShowMobileStats(!showMobileStats)}
+                className="sm:hidden w-full flex items-center justify-between px-4 py-2 text-sm text-slate-400 hover:text-slate-200"
+              >
+                <span>Training Summary</span>
+                {showMobileStats ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+              <div className={`${showMobileStats ? 'grid' : 'hidden'} sm:grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm p-4`}>
                 <div>
                   <span className="text-slate-500">Recent:</span>
                   <span className="font-medium ml-1 text-slate-300">{activities.length}</span>
@@ -794,7 +802,7 @@ export const ChatPage: React.FC = () => {
                     className={`flex group ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
-                      className={`flex items-start space-x-2 max-w-[80%] ${message.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''
+                      className={`flex items-start space-x-2 max-w-[85%] sm:max-w-[80%] min-w-0 ${message.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''
                         }`}
                     >
                       <div
@@ -810,7 +818,7 @@ export const ChatPage: React.FC = () => {
                         )}
                       </div>
                       <div
-                        className={`rounded-2xl px-5 py-3 backdrop-blur-sm border ${message.role === 'user'
+                        className={`rounded-2xl px-5 py-3 backdrop-blur-sm border min-w-0 overflow-x-auto ${message.role === 'user'
                           ? 'bg-orange-900/40 border-orange-500/30 text-orange-100'
                           : 'bg-slate-800/60 border-slate-700/60 text-slate-200'
                           }`}
@@ -832,11 +840,11 @@ export const ChatPage: React.FC = () => {
                                 ))}
                               </div>
                             )}
-                            <p className="whitespace-pre-wrap">{message.content}</p>
+                            <p className="whitespace-pre-wrap break-words">{message.content}</p>
                           </div>
                         ) : (
                           <div
-                            className="prose prose-sm max-w-none 
+                            className="prose prose-sm max-w-none break-words
                               text-slate-200
                               prose-headings:text-slate-100 
                               prose-p:text-slate-200 
