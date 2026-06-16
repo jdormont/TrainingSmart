@@ -8,7 +8,7 @@ _Note: `npx vitest run` / `npm run lint` / `npm run typecheck` could not be exec
 ---
 
 ## Current Sprint
-1.1 Pure-Function Unit Tests for Daily Dashboard Calculations (Tier 1) — `[IN PROGRESS — branch: claude/optimistic-meitner-lqx73b, started: 2026-06-16]`
+1.1 Pure-Function Unit Tests for Daily Dashboard Calculations (Tier 1) — `[IN PROGRESS — PR: #36]` · Actual effort: S
 
 _(Item 1.1 "Accessibility for ConsistencyHeatmap Grid Cells" — PR #32 — merged 2026-06-11 and is moved to Recently Completed below. PR #33, open as of today, is unrelated human-authored work on mobile chat layout; see note in Tier 1.)_
 
