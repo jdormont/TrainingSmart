@@ -236,3 +236,186 @@ describe('HealthMetricsService', () => {
       expect(metrics.details.efficiency.suggestion).toContain("Strong Efficiency Gains");
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// calculateBiologicalReadiness — pure function, zero mocking needed
+// ─────────────────────────────────────────────────────────────────────────────
+
+import type { OuraSleepData } from '../types';
+
+/**
+ * Build a minimal OuraSleepData object for testing.
+ *
+ * Required fields: day, average_hrv, lowest_heart_rate, efficiency.
+ * Optional: temperature_deviation, average_breath.
+ */
+const makeSleepData = (
+  day: string,
+  avgHrv: number,
+  lowestHr: number,
+  efficiency: number,
+  tempDev = 0,
+  avgBreath = 0
+): OuraSleepData => ({
+  id: `sleep-${day}`,
+  day,
+  bedtime_start: `${day}T22:00:00`,
+  bedtime_end: `${day}T06:00:00`,
+  total_sleep_duration: 28800, // 8 h
+  efficiency,
+  latency: 600,
+  awake_time: 1800,
+  light_sleep_duration: 10800,
+  deep_sleep_duration: 7200,
+  rem_sleep_duration: 7200,
+  restless_periods: 2,
+  sleep_score_delta: 0,
+  temperature_deviation: tempDev,
+  average_heart_rate: lowestHr + 5,
+  lowest_heart_rate: lowestHr,
+  average_hrv: avgHrv,
+  time_in_bed: 30600,
+  average_breath: avgBreath,
+});
+
+/** Build 30 days of consistent baseline history ending just before targetDay. */
+const buildHistory = (
+  targetDay: string,
+  baseHrv: number,
+  baseRhr: number,
+  baseEfficiency: number
+): OuraSleepData[] => {
+  const history: OuraSleepData[] = [];
+  const target = new Date(targetDay);
+  for (let i = 1; i <= 30; i++) {
+    const d = new Date(target);
+    d.setDate(d.getDate() - i);
+    history.push(makeSleepData(d.toISOString().split('T')[0], baseHrv, baseRhr, baseEfficiency));
+  }
+  return history;
+};
+
+describe('calculateBiologicalReadiness()', () => {
+
+  it('returns "Prime" status for a well-recovered athlete (high HRV, low RHR, high sleep efficiency)', () => {
+    const TODAY = '2026-06-16';
+    const BASE_HRV = 60;
+    const BASE_RHR = 50;
+
+    // Current night: HRV above baseline (+10%), RHR at or below baseline, high efficiency
+    const current = makeSleepData(TODAY, BASE_HRV * 1.1, BASE_RHR - 1, 92);
+    const history = buildHistory(TODAY, BASE_HRV, BASE_RHR, 90);
+
+    const result = healthMetricsService.calculateBiologicalReadiness(current, history);
+
+    expect(result.status).toBe('Prime');
+    expect(result.score).toBeGreaterThanOrEqual(80);
+    // HRV ratio ≥ 1.05 → hrvScore 100. RHR below baseline → rhrScore 100.
+    // sleepScore = efficiency = 92.
+    // finalScore = 100*0.4 + 92*0.4 + 100*0.2 = 40+36.8+20 = 96.8 → 97.
+    expect(result.breakdown.hrvScore).toBe(100);
+    expect(result.breakdown.rhrScore).toBe(100);
+    expect(result.breakdown.temperatureRisk).toBe(false);
+  });
+
+  it('returns "Strained" status for a fatigued athlete (low HRV, elevated RHR, poor sleep)', () => {
+    const TODAY = '2026-06-16';
+    const BASE_HRV = 60;
+    const BASE_RHR = 50;
+
+    // Current night: HRV well below baseline (-20%), RHR elevated (+10%), poor sleep efficiency
+    const current = makeSleepData(TODAY, BASE_HRV * 0.78, Math.round(BASE_RHR * 1.12), 55);
+    const history = buildHistory(TODAY, BASE_HRV, BASE_RHR, 85);
+
+    const result = healthMetricsService.calculateBiologicalReadiness(current, history);
+
+    // HRV ratio ≈ 0.78 → < 0.80 → hrvScore = 40.
+    // RHR ratio ≈ 1.12 → > 1.10 → rhrScore = 40.
+    // sleepScore = efficiency = 55.
+    // finalScore = 40*0.4 + 55*0.4 + 40*0.2 = 16 + 22 + 8 = 46 → 46.
+    // 46 < 50 → status = 'Strained'.
+    expect(result.status).toBe('Strained');
+    expect(result.score).toBeLessThan(50);
+    expect(result.breakdown.hrvScore).toBe(40);
+  });
+
+  it('returns "Rest Required" and capped score when temperature deviation exceeds 0.5°C', () => {
+    const TODAY = '2026-06-16';
+    const BASE_HRV = 60;
+    const BASE_RHR = 50;
+
+    // Sickness tripwire: tempDev = 0.6 (> 0.5 threshold)
+    const current = makeSleepData(TODAY, BASE_HRV, BASE_RHR, 80, 0.6);
+    const history = buildHistory(TODAY, BASE_HRV, BASE_RHR, 85);
+
+    const result = healthMetricsService.calculateBiologicalReadiness(current, history);
+
+    expect(result.status).toBe('Rest Required');
+    expect(result.score).toBe(45); // hard cap at 45 when sicknessTripwire fires
+    expect(result.breakdown.temperatureRisk).toBe(true);
+  });
+
+  it('returns "Good" for mid-range inputs (HRV at baseline, normal RHR, average sleep efficiency)', () => {
+    const TODAY = '2026-06-16';
+    const BASE_HRV = 55;
+    const BASE_RHR = 52;
+
+    // HRV ratio ≈ 1.00 → in 0.98-1.05 range → hrvScore 95.
+    // RHR ratio = 1.0 → in 0.98-1.02 range → rhrScore 95.
+    // sleepScore = efficiency = 70.
+    // finalScore = 95*0.4 + 70*0.4 + 95*0.2 = 38 + 28 + 19 = 85 → status 'Prime'.
+    // Let's intentionally lower the sleep efficiency to tip below 80:
+    // sleepScore = 60: finalScore = 95*0.4 + 60*0.4 + 95*0.2 = 38+24+19 = 81 → still Prime.
+    // Use hrv at -5% to get hrvScore=80, rhr at +3% to get rhrScore=80, efficiency=60.
+    // finalScore = 80*0.4 + 60*0.4 + 80*0.2 = 32+24+16 = 72 → 'Good'.
+    const current = makeSleepData(
+      TODAY,
+      Math.round(BASE_HRV * 0.95),   // hrv ratio ~0.95 → hrvScore 80
+      Math.round(BASE_RHR * 1.04),   // rhr ratio ~1.04 → rhrScore 80
+      60                             // sleep efficiency 60 → sleepScore 60
+    );
+    const history = buildHistory(TODAY, BASE_HRV, BASE_RHR, 80);
+
+    const result = healthMetricsService.calculateBiologicalReadiness(current, history);
+
+    expect(result.status).toBe('Good');
+    expect(result.score).toBeGreaterThanOrEqual(50);
+    expect(result.score).toBeLessThan(80);
+  });
+
+  it('returns correct details shape with hrv, rhr, temperature, and respiratory fields', () => {
+    const TODAY = '2026-06-16';
+    const current = makeSleepData(TODAY, 55, 50, 85);
+    const history = buildHistory(TODAY, 55, 50, 85);
+
+    const result = healthMetricsService.calculateBiologicalReadiness(current, history);
+
+    expect(typeof result.score).toBe('number');
+    expect(['Prime', 'Good', 'Strained', 'Rest Required']).toContain(result.status);
+
+    // breakdown fields
+    expect(typeof result.breakdown.hrvScore).toBe('number');
+    expect(typeof result.breakdown.sleepScore).toBe('number');
+    expect(typeof result.breakdown.rhrScore).toBe('number');
+    expect(typeof result.breakdown.temperatureRisk).toBe('boolean');
+
+    // details
+    expect(result.details.hrv.value).toBe(55);
+    expect(result.details.rhr.value).toBe(50);
+    expect(typeof result.details.temperature.isElevated).toBe('boolean');
+    expect(typeof result.details.respiratory.isElevated).toBe('boolean');
+  });
+
+  it('falls back gracefully when no history is provided (uses current values as baseline)', () => {
+    // With empty history, safeBaseHRV = currentSleep.average_hrv (same values).
+    // hrvRatio = 1.0 → hrvScore 95. rhrRatio = 1.0 → rhrScore 95. efficiency = 85.
+    // finalScore = 95*0.4 + 85*0.4 + 95*0.2 = 38+34+19 = 91 → 'Prime'.
+    const TODAY = '2026-06-16';
+    const current = makeSleepData(TODAY, 60, 50, 85);
+
+    const result = healthMetricsService.calculateBiologicalReadiness(current, []);
+
+    expect(result.status).toBe('Prime');
+    expect(result.score).toBeGreaterThanOrEqual(80);
+  });
+});
