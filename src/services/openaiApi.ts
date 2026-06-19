@@ -5,10 +5,9 @@ import { UserStreak } from './streakService';
 import { STORAGE_KEYS } from '../utils/constants';
 
 
-// OpenAI Configuration
+// Chat configuration — model/provider are resolved server-side via AI_PROVIDER + AI_MODEL Supabase secrets.
 const OPENAI_CONFIG = {
-  MODEL: 'gpt-4o-mini', // More cost-effective than gpt-4
-  MAX_TOKENS: 2000,
+  MAX_TOKENS: 4096,
   TEMPERATURE: 0.7,
 } as const;
 
@@ -36,10 +35,11 @@ interface TrainingContext {
     weekly_availability_days?: number;
     weekly_availability_duration?: number;
     ftp?: number;
-    // Phase 1 — conversational onboarding fields
+    gender?: string;
+    age_bucket?: string;
+    fitness_level?: string;
     coach_specialization?: string;
     fitness_mode?: string;
-    // Phase 2 — activity mix
     activity_mix?: ActivityMixItem[];
   };
 }
@@ -529,11 +529,17 @@ STREAK CONTEXT:
 
     const showPowerMetrics = !specialization || specialization === 'endurance';
 
+    const athleteDemographics: string[] = [];
+    if (context.userProfile?.gender) athleteDemographics.push(`Gender: ${context.userProfile.gender}`);
+    if (context.userProfile?.age_bucket) athleteDemographics.push(`Age group: ${context.userProfile.age_bucket}`);
+    if (context.userProfile?.fitness_level) athleteDemographics.push(`Fitness level: ${context.userProfile.fitness_level}`);
+    const demographicsLine = athleteDemographics.length > 0 ? `\n- ${athleteDemographics.join(', ')}` : '';
+
     return `${specializationBlock ? specializationBlock + '\n\n' : ''}${basePrompt}
 
 ATHLETE PROFILE:
 - Name: ${context.athlete.firstname} ${context.athlete.lastname}
-- Location: ${context.athlete.city}, ${context.athlete.state}
+- Location: ${context.athlete.city}, ${context.athlete.state}${demographicsLine}
 - Recent activities: ${context.recentActivities.length} activities${activityMixSection}
 
 RECENT TRAINING DATA:
