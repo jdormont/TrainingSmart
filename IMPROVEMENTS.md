@@ -8,7 +8,7 @@ _Note: `npx vitest run` / `npm run lint` / `npm run typecheck` could not be exec
 ---
 
 ## Current Sprint
-None — ready for next implementation run. (PR #36, the prior Current Sprint item, merged 2026-06-16.)
+Throttle/Skip Redundant Reconciliation Pass on Tab Focus + Test Coverage (Tier 1.1/1.2) — `[IN PROGRESS — PR: #38]`
 
 ---
 
@@ -26,7 +26,7 @@ None — ready for next implementation run. (PR #36, the prior Current Sprint it
 
 ## Tier 1 — Quick Wins
 
-### 1.1 Throttle/Skip Redundant Reconciliation Pass on Every Tab Focus — OPEN _(new this cycle)_
+### 1.1 Throttle/Skip Redundant Reconciliation Pass on Every Tab Focus — IN PROGRESS
 - **What:** `useBackgroundSync.ts` runs `trainingPlansService.reconcileWorkoutsWithStrava()` on **every** `visibilitychange` event where the tab becomes visible — even in the "cache is fresh" branch (lines 59-68), with no debounce, cooldown, or in-flight guard against rapid tab-switching. A user alt-tabbing or switching browser tabs repeatedly (common while multitasking) re-triggers a full Supabase reconciliation query each time, with only a `console.log` audit trail and no rate limit. Also carries 12 `console.log` calls that ship to production (no env gate), which is unnecessary console noise/string-building cost on every sync.
 - **Why now:** This hook runs app-wide on every page (mounted in `App.tsx` per CLAUDE.md) — it's the highest-frequency code path in the app and was not covered by the last several assessments' performance lens. The fix is small, isolated, and reduces redundant Supabase round-trips without changing the staleness-detection logic for Strava data itself (the 15-minute cache check is fine; it's the "fresh cache" reconciliation pass that has no rate limit).
 - **Effort estimate:** S (0.5–1 day)
@@ -35,7 +35,7 @@ None — ready for next implementation run. (PR #36, the prior Current Sprint it
 
 ---
 
-### 1.2 Add a Test for `useBackgroundSync`'s Reconciliation Gating — OPEN _(new this cycle, paired with 1.1)_
+### 1.2 Add a Test for `useBackgroundSync`'s Reconciliation Gating — IN PROGRESS (paired with 1.1)
 - **What:** `useBackgroundSync.ts` has zero test coverage and is the only app-wide hook with non-trivial conditional logic (cache-staleness branch vs. fresh-cache branch, Oura conditional sync, double `invalidateQueries` paths). Once 1.1 adds the interval guard, a regression here would be invisible until a user actually multitasks across tabs.
 - **Why now:** Pairs directly with 1.1 — testing the gating logic at the same time as introducing it is far cheaper than retrofitting later, and this hook has never had a "is it tested" check applied to it in prior assessments (services have been the focus; hooks haven't).
 - **Effort estimate:** S (1 day)
