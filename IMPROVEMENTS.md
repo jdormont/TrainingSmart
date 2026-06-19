@@ -8,7 +8,7 @@ _Note: `npx vitest run` / `npm run lint` / `npm run typecheck` could not be exec
 ---
 
 ## Current Sprint
-Throttle/Skip Redundant Reconciliation Pass on Tab Focus + Test Coverage (Tier 1.1/1.2) — `[IN PROGRESS]`
+Throttle/Skip Redundant Reconciliation Pass on Tab Focus + Test Coverage (Tier 1.1/1.2) — `[IN PROGRESS — PR: #38]`
 
 ---
 
