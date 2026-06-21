@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { BarChart2, Activity, Heart, Grid, Flame } from 'lucide-react';
+import { BarChart2, Activity, Heart, Grid, Flame, Zap } from 'lucide-react';
 import { TrainingTrendsChart } from './TrainingTrendsChart';
 import { RiderProfileChart } from './RiderProfileChart';
 import { RecoveryCard } from './RecoveryCard';
 import { ConsistencyHeatmap } from './ConsistencyHeatmap';
 import { DailyActivityCard } from './DailyActivityCard';
+import { PowerCurveChart } from './PowerCurveChart';
 import type { StravaActivity, StravaAthlete, OuraSleepData, OuraReadinessData, DailyMetric, Workout } from '../../types';
 import type { HealthMetrics } from '../../services/weeklyInsightService';
 import type { UserStreak } from '../../services/streakService';
@@ -25,7 +26,7 @@ interface AnalyticsContainerProps {
     onWorkoutClick?: (workout: Workout) => void;
 }
 
-type TabType = 'trends' | 'activity' | 'health' | 'recovery' | 'consistency';
+type TabType = 'trends' | 'activity' | 'power' | 'health' | 'recovery' | 'consistency';
 
 export const AnalyticsContainer: React.FC<AnalyticsContainerProps> = ({
     activities,
@@ -53,6 +54,8 @@ export const AnalyticsContainer: React.FC<AnalyticsContainerProps> = ({
             setActiveTab('trends');
         } else if (location.hash === '#activity') {
             setActiveTab('activity');
+        } else if (location.hash === '#power') {
+            setActiveTab('power');
         } else if (location.hash === '#consistency') {
             setActiveTab('consistency');
         }
@@ -61,6 +64,7 @@ export const AnalyticsContainer: React.FC<AnalyticsContainerProps> = ({
     const tabs = [
         { id: 'trends', label: 'Training Trends', icon: BarChart2 },
         { id: 'activity', label: 'Daily Activity', icon: Flame },
+        { id: 'power', label: 'Power Curve', icon: Zap },
         { id: 'health', label: 'Rider Profile', icon: Activity },
         { id: 'recovery', label: 'Recovery', icon: Heart },
         { id: 'consistency', label: 'Consistency', icon: Grid },
@@ -104,6 +108,11 @@ export const AnalyticsContainer: React.FC<AnalyticsContainerProps> = ({
                 {/* TAB 1.5: Daily Activity */}
                 <div className={activeTab === 'activity' ? 'block' : 'hidden'}>
                     <DailyActivityCard dailyMetric={dailyMetric} />
+                </div>
+
+                {/* TAB 1.6: Power Curve */}
+                <div className={activeTab === 'power' ? 'block' : 'hidden'}>
+                    <PowerCurveChart activities={activities} />
                 </div>
 
                 {/* TAB 2: Health Balance */}
