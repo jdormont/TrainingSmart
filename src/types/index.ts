@@ -69,14 +69,20 @@ export interface StravaActivity {
 }
 
 export interface DetailedWorkoutMetrics {
+  schema_version?: number;
   normalized_power?: number;
   variability_index?: number;
   power_curve?: {
-    '1s': number;
-    '5s': number;
-    '1m': number;
-    '5m': number;
-    '20m': number;
+    '1s'?: number;
+    '5s'?: number;
+    '15s'?: number;
+    '30s'?: number;
+    '1m'?: number;
+    '2m'?: number;
+    '5m'?: number;
+    '10m'?: number;
+    '20m'?: number;
+    '60m'?: number;
   };
   time_in_zones?: {
     power?: { zone: number; min: number; max: number; seconds: number; percentage: number }[];
@@ -96,6 +102,19 @@ export interface DetailedWorkoutMetrics {
     avg_power?: number;
     avg_hr?: number;
     max_hr?: number;
+    max_power?: number;
+    distance?: number; // meters
+    average_grade?: number; // percent
+    maximum_grade?: number; // percent
+    elevation_high?: number; // meters
+    elevation_low?: number; // meters
+    climb_category?: number; // 0-5, Strava's none/4/3/2/1/HC scale
+  }[];
+  elevation_power_profile?: {
+    grade_bucket: string; // e.g. 'Downhill', 'Flat (0-2%)', 'Rolling (2-5%)', 'Climbing (5-8%)', 'Steep (8%+)'
+    avg_power: number;
+    avg_hr?: number;
+    seconds: number;
   }[];
   heartrate_efficiency?: {
     avg_hr_at_power_buckets?: {

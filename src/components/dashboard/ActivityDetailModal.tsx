@@ -4,6 +4,8 @@ import type { StravaActivity, StravaZone } from '../../types';
 import { formatDistance, formatDuration, formatPace, formatDate, formatTime, getActivityIcon } from '../../utils/formatters';
 import { stravaApi } from '../../services/stravaApi';
 import { userProfileService } from '../../services/userProfileService';
+import { SegmentEffortsList } from './SegmentEffortsList';
+import { ElevationPowerCorrelationChart } from './ElevationPowerCorrelationChart';
 
 interface ActivityDetailModalProps {
   activity: StravaActivity;
@@ -467,6 +469,22 @@ export const ActivityDetailModal: React.FC<ActivityDetailModalProps> = ({
               ) : (
                 <div className="text-center text-slate-500 py-4">No heart rate data available</div>
               )}
+            </div>
+          )}
+
+          {/* Segment Efforts (grade, elevation, climb category, power/HR) */}
+          {activity.detailed_metrics?.segment_efforts && activity.detailed_metrics.segment_efforts.length > 0 && (
+            <SegmentEffortsList segments={activity.detailed_metrics.segment_efforts} />
+          )}
+
+          {/* Power vs. Elevation correlation for the whole ride */}
+          {activity.detailed_metrics?.elevation_power_profile && activity.detailed_metrics.elevation_power_profile.length > 0 && (
+            <ElevationPowerCorrelationChart profile={activity.detailed_metrics.elevation_power_profile} />
+          )}
+
+          {!activity.detailed_metrics && (activity.average_watts || activity.average_heartrate) && (
+            <div className="text-center text-slate-500 text-sm py-3 border border-dashed border-slate-800 rounded-xl">
+              Segment and terrain breakdowns aren't available for this ride yet — they'll appear once it's synced in the background.
             </div>
           )}
 

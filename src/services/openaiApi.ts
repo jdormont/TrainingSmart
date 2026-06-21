@@ -291,7 +291,7 @@ export const buildActivitiesTable = (activities: StravaActivity[], showPowerMetr
       }
       
       if (dm.power_curve) {
-        output += `- **Power Curve peaks:** 5s: ${dm.power_curve['5s'] || 0}W, 1m: ${dm.power_curve['1m'] || 0}W, 5m: ${dm.power_curve['5m'] || 0}W, 20m: ${dm.power_curve['20m'] || 0}W\n`;
+        output += `- **Power Curve peaks:** 5s: ${dm.power_curve['5s'] || 0}W, 1m: ${dm.power_curve['1m'] || 0}W, 5m: ${dm.power_curve['5m'] || 0}W, 20m: ${dm.power_curve['20m'] || 0}W, 60m: ${dm.power_curve['60m'] || 0}W\n`;
       }
 
       if (dm.time_in_zones?.power && dm.time_in_zones.power.length > 0) {
@@ -332,10 +332,30 @@ export const buildActivitiesTable = (activities: StravaActivity[], showPowerMetr
           const durStr = min > 0 ? `${min}m ${sec}s` : `${sec}s`;
           let segDetail = `  * "${se.name}": ${durStr}`;
           if (se.avg_power) segDetail += `, Avg Power: ${Math.round(se.avg_power)}W`;
+          if (se.max_power) segDetail += `, Max Power: ${Math.round(se.max_power)}W`;
           if (se.avg_hr) segDetail += `, Avg HR: ${Math.round(se.avg_hr)} bpm`;
           if (se.max_hr) segDetail += `, Max HR: ${Math.round(se.max_hr)} bpm`;
+          if (se.average_grade !== undefined) {
+            segDetail += `, Grade: ${se.average_grade.toFixed(1)}% avg`;
+            if (se.maximum_grade !== undefined) segDetail += ` (${se.maximum_grade.toFixed(1)}% max)`;
+          }
+          if (se.elevation_high !== undefined && se.elevation_low !== undefined) {
+            const elevGainFt = Math.round((se.elevation_high - se.elevation_low) * 3.28084);
+            if (elevGainFt > 0) segDetail += `, Elev: +${elevGainFt} ft`;
+          }
+          if (se.climb_category !== undefined && se.climb_category > 0) {
+            const catLabels: Record<number, string> = { 1: 'Cat 4', 2: 'Cat 3', 3: 'Cat 2', 4: 'Cat 1', 5: 'HC' };
+            segDetail += `, ${catLabels[se.climb_category] || `Cat ${se.climb_category}`} climb`;
+          }
           output += segDetail + '\n';
         });
+      }
+
+      if (dm.elevation_power_profile && dm.elevation_power_profile.length > 0) {
+        const terrainStr = dm.elevation_power_profile
+          .map(p => `${p.grade_bucket}: ${p.avg_power}W${p.avg_hr ? `/${p.avg_hr}bpm` : ''}`)
+          .join(', ');
+        output += `- **Power by Terrain:** ${terrainStr}\n`;
       }
 
       if (dm.heartrate_efficiency) {

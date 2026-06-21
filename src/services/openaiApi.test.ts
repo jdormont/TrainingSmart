@@ -177,5 +177,69 @@ describe('OpenAIService Prompt Helpers', () => {
       expect(table).toContain('Power Zones:** Z1: 17%, Z2: 67%, Z3: 17%');
       expect(table).toContain('Lap 1: 30m 0s, Avg Power: 190W, Avg HR: 135 bpm');
     });
+
+    it('includes segment grade/elevation/climb category when present', () => {
+      const activity = createActivity(getRelativeDateStr(1), 3600, 16093.4, 'Ride', 140, 160, 200, 300);
+      activity.detailed_metrics = {
+        segment_efforts: [
+          {
+            name: 'Eastside Climb',
+            moving_time: 512,
+            avg_power: 245,
+            max_power: 310,
+            avg_hr: 158,
+            max_hr: 172,
+            average_grade: 6.2,
+            maximum_grade: 8.1,
+            elevation_high: 280,
+            elevation_low: 130,
+            climb_category: 3
+          }
+        ]
+      };
+
+      const table = buildActivitiesTable([activity], true);
+      expect(table).toContain('"Eastside Climb"');
+      expect(table).toContain('Max Power: 310W');
+      expect(table).toContain('Grade: 6.2% avg (8.1% max)');
+      expect(table).toContain('Elev: +492 ft'); // (280-130)m * 3.28084
+      expect(table).toContain('Cat 2 climb');
+    });
+
+    it('omits grade/elevation/climb fragments when segment data lacks them', () => {
+      const activity = createActivity(getRelativeDateStr(1), 3600, 16093.4, 'Ride', 140, 160, 200, 300);
+      activity.detailed_metrics = {
+        segment_efforts: [
+          { name: 'Flat Sprint', moving_time: 65, avg_power: 320, avg_hr: 170 }
+        ]
+      };
+
+      const table = buildActivitiesTable([activity], true);
+      expect(table).toContain('"Flat Sprint"');
+      expect(table).not.toContain('Grade:');
+      expect(table).not.toContain('Elev:');
+      expect(table).not.toContain('climb');
+    });
+
+    it('includes a Power by Terrain summary when elevation_power_profile is present', () => {
+      const activity = createActivity(getRelativeDateStr(1), 3600, 16093.4, 'Ride', 140, 160, 200, 300);
+      activity.detailed_metrics = {
+        elevation_power_profile: [
+          { grade_bucket: 'Flat (0-2%)', avg_power: 195, avg_hr: 142, seconds: 1200 },
+          { grade_bucket: 'Climbing (5-8%)', avg_power: 265, avg_hr: 168, seconds: 600 }
+        ]
+      };
+
+      const table = buildActivitiesTable([activity], true);
+      expect(table).toContain('Power by Terrain:** Flat (0-2%): 195W/142bpm, Climbing (5-8%): 265W/168bpm');
+    });
+
+    it('does not render a Power by Terrain line when elevation_power_profile is absent', () => {
+      const activity = createActivity(getRelativeDateStr(1), 3600, 16093.4, 'Ride', 140, 160, 200, 300);
+      activity.detailed_metrics = { normalized_power: 230 };
+
+      const table = buildActivitiesTable([activity], true);
+      expect(table).not.toContain('Power by Terrain');
+    });
   });
 });
