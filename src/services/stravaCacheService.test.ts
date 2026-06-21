@@ -4,7 +4,8 @@ import {
   calculatePowerCurve,
   calculateHeartRateEfficiencyBins,
   calculateCardiacDecoupling,
-  calculateElevationPowerProfile
+  calculateElevationPowerProfile,
+  isEnrichableActivityType
 } from './stravaCacheService';
 
 describe('StravaCacheService Algorithms', () => {
@@ -103,6 +104,35 @@ describe('StravaCacheService Algorithms', () => {
 
       const bins = calculateHeartRateEfficiencyBins(watts, hr);
       expect(bins).toEqual([]);
+    });
+  });
+
+  describe('isEnrichableActivityType', () => {
+    it('matches the exact Ride and Run types', () => {
+      expect(isEnrichableActivityType('Ride')).toBe(true);
+      expect(isEnrichableActivityType('Run')).toBe(true);
+    });
+
+    it('matches Strava ride/run variants, including VirtualRide', () => {
+      expect(isEnrichableActivityType('VirtualRide')).toBe(true);
+      expect(isEnrichableActivityType('EBikeRide')).toBe(true);
+      expect(isEnrichableActivityType('GravelRide')).toBe(true);
+      expect(isEnrichableActivityType('MountainBikeRide')).toBe(true);
+      expect(isEnrichableActivityType('TrailRun')).toBe(true);
+      expect(isEnrichableActivityType('VirtualRun')).toBe(true);
+    });
+
+    it('is case-insensitive', () => {
+      expect(isEnrichableActivityType('virtualride')).toBe(true);
+      expect(isEnrichableActivityType('RIDE')).toBe(true);
+    });
+
+    it('rejects non-ride/run types and undefined', () => {
+      expect(isEnrichableActivityType('WeightTraining')).toBe(false);
+      expect(isEnrichableActivityType('Yoga')).toBe(false);
+      expect(isEnrichableActivityType('Hike')).toBe(false);
+      expect(isEnrichableActivityType(undefined)).toBe(false);
+      expect(isEnrichableActivityType('')).toBe(false);
     });
   });
 
