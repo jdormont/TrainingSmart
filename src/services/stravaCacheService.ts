@@ -4,6 +4,7 @@ import { stravaApi } from './stravaApi';
 import type { StravaAthlete, StravaActivity, DetailedWorkoutMetrics } from '../types';
 
 const CACHE_DURATION_MS = 15 * 60 * 1000;
+const DETAILED_METRICS_SCHEMA_VERSION = 2;
 
 class StravaCacheService {
   private async getCurrentUserId(): Promise<string> {
@@ -184,9 +185,10 @@ class StravaCacheService {
     const eligible = activities.filter(a => {
       const type = (a.type || '').toLowerCase();
       const isEligibleType = type === 'ride' || type === 'run';
-      const isDetailed = !!a.detailed_metrics;
+      // Re-enrich activities with no metrics yet, or with an outdated schema (e.g. pre-segment-grade/power-curve data)
+      const isUpToDate = !!a.detailed_metrics && (a.detailed_metrics.schema_version || 1) >= DETAILED_METRICS_SCHEMA_VERSION;
       const isAttempted = attemptedIds.has(a.id);
-      return isEligibleType && !isDetailed && !isAttempted;
+      return isEligibleType && !isUpToDate && !isAttempted;
     });
 
     if (eligible.length === 0) return false;
@@ -221,7 +223,7 @@ class StravaCacheService {
     const [detailResult, zonesResult, streamsResult] = await Promise.allSettled([
       stravaApi.getActivity(activity.id),
       stravaApi.getActivityZones(activity.id),
-      stravaApi.getActivityStreams(activity.id, ['watts', 'heartrate'])
+      stravaApi.getActivityStreams(activity.id, ['watts', 'heartrate', 'grade_smooth'])
     ]);
 
     const detailedActivity = detailResult.status === 'fulfilled' ? detailResult.value : null;
@@ -244,13 +246,23 @@ class StravaCacheService {
     }
 
     // 1b. Segment Efforts
+    let rawSegmentEfforts: any[] = [];
     if (detailedActivity && (detailedActivity as any).segment_efforts) {
-      const allSegments = (detailedActivity as any).segment_efforts.map((se: any) => ({
+      rawSegmentEfforts = (detailedActivity as any).segment_efforts;
+      const allSegments = rawSegmentEfforts.map((se: any) => ({
         name: se.name || 'Unknown Segment',
         moving_time: se.moving_time,
         avg_power: se.average_watts,
         avg_hr: se.average_heartrate,
-        max_hr: se.max_heartrate
+        max_hr: se.max_heartrate,
+        distance: se.segment?.distance,
+        average_grade: se.segment?.average_grade,
+        maximum_grade: se.segment?.maximum_grade,
+        elevation_high: se.segment?.elevation_high,
+        elevation_low: se.segment?.elevation_low,
+        climb_category: se.segment?.climb_category,
+        start_index: se.start_index,
+        end_index: se.end_index
       }));
       // Filter out segments under 60 seconds, sort by moving_time descending, keep top 8
       detailed_metrics.segment_efforts = allSegments
@@ -287,18 +299,22 @@ class StravaCacheService {
       }
     }
 
-    // 3. Streams (Power Curve, Normalized Power, and HR Efficiency)
+    // 3. Streams (Power Curve, Normalized Power, HR Efficiency, Elevation/Grade)
     let wattsData: number[] = [];
     let hrData: number[] = [];
+    let gradeData: number[] = [];
     if (streams) {
       if (Array.isArray(streams)) {
         const wattsStream = streams.find((s: any) => s.type === 'watts');
         const hrStream = streams.find((s: any) => s.type === 'heartrate');
+        const gradeStream = streams.find((s: any) => s.type === 'grade_smooth');
         if (wattsStream) wattsData = wattsStream.data || [];
         if (hrStream) hrData = hrStream.data || [];
+        if (gradeStream) gradeData = gradeStream.data || [];
       } else if (typeof streams === 'object') {
         if (streams.watts) wattsData = streams.watts.data || [];
         if ((streams as any).heartrate) hrData = (streams as any).heartrate.data || [];
+        if ((streams as any).grade_smooth) gradeData = (streams as any).grade_smooth.data || [];
       }
     }
 
@@ -330,6 +346,33 @@ class StravaCacheService {
         }
       }
     }
+
+    // 5. Per-segment elevation/grade context (sliced from activity-level streams using start/end index)
+    if (detailed_metrics.segment_efforts && detailed_metrics.segment_efforts.length > 0) {
+      detailed_metrics.segment_efforts = detailed_metrics.segment_efforts.map((se: any) => {
+        const { start_index, end_index, ...rest } = se;
+        if (typeof start_index === 'number' && typeof end_index === 'number' && wattsData.length > end_index) {
+          const segmentWatts = wattsData.slice(start_index, end_index);
+          if (segmentWatts.length > 0) {
+            const maxPower = Math.max(...segmentWatts);
+            if (Number.isFinite(maxPower) && (rest.max_power === undefined || maxPower > 0)) {
+              rest.max_power = Math.round(maxPower);
+            }
+          }
+        }
+        return rest;
+      });
+    }
+
+    // 6. Whole-ride power-vs-elevation correlation
+    if (wattsData.length > 0 && gradeData.length === wattsData.length) {
+      const profile = calculateElevationPowerProfile(wattsData, gradeData, hrData);
+      if (profile.length > 0) {
+        detailed_metrics.elevation_power_profile = profile;
+      }
+    }
+
+    detailed_metrics.schema_version = DETAILED_METRICS_SCHEMA_VERSION;
 
     // Merge into activity_data
     const updatedActivityData = {
@@ -499,9 +542,14 @@ export function calculatePowerCurve(watts: number[]): Record<string, number> {
   const durations = {
     '1s': 1,
     '5s': 5,
+    '15s': 15,
+    '30s': 30,
     '1m': 60,
+    '2m': 120,
     '5m': 300,
+    '10m': 600,
     '20m': 1200,
+    '60m': 3600,
   };
   
   const curve: Record<string, number> = {};
@@ -576,6 +624,58 @@ export function calculateHeartRateEfficiencyBins(
       };
     }
     return null;
+  }).filter((b): b is NonNullable<typeof b> => b !== null);
+}
+
+export function calculateElevationPowerProfile(
+  wattsData: number[],
+  gradeData: number[],
+  hrData: number[] = []
+): { grade_bucket: string; avg_power: number; avg_hr?: number; seconds: number }[] {
+  if (wattsData.length === 0 || gradeData.length === 0 || wattsData.length !== gradeData.length) {
+    return [];
+  }
+
+  const hasHr = hrData.length === wattsData.length;
+
+  const buckets = [
+    { name: 'Downhill', min: -Infinity, max: 0 },
+    { name: 'Flat (0-2%)', min: 0, max: 2 },
+    { name: 'Rolling (2-5%)', min: 2, max: 5 },
+    { name: 'Climbing (5-8%)', min: 5, max: 8 },
+    { name: 'Steep (8%+)', min: 8, max: Infinity },
+  ];
+
+  return buckets.map(b => {
+    let sumPwr = 0;
+    let sumHr = 0;
+    let hrCount = 0;
+    let count = 0;
+
+    for (let i = 0; i < wattsData.length; i++) {
+      const grade = gradeData[i];
+      const watts = wattsData[i];
+      if (grade >= b.min && grade < b.max) {
+        sumPwr += watts;
+        count++;
+        if (hasHr && hrData[i] > 0) {
+          sumHr += hrData[i];
+          hrCount++;
+        }
+      }
+    }
+
+    if (count < 30) return null;
+
+    const result: { grade_bucket: string; avg_power: number; avg_hr?: number; seconds: number } = {
+      grade_bucket: b.name,
+      avg_power: Math.round(sumPwr / count),
+      seconds: count
+    };
+    if (hrCount >= 30) {
+      result.avg_hr = Math.round(sumHr / hrCount);
+    }
+    return result;
   }).filter((b): b is NonNullable<typeof b> => b !== null);
 }
 

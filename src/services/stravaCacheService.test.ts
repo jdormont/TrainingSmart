@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { 
-  calculateNormalizedPower, 
+import {
+  calculateNormalizedPower,
   calculatePowerCurve,
   calculateHeartRateEfficiencyBins,
-  calculateCardiacDecoupling 
+  calculateCardiacDecoupling,
+  calculateElevationPowerProfile
 } from './stravaCacheService';
 
 describe('StravaCacheService Algorithms', () => {
@@ -57,6 +58,20 @@ describe('StravaCacheService Algorithms', () => {
       expect(curve['1m']).toBe(400); // 5*800 + 55*364 = 24020 / 60 = 400
       expect(curve['5m']).toBe(240); // (24020 + 240*200) / 300 = 72020 / 300 = 240
     });
+
+    it('includes the extended duration set (15s/30s/2m/10m/60m)', () => {
+      const watts = Array(1500).fill(200);
+      const curve = calculatePowerCurve(watts);
+      expect(Object.keys(curve)).toEqual(
+        expect.arrayContaining(['1s', '5s', '15s', '30s', '1m', '2m', '5m', '10m', '20m', '60m'])
+      );
+      // Steady 200W for less than 60m, so 60m should be 0 (insufficient samples)
+      expect(curve['60m']).toBe(0);
+      expect(curve['15s']).toBe(200);
+      expect(curve['30s']).toBe(200);
+      expect(curve['2m']).toBe(200);
+      expect(curve['10m']).toBe(200);
+    });
   });
 
   describe('calculateHeartRateEfficiencyBins', () => {
@@ -88,6 +103,49 @@ describe('StravaCacheService Algorithms', () => {
 
       const bins = calculateHeartRateEfficiencyBins(watts, hr);
       expect(bins).toEqual([]);
+    });
+  });
+
+  describe('calculateElevationPowerProfile', () => {
+    it('returns empty array for mismatched or empty streams', () => {
+      expect(calculateElevationPowerProfile([], [])).toEqual([]);
+      expect(calculateElevationPowerProfile([100], [])).toEqual([]);
+      expect(calculateElevationPowerProfile([100], [1, 2])).toEqual([]);
+    });
+
+    it('buckets power by grade and ignores buckets with fewer than 30 samples', () => {
+      // 30 seconds flat at 200W, 30 seconds climbing (6%) at 280W
+      const watts = [...Array(30).fill(200), ...Array(30).fill(280)];
+      const grade = [...Array(30).fill(1), ...Array(30).fill(6)];
+
+      const profile = calculateElevationPowerProfile(watts, grade);
+      expect(profile).toHaveLength(2);
+
+      const flat = profile.find(p => p.grade_bucket === 'Flat (0-2%)');
+      const climbing = profile.find(p => p.grade_bucket === 'Climbing (5-8%)');
+      expect(flat).toEqual({ grade_bucket: 'Flat (0-2%)', avg_power: 200, seconds: 30 });
+      expect(climbing).toEqual({ grade_bucket: 'Climbing (5-8%)', avg_power: 280, seconds: 30 });
+    });
+
+    it('includes avg_hr when a matching heart rate stream is provided', () => {
+      const watts = Array(30).fill(250);
+      const grade = Array(30).fill(7);
+      const hr = Array(30).fill(165);
+
+      const profile = calculateElevationPowerProfile(watts, grade, hr);
+      expect(profile).toEqual([
+        { grade_bucket: 'Climbing (5-8%)', avg_power: 250, avg_hr: 165, seconds: 30 }
+      ]);
+    });
+
+    it('classifies negative grade as downhill', () => {
+      const watts = Array(30).fill(120);
+      const grade = Array(30).fill(-4);
+
+      const profile = calculateElevationPowerProfile(watts, grade);
+      expect(profile).toEqual([
+        { grade_bucket: 'Downhill', avg_power: 120, seconds: 30 }
+      ]);
     });
   });
 
