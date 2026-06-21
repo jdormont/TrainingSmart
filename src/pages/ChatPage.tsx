@@ -19,6 +19,8 @@ import { format } from 'date-fns';
 import { analytics } from '../lib/analytics';
 import { useChatSessions } from '../hooks/useChatSessions';
 import { useDashboardData } from '../hooks/useDashboardData';
+import { useUserMemory } from '../hooks/useUserMemory';
+import { useMemorySessionSync } from '../hooks/useMemorySessionSync';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChatSession } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -62,6 +64,8 @@ export const ChatPage: React.FC = () => {
     isLoading: dashboardLoading,
   } = useDashboardData();
 
+  const { data: userMemory } = useUserMemory();
+
   const {
     athlete,
     activities: recentActivities,
@@ -97,6 +101,8 @@ export const ChatPage: React.FC = () => {
   const [extractedContext, setExtractedContext] = useState<ChatContextSnapshot | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [showPlanButton, setShowPlanButton] = useState(false);
+
+  useMemorySessionSync(activeSession, currentUserId === 'demo', dailyMetricsRaw);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -422,7 +428,8 @@ export const ChatPage: React.FC = () => {
           coach_specialization: userProfile.coach_specialization,
           fitness_mode: userProfile.fitness_mode,
           activity_mix: userProfile.activity_mix,
-        } : undefined
+        } : undefined,
+        memory: userMemory
       };
 
       const response = await openaiService.getChatResponse(
@@ -598,7 +605,8 @@ export const ChatPage: React.FC = () => {
           coach_specialization: authProfile.coach_specialization,
           fitness_mode: authProfile.fitness_mode,
           activity_mix: authProfile.activity_mix as any,
-        } : undefined
+        } : undefined,
+        memory: userMemory
       };
 
       const response = await openaiService.getChatResponse(

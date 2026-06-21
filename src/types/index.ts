@@ -225,6 +225,54 @@ export interface ChatContextSnapshot {
   extractedAt: Date;
 }
 
+export interface UserMemory {
+  userId: string;
+  goals: string[];
+  constraints: {
+    timeAvailability?: string;
+    equipment?: string[];
+    injuries?: string[];
+    other?: string[];
+  };
+  preferences: {
+    workoutTypes?: string[];
+    intensityPreference?: string;
+    trainingDays?: number[];
+  };
+  notablePatterns: Array<{
+    observation: string;
+    firstNoted: string;
+    lastConfirmed: string;
+  }>;
+  narrative: string;
+  previousNarrative?: string;
+  confidenceScores: {
+    goals: number;
+    constraints: number;
+    preferences: number;
+  };
+  sourceSessionIds: string[];
+  updatedAt: Date;
+  createdAt: Date;
+}
+
+export interface MemoryRollupInput {
+  periodDays: number;
+  activityCount: number;
+  weeklyVolumeTrend?: { thisWeek: number; lastWeek: number; pctChange: number };
+  avgRecoveryScore?: number;
+  recoveryTrend?: 'improving' | 'stable' | 'declining';
+  ftpTrend?: { current?: number; pctChange30d?: number };
+  healthMetricsSnapshot?: {
+    load: number;
+    consistency: number;
+    endurance: number;
+    intensity: number;
+    efficiency: number;
+  };
+  notableFlags?: string[];
+}
+
 export interface TrainingPlan {
   id: string;
   name: string;
