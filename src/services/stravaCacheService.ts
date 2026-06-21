@@ -181,10 +181,10 @@ class StravaCacheService {
     const attemptedStr = sessionStorage.getItem(attemptedKey) || '[]';
     const attemptedIds = new Set<number>(JSON.parse(attemptedStr));
 
-    // Filter activities that are Rides or Runs, do not have detailed_metrics, and haven't been attempted yet
+    // Filter activities that are Rides or Runs (including variants like VirtualRide, EBikeRide,
+    // GravelRide, TrailRun, VirtualRun), do not have detailed_metrics, and haven't been attempted yet
     const eligible = activities.filter(a => {
-      const type = (a.type || '').toLowerCase();
-      const isEligibleType = type === 'ride' || type === 'run';
+      const isEligibleType = isEnrichableActivityType(a.type);
       // Re-enrich activities with no metrics yet, or with an outdated schema (e.g. pre-segment-grade/power-curve data)
       const isUpToDate = !!a.detailed_metrics && (a.detailed_metrics.schema_version || 1) >= DETAILED_METRICS_SCHEMA_VERSION;
       const isAttempted = attemptedIds.has(a.id);
@@ -514,6 +514,18 @@ class StravaCacheService {
 export const stravaCacheService = new StravaCacheService();
 
 // === Helper mathematical algorithms for detailed metrics enrichment ===
+
+/**
+ * Matches Strava's ride/run type family (Ride, VirtualRide, EBikeRide, GravelRide,
+ * MountainBikeRide, Run, TrailRun, VirtualRun, etc.), not just the exact 'Ride'/'Run' strings.
+ * VirtualRide in particular is the only activity type for many indoor-trainer users where
+ * Strava provides a real per-second watts stream (device_watts: true), so excluding it
+ * silently drops the one source of enrichable power data for those users.
+ */
+export function isEnrichableActivityType(type: string | undefined): boolean {
+  const t = (type || '').toLowerCase();
+  return t.includes('ride') || t.includes('run');
+}
 
 export function calculateNormalizedPower(watts: number[]): number {
   if (!watts || watts.length < 30) return 0;
