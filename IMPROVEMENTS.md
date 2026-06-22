@@ -9,12 +9,12 @@ _Note: `npx vitest run` / `npm run lint` / `npm run typecheck` could not be exec
 
 ## Current Sprint
 
-### Add Test Coverage for the New Persistent-Memory Feature (PR #42) — `[IN PROGRESS — branch: claude/optimistic-meitner-j486b7, started: 2026-06-22]`
+### Add Test Coverage for the New Persistent-Memory Feature (PR #42) — `[IN PROGRESS — PR: #44]`
 
 - **What:** PR #42 added `src/services/userMemoryService.ts` (311 lines), `src/hooks/useUserMemory.ts`, `src/hooks/useMemorySessionSync.ts`, and the `openai-update-memory` edge function — all with **zero automated test coverage**. The PR's own test plan left 4 of 5 checklist items unchecked (RLS verification, end-to-end system-prompt injection, multi-session audit-trail behavior, Settings edit/delete persistence) — all manual-only, none executed in this sandbox. This code also sits directly on the chat system-prompt construction path (`buildSystemPrompt()`), so a bug here silently degrades every chat response, not just the Memory tab.
 - **Why now:** This is the freshest, highest-blast-radius code in the repo (1,035 lines, new RLS-protected tables, new edge function) and is currently the single biggest gap between "shipped" and "verified." Catching this in the cycle right after it lands is far cheaper than after a second feature builds on top of `userMemoryService.ts`.
 - **Effort estimate:** S–M (1–2 days)
-- **Actual effort:** —
+- **Actual effort:** S — added `userMemoryService.test.ts` (getMemory mapping, merge/reconciliation for resolved-injury and changed-goal scenarios, session-id capping, audit-row insert + non-fatal failure, applyDraft, clearMemory) and `useMemorySessionSync.test.ts` (idle-trigger conditions via `renderHook`: demo no-op, no-session no-op, tab-hidden sync, message-count threshold, unmount sync). `npx vitest run` now 208/208 (+20). Lint/typecheck clean. Found a real bug while testing: session-switch never actually triggers a sync of the outgoing session (ref-ordering issue, contradicts the hook's own doc comment) — documented in a test and flagged in PR #44 for a follow-up fix, not changed here. Edge function (`openai-update-memory`, Deno) left out of scope per the agent prompt — noted as a candidate for a `sync-health`-style Deno test. See PR #44.
 
 ---
 
