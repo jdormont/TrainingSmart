@@ -1,5 +1,10 @@
 import { supabase } from './supabaseClient';
+import { supabaseChatService } from './supabaseChatService';
+import { dailyMetricsService } from './dailyMetricsService';
 import type { ChatMessage, MemoryRollupInput, UserMemory } from '../types';
+
+const HISTORY_BACKFILL_MESSAGE_CAP = 200;
+const HISTORY_BACKFILL_ROLLUP_DAYS = 30;
 
 interface MemoryRow {
   user_id: string;
@@ -31,7 +36,7 @@ function rowToMemory(row: MemoryRow): UserMemory {
   };
 }
 
-interface MergedMemory {
+export interface MergedMemory {
   goals: string[];
   constraints: UserMemory['constraints'];
   preferences: UserMemory['preferences'];
@@ -148,6 +153,106 @@ class UserMemoryService {
       user_id: user.id,
       session_id: sessionId,
       change_summary: merged.changeSummary || 'Memory updated',
+    });
+    if (auditError) {
+      console.error('Error inserting memory audit row:', auditError);
+    }
+
+    return rowToMemory(data as MemoryRow);
+  }
+
+  private buildRollupFromMetrics(dailyMetrics: { recovery_score?: number | null }[]): MemoryRollupInput | undefined {
+    if (dailyMetrics.length === 0) return undefined;
+
+    const recoveryScores = dailyMetrics
+      .map(m => m.recovery_score)
+      .filter((s): s is number => typeof s === 'number');
+
+    if (recoveryScores.length === 0) {
+      return { periodDays: dailyMetrics.length, activityCount: 0 };
+    }
+
+    const avgRecoveryScore = Math.round(
+      recoveryScores.reduce((sum, s) => sum + s, 0) / recoveryScores.length,
+    );
+
+    const half = Math.floor(recoveryScores.length / 2);
+    const recentAvg = recoveryScores.slice(0, half).reduce((s, v) => s + v, 0) / Math.max(half, 1);
+    const olderAvg = recoveryScores.slice(half).reduce((s, v) => s + v, 0) / Math.max(recoveryScores.length - half, 1);
+    const recoveryTrend: MemoryRollupInput['recoveryTrend'] =
+      recentAvg - olderAvg > 5 ? 'improving' : olderAvg - recentAvg > 5 ? 'declining' : 'stable';
+
+    return {
+      periodDays: dailyMetrics.length,
+      activityCount: 0,
+      avgRecoveryScore,
+      recoveryTrend,
+    };
+  }
+
+  /**
+   * Builds a one-time draft memory from the user's full chat history plus a
+   * recent recovery rollup, without persisting anything. The caller (Settings
+   * UI) shows this draft for review/edit before calling applyDraft().
+   */
+  async generateDraftFromHistory(): Promise<MergedMemory> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const sessions = await supabaseChatService.getSessions();
+    const allMessages: ChatMessage[] = sessions
+      .flatMap(s => s.messages)
+      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+      .slice(-HISTORY_BACKFILL_MESSAGE_CAP);
+
+    if (allMessages.length === 0) {
+      throw new Error('No chat history found to generate memory from');
+    }
+
+    const [existingMemory, dailyMetrics] = await Promise.all([
+      this.getMemory(),
+      dailyMetricsService.getRecentMetrics(HISTORY_BACKFILL_ROLLUP_DAYS).catch(() => []),
+    ]);
+
+    return this.mergeWithAI(allMessages, existingMemory, this.buildRollupFromMetrics(dailyMetrics));
+  }
+
+  /**
+   * Persists a previously generated (and possibly user-edited) draft as the
+   * user's active memory, after they've reviewed it in Settings.
+   */
+  async applyDraft(draft: MergedMemory, sourceSessionIds: string[] = []): Promise<UserMemory> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const existingMemory = await this.getMemory();
+
+    const { data, error } = await supabase
+      .from('user_memory')
+      .upsert({
+        user_id: user.id,
+        goals: draft.goals,
+        constraints: draft.constraints,
+        preferences: draft.preferences,
+        notable_patterns: draft.notablePatterns,
+        narrative: draft.narrative,
+        previous_narrative: existingMemory?.narrative ?? null,
+        confidence_scores: draft.confidenceScores,
+        source_session_ids: sourceSessionIds.slice(-20),
+        updated_at: new Date().toISOString(),
+      })
+      .select('*')
+      .single();
+
+    if (error) {
+      console.error('Error applying memory draft:', error);
+      throw error;
+    }
+
+    const { error: auditError } = await supabase.from('user_memory_audit').insert({
+      user_id: user.id,
+      session_id: null,
+      change_summary: draft.changeSummary || 'Initial memory generated from chat history',
     });
     if (auditError) {
       console.error('Error inserting memory audit row:', auditError);

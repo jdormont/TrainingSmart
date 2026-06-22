@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Save, RotateCcw, Bot, User, Settings, Moon, Activity, TrendingUp, Watch, Copy, Eye, EyeOff, Download, ChevronDown, ChevronUp, Brain, Trash2 } from 'lucide-react';
+import { Save, RotateCcw, Bot, User, Settings, Moon, Activity, TrendingUp, Watch, Copy, Eye, EyeOff, Download, ChevronDown, ChevronUp, Brain, Trash2, Sparkles, X } from 'lucide-react';
 import { Button } from '../components/common/Button';
 import { stravaApi } from '../services/stravaApi';
 import { stravaCacheService } from '../services/stravaCacheService';
@@ -19,7 +19,14 @@ import {
   AVAILABLE_INTERESTS
 } from '../services/userProfileService';
 import { useSaveUserProfile } from '../hooks/useProfileMutations';
-import { useUserMemory, useUpdateUserMemory, useClearUserMemory } from '../hooks/useUserMemory';
+import {
+  useUserMemory,
+  useUpdateUserMemory,
+  useClearUserMemory,
+  useGenerateMemoryDraft,
+  useApplyMemoryDraft,
+} from '../hooks/useUserMemory';
+import type { MergedMemory } from '../services/userMemoryService';
 import type { StravaAthlete } from '../types';
 import { analytics } from '../lib/analytics';
 
@@ -125,10 +132,17 @@ export const SettingsPage: React.FC = () => {
   const { data: userMemory, isLoading: memoryLoading } = useUserMemory();
   const updateUserMemory = useUpdateUserMemory();
   const clearUserMemory = useClearUserMemory();
+  const generateMemoryDraft = useGenerateMemoryDraft();
+  const applyMemoryDraft = useApplyMemoryDraft();
   const [memoryGoalsText, setMemoryGoalsText] = useState('');
   const [memoryNarrativeText, setMemoryNarrativeText] = useState('');
   const [savingMemory, setSavingMemory] = useState(false);
   const [memorySaved, setMemorySaved] = useState(false);
+  const [memoryDraft, setMemoryDraft] = useState<MergedMemory | null>(null);
+  const [draftGoalsText, setDraftGoalsText] = useState('');
+  const [draftNarrativeText, setDraftNarrativeText] = useState('');
+  const [generateDraftError, setGenerateDraftError] = useState<string | null>(null);
+  const [applyingDraft, setApplyingDraft] = useState(false);
 
   useEffect(() => {
     if (userMemory) {
@@ -164,6 +178,42 @@ export const SettingsPage: React.FC = () => {
     } catch (error) {
       console.error('Failed to clear memory:', error);
     }
+  };
+
+  const handleGenerateDraft = async () => {
+    setGenerateDraftError(null);
+    try {
+      const draft = await generateMemoryDraft.mutateAsync();
+      setMemoryDraft(draft);
+      setDraftGoalsText(draft.goals.join('\n'));
+      setDraftNarrativeText(draft.narrative);
+    } catch (error) {
+      console.error('Failed to generate memory draft:', error);
+      setGenerateDraftError((error as Error).message || 'Failed to generate memory from chat history');
+    }
+  };
+
+  const handleApproveDraft = async () => {
+    if (!memoryDraft) return;
+    setApplyingDraft(true);
+    try {
+      await applyMemoryDraft.mutateAsync({
+        ...memoryDraft,
+        goals: draftGoalsText.split('\n').map(g => g.trim()).filter(Boolean),
+        narrative: draftNarrativeText,
+      });
+      setMemoryDraft(null);
+    } catch (error) {
+      console.error('Failed to apply memory draft:', error);
+      setGenerateDraftError((error as Error).message || 'Failed to save memory');
+    } finally {
+      setApplyingDraft(false);
+    }
+  };
+
+  const handleDiscardDraft = () => {
+    setMemoryDraft(null);
+    setGenerateDraftError(null);
   };
 
   // --- Advanced tab state ---
@@ -1055,11 +1105,91 @@ export const SettingsPage: React.FC = () => {
 
               {memoryLoading ? (
                 <p className="text-slate-500 text-sm">Loading memory...</p>
-              ) : !userMemory ? (
-                <p className="text-slate-500 text-sm">
-                  Your coach hasn't built up any memory yet — keep chatting and it will start remembering things
-                  like your goals, constraints, and preferences.
-                </p>
+              ) : !userMemory && !memoryDraft ? (
+                <div className="space-y-4">
+                  <p className="text-slate-500 text-sm">
+                    Your coach hasn't built up any memory yet — keep chatting and it will start remembering things
+                    like your goals, constraints, and preferences. Or, generate a starting point from your past chats.
+                  </p>
+                  {generateDraftError && <p className="text-red-400 text-sm">{generateDraftError}</p>}
+                  <Button
+                    onClick={handleGenerateDraft}
+                    loading={generateMemoryDraft.isPending}
+                    variant="outline"
+                    className="flex items-center text-orange-400 border-orange-500/30 hover:bg-orange-500/10"
+                  >
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Generate from Chat History
+                  </Button>
+                </div>
+              ) : memoryDraft ? (
+                <div className="space-y-4">
+                  <div className="bg-orange-950/20 border border-orange-500/20 rounded-lg p-3 flex items-start gap-2">
+                    <Sparkles className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
+                    <p className="text-orange-200/90 text-sm">
+                      Draft generated from your past chat history. Review and edit before saving — nothing has
+                      been stored yet.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label htmlFor="draftGoals" className="block text-sm font-medium text-slate-400 mb-2">
+                      Goals (one per line)
+                    </label>
+                    <textarea
+                      id="draftGoals"
+                      value={draftGoalsText}
+                      onChange={e => setDraftGoalsText(e.target.value)}
+                      rows={4}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 text-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="draftNarrative" className="block text-sm font-medium text-slate-400 mb-2">
+                      Narrative
+                    </label>
+                    <textarea
+                      id="draftNarrative"
+                      value={draftNarrativeText}
+                      onChange={e => setDraftNarrativeText(e.target.value)}
+                      rows={6}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 text-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
+                    />
+                  </div>
+
+                  {memoryDraft.notablePatterns.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium text-slate-400 mb-2">Notable Patterns</h3>
+                      <ul className="text-sm text-slate-300 space-y-1">
+                        {memoryDraft.notablePatterns.map(p => (
+                          <li key={p.observation}>• {p.observation}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {generateDraftError && <p className="text-red-400 text-sm">{generateDraftError}</p>}
+
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      onClick={handleApproveDraft}
+                      loading={applyingDraft}
+                      className="flex items-center text-white bg-orange-600 hover:bg-orange-700"
+                    >
+                      <Save className="w-4 h-4 mr-2" />
+                      Approve & Save
+                    </Button>
+                    <Button
+                      onClick={handleDiscardDraft}
+                      variant="outline"
+                      className="flex items-center text-slate-300 border-slate-700 hover:bg-slate-800"
+                    >
+                      <X className="w-4 h-4 mr-2" />
+                      Discard
+                    </Button>
+                  </div>
+                </div>
               ) : (
                 <div className="space-y-4">
                   <div>
@@ -1129,7 +1259,9 @@ export const SettingsPage: React.FC = () => {
                     </div>
                   )}
 
-                  <div className="flex gap-3 pt-2">
+                  {generateDraftError && <p className="text-red-400 text-sm">{generateDraftError}</p>}
+
+                  <div className="flex flex-wrap gap-3 pt-2">
                     <Button
                       onClick={handleSaveMemory}
                       loading={savingMemory}
@@ -1137,6 +1269,15 @@ export const SettingsPage: React.FC = () => {
                     >
                       <Save className="w-4 h-4 mr-2" />
                       {memorySaved ? 'Saved!' : 'Save Changes'}
+                    </Button>
+                    <Button
+                      onClick={handleGenerateDraft}
+                      loading={generateMemoryDraft.isPending}
+                      variant="outline"
+                      className="flex items-center text-orange-400 border-orange-500/30 hover:bg-orange-500/10"
+                    >
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Regenerate from Chat History
                     </Button>
                     <Button
                       onClick={handleForgetEverything}

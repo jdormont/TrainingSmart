@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { userMemoryService } from '../services/userMemoryService';
+import { userMemoryService, type MergedMemory } from '../services/userMemoryService';
 import type { UserMemory } from '../types';
 
 export const USER_MEMORY_KEY = ['user-memory'] as const;
@@ -31,6 +31,23 @@ export function useClearUserMemory() {
     mutationFn: () => userMemoryService.clearMemory(),
     onSuccess: () => {
       queryClient.setQueryData(USER_MEMORY_KEY, null);
+    },
+  });
+}
+
+export function useGenerateMemoryDraft() {
+  return useMutation<MergedMemory>({
+    mutationFn: () => userMemoryService.generateDraftFromHistory(),
+  });
+}
+
+export function useApplyMemoryDraft() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (draft: MergedMemory) => userMemoryService.applyDraft(draft),
+    onSuccess: (memory: UserMemory) => {
+      queryClient.setQueryData(USER_MEMORY_KEY, memory);
     },
   });
 }
