@@ -8,9 +8,13 @@ _Note: `npx vitest run` / `npm run lint` / `npm run typecheck` could not be exec
 ---
 
 ## Current Sprint
-None — ready for next implementation run.
 
-_(The previous Current Sprint item — Throttle/Skip Redundant Reconciliation Pass on Tab Focus + Test Coverage, Tier 1.1/1.2 — merged via PR #38 on 2026-06-19. No new item has been promoted to Current Sprint yet this cycle; see Tier 1 below for the strongest candidate.)_
+### Add Test Coverage for the New Persistent-Memory Feature (PR #42) — `[IN PROGRESS — branch: claude/optimistic-meitner-j486b7, started: 2026-06-22]`
+
+- **What:** PR #42 added `src/services/userMemoryService.ts` (311 lines), `src/hooks/useUserMemory.ts`, `src/hooks/useMemorySessionSync.ts`, and the `openai-update-memory` edge function — all with **zero automated test coverage**. The PR's own test plan left 4 of 5 checklist items unchecked (RLS verification, end-to-end system-prompt injection, multi-session audit-trail behavior, Settings edit/delete persistence) — all manual-only, none executed in this sandbox. This code also sits directly on the chat system-prompt construction path (`buildSystemPrompt()`), so a bug here silently degrades every chat response, not just the Memory tab.
+- **Why now:** This is the freshest, highest-blast-radius code in the repo (1,035 lines, new RLS-protected tables, new edge function) and is currently the single biggest gap between "shipped" and "verified." Catching this in the cycle right after it lands is far cheaper than after a second feature builds on top of `userMemoryService.ts`.
+- **Effort estimate:** S–M (1–2 days)
+- **Actual effort:** —
 
 ---
 
@@ -22,22 +26,13 @@ _(The previous Current Sprint item — Throttle/Skip Redundant Reconciliation Pa
 | Expand chat context with full user profile + raise token limits | 2026-06-19 | PR #39 merged (`5ce580c`). Not a previously tracked IMPROVEMENTS item, but a real product fix: `ftp`, `gender`, `age_bucket`, `fitness_level` were collected in Settings but never reached the AI coach's system prompt; `MAX_TOKENS` raised 2000→4096 client-side / 4000→8192 edge-function ceiling to stop premature truncation. Noted here so it isn't re-flagged. |
 | Strava power curves, segment effort, and elevation-power correlation (Dashboard + Chat) | 2026-06-21 | PR #40 merged (`20a7b75` + `fa47147` + `f9263f8`). New `elevation_power_profile`, extended power-curve durations (4→10), segment grade/elevation/climb-category, new Power Curve dashboard tab and Power-by-Terrain chart. Reported 184/184 tests passing. Directly advances PRD 2.3/2.4 ("Power Analysis"). |
 | Fix Strava enrichment excluding VirtualRide/EBikeRide/TrailRun activities | 2026-06-21 | PR #41 merged (`6388a2c`). Root-caused why indoor-trainer (Zwift VirtualRide) power data never populated the new Power Curve view — `enrichRecentActivities()` matched activity type by exact string equality only. Broadened to substring/case-insensitive match via new exported `isEnrichableActivityType()`. Reported 188/188 tests passing. |
-| Persistent user memory for the AI coach | 2026-06-22 | PR #42 merged (`e88d525`). New `user_memory` + `user_memory_audit` tables (owner-scoped RLS confirmed in this cycle's read of `20260621000000_create_user_memory.sql`), `openai-update-memory` edge function, memory re-injected into `buildSystemPrompt()`, and a new Settings → Memory tab. This is the single largest feature addition this cycle (1,035 additions) but landed with **no automated test coverage** — see Tier 1 below, this is not a "nothing left to do" close-out. |
+| Persistent user memory for the AI coach | 2026-06-22 | PR #42 merged (`e88d525`). New `user_memory` + `user_memory_audit` tables (owner-scoped RLS confirmed in this cycle's read of `20260621000000_create_user_memory.sql`), `openai-update-memory` edge function, memory re-injected into `buildSystemPrompt()`, and a new Settings → Memory tab. This is the single largest feature addition this cycle (1,035 additions) but landed with **no automated test coverage** — picked up this cycle as the Current Sprint item above. |
 
 ---
 
 ## Tier 1 — Quick Wins
 
-### 1.1 Add Test Coverage for the New Persistent-Memory Feature (PR #42) — OPEN _(new this cycle)_
-- **What:** PR #42 added `src/services/userMemoryService.ts` (311 lines), `src/hooks/useUserMemory.ts`, `src/hooks/useMemorySessionSync.ts`, and the `openai-update-memory` edge function — all with **zero automated test coverage**. The PR's own test plan left 4 of 5 checklist items unchecked (RLS verification, end-to-end system-prompt injection, multi-session audit-trail behavior, Settings edit/delete persistence) — all manual-only, none executed in this sandbox. This code also sits directly on the chat system-prompt construction path (`buildSystemPrompt()`), so a bug here silently degrades every chat response, not just the Memory tab.
-- **Why now:** This is the freshest, highest-blast-radius code in the repo (1,035 lines, new RLS-protected tables, new edge function) and is currently the single biggest gap between "shipped" and "verified." Catching this in the cycle right after it lands is far cheaper than after a second feature builds on top of `userMemoryService.ts`.
-- **Effort estimate:** S–M (1–2 days)
-- **Actual effort:** —
-- **Agent prompt:** "Add `src/services/userMemoryService.test.ts` covering the memory merge/reconciliation logic (resolved injury, changed goal scenarios per the PR description) and the audit-trail insert. Add a focused test for `useMemorySessionSync.ts`'s idle-trigger conditions (tab hidden, session switch, unmount) using `renderHook`. Mock `supabase` and the `openai-update-memory` invocation. Do not attempt to test the edge function itself (Deno, out of scope for Vitest) — note in the PR if `supabase/functions/openai-update-memory` would benefit from a Deno test mirroring the existing `supabase/functions/sync-health` test pattern. Run `npx vitest run` and report the new total test count."
-
----
-
-### 1.2 Eliminate `: any` in `stravaCacheService.ts` — OPEN _(carried, count increased)_
+### 1.1 Eliminate `: any` in `stravaCacheService.ts` — OPEN _(carried, count increased)_
 - **What:** `stravaCacheService.ts` now has **17** `: any` usages (was 14 last cycle) — grew because PR #40's segment-effort/grade-stream/elevation-power additions used the same untyped pattern as the existing code they extended (`laps.map((l: any) => ...)`, `streams.find((s: any) => ...)`, zone-distribution lookups, row-mapping casts). Still the single largest concentration of `any` in `src/`.
 - **Why now:** The gap is now widening, not just sitting static — every new Strava field added to this file (this cycle: grade streams, segment grade/elevation, elevation-power profile) compounds on an already-untyped base, and the file is actively being extended (3 commits touched it this cycle alone). Fixing now is cheaper than after a 4th feature lands on top.
 - **Effort estimate:** S–M (1–2 days)
@@ -46,7 +41,7 @@ _(The previous Current Sprint item — Throttle/Skip Redundant Reconciliation Pa
 
 ---
 
-### 1.3 SettingsPage Modularization — OPEN _(carried, file grew 26% this cycle)_
+### 1.2 SettingsPage Modularization — OPEN _(carried, file grew 26% this cycle)_
 - **What:** `SettingsPage.tsx` grew from 1,163 to **1,464 lines** this cycle — the new Memory tab (PR #42) landed directly in the monolith, the third time in a row a new settings feature has compounded this file rather than being extracted. `src/components/settings/` still contains only `CoachSpecializationSelector.tsx` and `Integrations.tsx`.
 - **Why now:** This item has been open for several cycles as a moderate-priority cleanup; the fact that the newest feature (Memory) landed straight into the monolith instead of as its own component is a concrete sign the cost is compounding now, not hypothetically. Promoting to Tier 1 this cycle because the next settings feature (and there has been one almost every cycle recently) will make this materially harder to safely extract.
 - **Effort estimate:** M (2–3 days)
@@ -71,7 +66,7 @@ _(The previous Current Sprint item — Throttle/Skip Redundant Reconciliation Pa
 - **Why now:** `trainingPlansService.ts`'s 8 `any`s mask DB response shape mismatches in the service every plan mutation depends on; fixing before 2.1's `PlansPage.tsx` split means new sub-components inherit clean types.
 - **Effort estimate:** M (2–3 days)
 - **Actual effort:** —
-- **Agent prompt:** "Eliminate TypeScript `any` usages in `src/services/trainingPlansService.ts` (8 occurrences). Replace `dbPayload: any` with a typed `DbWorkoutInsert` interface; replace `(data as any[]).map(...)` with a typed `DbPlanRow` interface from the migration columns. Then address the `PlansPage.tsx` `queryClient.setQueryData` casts and the `useChatSessions.ts` row-mapping `any`s. Run `npm run typecheck` with `strict: true` to verify zero `any`-related errors in these files. `stravaCacheService.ts` is covered separately by Tier 1 item 1.2."
+- **Agent prompt:** "Eliminate TypeScript `any` usages in `src/services/trainingPlansService.ts` (8 occurrences). Replace `dbPayload: any` with a typed `DbWorkoutInsert` interface; replace `(data as any[]).map(...)` with a typed `DbPlanRow` interface from the migration columns. Then address the `PlansPage.tsx` `queryClient.setQueryData` casts and the `useChatSessions.ts` row-mapping `any`s. Run `npm run typecheck` with `strict: true` to verify zero `any`-related errors in these files. `stravaCacheService.ts` is covered separately by Tier 1 item 1.1."
 
 ---
 
