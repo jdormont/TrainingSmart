@@ -1,6 +1,6 @@
 // OpenAI API service for training advice
 import axios from 'axios';
-import type { StravaActivity, StravaAthlete, StravaStats, ChatMessage, OuraSleepData, OuraReadinessData, Workout, DailyMetric, PlanReasoning, ActivityMixItem } from '../types';
+import type { StravaActivity, StravaAthlete, StravaStats, ChatMessage, OuraSleepData, OuraReadinessData, Workout, DailyMetric, PlanReasoning, ActivityMixItem, UserMemory } from '../types';
 import { UserStreak } from './streakService';
 import { STORAGE_KEYS } from '../utils/constants';
 
@@ -42,6 +42,7 @@ interface TrainingContext {
     fitness_mode?: string;
     activity_mix?: ActivityMixItem[];
   };
+  memory?: UserMemory | null;
 }
 
 const SPECIALIZATION_PREFIXES: Record<string, string> = {
@@ -547,6 +548,37 @@ STREAK CONTEXT:
 `;
     }
 
+    let memoryContext = '';
+    if (context.memory) {
+      const memory = context.memory;
+      const truncatedNarrative = memory.narrative.length > 800
+        ? `${memory.narrative.slice(0, 800)}...`
+        : memory.narrative;
+
+      const goalsLine = memory.goals.length > 0 ? `\n- Goals: ${memory.goals.join('; ')}` : '';
+      const constraintsParts = [
+        memory.constraints.timeAvailability,
+        ...(memory.constraints.equipment || []),
+        ...(memory.constraints.injuries || []),
+        ...(memory.constraints.other || []),
+      ].filter(Boolean);
+      const constraintsLine = constraintsParts.length > 0 ? `\n- Constraints: ${constraintsParts.join('; ')}` : '';
+      const preferenceParts = [
+        ...(memory.preferences.workoutTypes || []),
+        memory.preferences.intensityPreference,
+      ].filter(Boolean);
+      const preferencesLine = preferenceParts.length > 0 ? `\n- Preferences: ${preferenceParts.join('; ')}` : '';
+      const patternsLine = memory.notablePatterns.length > 0
+        ? `\n- Notable patterns: ${memory.notablePatterns.map(p => p.observation).join('; ')}`
+        : '';
+
+      if (truncatedNarrative || goalsLine || constraintsLine || preferencesLine || patternsLine) {
+        memoryContext = `
+
+USER MEMORY (long-term context from past conversations and training trends):${truncatedNarrative ? `\n${truncatedNarrative}` : ''}${goalsLine}${constraintsLine}${preferencesLine}${patternsLine}`;
+      }
+    }
+
     const showPowerMetrics = !specialization || specialization === 'endurance';
 
     const athleteDemographics: string[] = [];
@@ -560,7 +592,7 @@ STREAK CONTEXT:
 ATHLETE PROFILE:
 - Name: ${context.athlete.firstname} ${context.athlete.lastname}
 - Location: ${context.athlete.city}, ${context.athlete.state}${demographicsLine}
-- Recent activities: ${context.recentActivities.length} activities${activityMixSection}
+- Recent activities: ${context.recentActivities.length} activities${activityMixSection}${memoryContext}
 
 RECENT TRAINING DATA:
 - This week: ${context.weeklyVolume.activities} activities, ${Math.round(context.weeklyVolume.time / 3600)}h ${Math.round((context.weeklyVolume.time % 3600) / 60)}m total
