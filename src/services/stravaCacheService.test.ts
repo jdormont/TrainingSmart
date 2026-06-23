@@ -5,8 +5,10 @@ import {
   calculateHeartRateEfficiencyBins,
   calculateCardiacDecoupling,
   calculateElevationPowerProfile,
-  isEnrichableActivityType
+  isEnrichableActivityType,
+  prioritizeForEnrichment
 } from './stravaCacheService';
+import type { StravaActivity } from '../types';
 
 describe('StravaCacheService Algorithms', () => {
   describe('calculateNormalizedPower', () => {
@@ -220,6 +222,64 @@ describe('StravaCacheService Algorithms', () => {
       // EF2 = 200 / 150 = 1.3333
       // drift = ((1.25 - 1.3333) / 1.25) * 100 = (-0.0833 / 1.25) * 100 = -6.66% ~ -6.7%
       expect(decoupling!.drift_percentage).toBeCloseTo(-6.7, 1);
+    });
+  });
+
+  describe('prioritizeForEnrichment', () => {
+    const daysAgo = (n: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() - n);
+      return d.toISOString();
+    };
+
+    const makeActivity = (id: number, daysAgoCount: number, movingTimeMin: number): StravaActivity => ({
+      id,
+      name: `Activity ${id}`,
+      distance: 30000,
+      moving_time: movingTimeMin * 60,
+      elapsed_time: movingTimeMin * 60,
+      total_elevation_gain: 100,
+      type: 'Ride',
+      sport_type: 'Ride',
+      start_date: daysAgo(daysAgoCount),
+      start_date_local: daysAgo(daysAgoCount),
+      timezone: '(GMT+00:00) UTC',
+      average_speed: 8,
+      max_speed: 12,
+      kudos_count: 0,
+      comment_count: 0,
+      athlete_count: 1,
+      photo_count: 0,
+      map: { id: '1', summary_polyline: '', resource_state: 2 },
+    });
+
+    it('puts >60min rides within the 6-week window ahead of shorter/older rides', () => {
+      const shortRecent = makeActivity(1, 1, 30); // 30min, 1 day ago
+      const longRecentInWindow = makeActivity(2, 10, 90); // 90min, 10 days ago
+      const longOldOutsideWindow = makeActivity(3, 60, 90); // 90min, 60 days ago (outside 6wk window)
+
+      const result = prioritizeForEnrichment([shortRecent, longRecentInWindow, longOldOutsideWindow]);
+
+      expect(result[0].id).toBe(2); // the qualifying long+recent ride goes first
+    });
+
+    it('falls back to newest-first when no rides qualify as Economy candidates', () => {
+      const older = makeActivity(1, 10, 20);
+      const newer = makeActivity(2, 1, 20);
+
+      const result = prioritizeForEnrichment([older, newer]);
+
+      expect(result.map(a => a.id)).toEqual([2, 1]);
+    });
+
+    it('does not mutate the input array', () => {
+      const a = makeActivity(1, 1, 90);
+      const b = makeActivity(2, 2, 30);
+      const input = [a, b];
+
+      prioritizeForEnrichment(input);
+
+      expect(input).toEqual([a, b]);
     });
   });
 });

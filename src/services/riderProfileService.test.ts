@@ -186,3 +186,60 @@ describe('RiderProfileService.calculateProfile()', () => {
     }
   });
 });
+
+describe('RiderProfileService Economy (cardiac decoupling)', () => {
+  const withDrift = (a: StravaActivity, driftPercentage: number): StravaActivity => ({
+    ...a,
+    detailed_metrics: {
+      heartrate_efficiency: {
+        cardiac_decoupling: {
+          first_half_avg_hr: 140,
+          second_half_avg_hr: 145,
+          first_half_avg_power: 200,
+          second_half_avg_power: 195,
+          drift_percentage: driftPercentage
+        }
+      }
+    }
+  });
+
+  it('uses real decoupling data once at least 3 rides have it, averaging the drift', () => {
+    // 3 long rides (>60min, within 6wk window) with real drift of 1%, 2%, 3% -> avg 2%
+    const activities = [
+      withDrift(createActivity(1, 90, 200, 145), 1),
+      withDrift(createActivity(5, 90, 200, 145), 2),
+      withDrift(createActivity(10, 90, 200, 145), 3),
+    ];
+
+    const profile = riderProfileService.calculateProfile(activities, makeLoadDetail(1.0), makeConsistencyDetail(3), 250);
+
+    // avgDrift = 2 -> level = round(10 - (2-2)*(5/3)) = 10
+    expect(profile.economy.level).toBe(10);
+    expect(profile.economy.currentValue).toContain('2.0% Drift');
+    expect(profile.economy.currentValue).toContain('3/3 rides');
+  });
+
+  it('falls back to the EF-trend heuristic when fewer than 3 rides have real decoupling data', () => {
+    // Only 2 rides with real drift data; should NOT use the real-drift path.
+    const activities = [
+      withDrift(createActivity(1, 90, 200, 145), 1),
+      withDrift(createActivity(5, 90, 200, 145), 2),
+      createActivity(10, 90, 200, 145), // no detailed_metrics at all
+    ];
+
+    const profile = riderProfileService.calculateProfile(activities, makeLoadDetail(1.0), makeConsistencyDetail(3), 250);
+
+    // Heuristic path: currentValue should flag itself as a heuristic estimate, not the real-drift format.
+    expect(profile.economy.currentValue).toContain('heuristic');
+    expect(profile.economy.currentValue).toContain('2 rides w/ real decoupling');
+  });
+
+  it('returns N/A when there are no rides over 60 minutes in the lookback window', () => {
+    const activities = [createActivity(1, 30, 200, 145)]; // only 30min, too short
+
+    const profile = riderProfileService.calculateProfile(activities, makeLoadDetail(1.0), makeConsistencyDetail(3), 250);
+
+    expect(profile.economy.level).toBe(1);
+    expect(profile.economy.currentValue).toBe('N/A');
+  });
+});
