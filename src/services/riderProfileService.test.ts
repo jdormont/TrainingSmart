@@ -45,7 +45,8 @@ const createActivity = (
 
 // Build a minimal HealthDimensionDetail that riderProfileService reads.
 // calculateDisciplineLevel reads the 'Avg Days/Week' component value.
-// calculateCapacityLevel reads the 'A:C Ratio' component value.
+// loadDetail itself is no longer read by calculateProfile (Form replaced the old
+// ACWR-based Capacity dimension) but the parameter is kept for signature stability.
 const makeLoadDetail = (acRatio: number): HealthDimensionDetail => ({
   score: 80,
   components: [
@@ -94,8 +95,9 @@ describe('RiderProfileService.calculateProfile()', () => {
     // Discipline: floor(5.5 * 1.5) = 8
     expect(profile.discipline.level).toBe(8);
 
-    // Capacity: floor(5 + (1.2 - 1 + 0.001) * 15) = floor(8.015) = 8
-    expect(profile.capacity.level).toBe(8);
+    // Form: 5 hard 3h rides recently push ATL above CTL → fatigued, but still a valid 1-10 level
+    expect(profile.form.level).toBeGreaterThanOrEqual(1);
+    expect(profile.form.level).toBeLessThanOrEqual(10);
 
     // Punch: no power stream → fallback 110% FTP → ratio=1.1 → floor((1.1-1)*40)=4 (capped at ≥1)
     expect(profile.punch.level).toBeGreaterThanOrEqual(1);
@@ -104,7 +106,7 @@ describe('RiderProfileService.calculateProfile()', () => {
     expect(profile.discipline).toBeDefined();
     expect(profile.stamina).toBeDefined();
     expect(profile.punch).toBeDefined();
-    expect(profile.capacity).toBeDefined();
+    expect(profile.form).toBeDefined();
     expect(profile.economy).toBeDefined();
   });
 
@@ -112,7 +114,6 @@ describe('RiderProfileService.calculateProfile()', () => {
     const activities: StravaActivity[] = [];
     // Consistency: 0 days/week → level = max(1, floor(0*1.5)) = 1
     const consistencyDetail = makeConsistencyDetail(0);
-    // Load: ACWR 0 → level = max(1, floor(5+(0-1+0.001)*15)) = max(1, floor(-9.985)) = 1
     const loadDetail = makeLoadDetail(0);
     const ftp = 200;
 
@@ -120,7 +121,9 @@ describe('RiderProfileService.calculateProfile()', () => {
 
     expect(profile.stamina.level).toBe(1);
     expect(profile.discipline.level).toBe(1);
-    expect(profile.capacity.level).toBe(1);
+    // No activities → all-zero TSS series → CTL=ATL=0 → TSB=0 → level=round(5)=5
+    expect(profile.form.level).toBe(5);
+    expect(profile.form.currentValue).toBe('+0 TSB');
 
     // Punch still works (uses ftp*1.1 fallback) — ratio 1.1 → floor((0.1)*40)=4
     // which is > 1, so just check it's in range [1..10]
@@ -155,15 +158,33 @@ describe('RiderProfileService.calculateProfile()', () => {
     expect(profile.stamina.level).toBe(1);
   });
 
-  it('capacity level reflects ACWR correctly at sweet-spot ratio 1.2', () => {
-    // Formula: level = floor(5 + (ratio - 1 + 0.001) * 15)
-    // ratio=1.2 → floor(5 + 0.201*15) = floor(5+3.015) = floor(8.015) = 8
-    const consistencyDetail = makeConsistencyDetail(3);
-    const loadDetail = makeLoadDetail(1.2);
+  it('form reflects fatigue (negative TSB, level < 5) when recent training spikes well above the chronic baseline', () => {
+    const activities: StravaActivity[] = [];
+    // 75 days of low, steady volume to establish a low chronic (CTL) baseline
+    for (let d = 80; d >= 6; d--) {
+      activities.push(createActivity(d, 30, 100)); // 30min @ 100W vs FTP 200 -> low TSS/day
+    }
+    // Last 5 days: much harder rides spike the acute load (ATL) above CTL
+    for (let d = 5; d >= 1; d--) {
+      activities.push(createActivity(d, 90, 220)); // 90min @ 220W (>FTP) -> high TSS/day
+    }
 
-    const profile = riderProfileService.calculateProfile([], loadDetail, consistencyDetail, 250);
+    const profile = riderProfileService.calculateProfile(activities, makeLoadDetail(1.0), makeConsistencyDetail(5), 200);
 
-    expect(profile.capacity.level).toBe(8);
+    expect(profile.form.level).toBeLessThan(5);
+  });
+
+  it('form reflects freshness (positive TSB, level > 5) after a rest taper following sustained training', () => {
+    const activities: StravaActivity[] = [];
+    // 60 days of steady volume to build chronic load (CTL)
+    for (let d = 65; d >= 6; d--) {
+      activities.push(createActivity(d, 60, 200)); // 1hr @ FTP -> TSS=100/day
+    }
+    // Last 5 days: rest, so acute load (ATL, 7d time constant) decays faster than CTL (42d)
+
+    const profile = riderProfileService.calculateProfile(activities, makeLoadDetail(1.0), makeConsistencyDetail(5), 200);
+
+    expect(profile.form.level).toBeGreaterThan(5);
   });
 
   it('profile LevelDetail objects carry the expected shape', () => {
@@ -175,7 +196,7 @@ describe('RiderProfileService.calculateProfile()', () => {
       250
     );
 
-    for (const dim of ['discipline', 'stamina', 'punch', 'capacity', 'economy'] as const) {
+    for (const dim of ['discipline', 'stamina', 'punch', 'form', 'economy'] as const) {
       const detail = profile[dim];
       expect(typeof detail.level).toBe('number');
       expect(detail.level).toBeGreaterThanOrEqual(1);
@@ -184,5 +205,62 @@ describe('RiderProfileService.calculateProfile()', () => {
       expect(typeof detail.nextLevelCriteria).toBe('string');
       expect(typeof detail.prompt).toBe('string');
     }
+  });
+});
+
+describe('RiderProfileService Economy (cardiac decoupling)', () => {
+  const withDrift = (a: StravaActivity, driftPercentage: number): StravaActivity => ({
+    ...a,
+    detailed_metrics: {
+      heartrate_efficiency: {
+        cardiac_decoupling: {
+          first_half_avg_hr: 140,
+          second_half_avg_hr: 145,
+          first_half_avg_power: 200,
+          second_half_avg_power: 195,
+          drift_percentage: driftPercentage
+        }
+      }
+    }
+  });
+
+  it('uses real decoupling data once at least 3 rides have it, averaging the drift', () => {
+    // 3 long rides (>60min, within 6wk window) with real drift of 1%, 2%, 3% -> avg 2%
+    const activities = [
+      withDrift(createActivity(1, 90, 200, 145), 1),
+      withDrift(createActivity(5, 90, 200, 145), 2),
+      withDrift(createActivity(10, 90, 200, 145), 3),
+    ];
+
+    const profile = riderProfileService.calculateProfile(activities, makeLoadDetail(1.0), makeConsistencyDetail(3), 250);
+
+    // avgDrift = 2 -> level = round(10 - (2-2)*(5/3)) = 10
+    expect(profile.economy.level).toBe(10);
+    expect(profile.economy.currentValue).toContain('2.0% Drift');
+    expect(profile.economy.currentValue).toContain('3/3 rides');
+  });
+
+  it('falls back to the EF-trend heuristic when fewer than 3 rides have real decoupling data', () => {
+    // Only 2 rides with real drift data; should NOT use the real-drift path.
+    const activities = [
+      withDrift(createActivity(1, 90, 200, 145), 1),
+      withDrift(createActivity(5, 90, 200, 145), 2),
+      createActivity(10, 90, 200, 145), // no detailed_metrics at all
+    ];
+
+    const profile = riderProfileService.calculateProfile(activities, makeLoadDetail(1.0), makeConsistencyDetail(3), 250);
+
+    // Heuristic path: currentValue should flag itself as a heuristic estimate, not the real-drift format.
+    expect(profile.economy.currentValue).toContain('heuristic');
+    expect(profile.economy.currentValue).toContain('2 rides w/ real decoupling');
+  });
+
+  it('returns N/A when there are no rides over 60 minutes in the lookback window', () => {
+    const activities = [createActivity(1, 30, 200, 145)]; // only 30min, too short
+
+    const profile = riderProfileService.calculateProfile(activities, makeLoadDetail(1.0), makeConsistencyDetail(3), 250);
+
+    expect(profile.economy.level).toBe(1);
+    expect(profile.economy.currentValue).toBe('N/A');
   });
 });

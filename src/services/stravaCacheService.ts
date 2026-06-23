@@ -175,7 +175,7 @@ class StravaCacheService {
     }
   }
 
-  async enrichRecentActivities(activities: StravaActivity[], limit = 3): Promise<boolean> {
+  async enrichRecentActivities(activities: StravaActivity[], limit = 5): Promise<boolean> {
     const userId = await this.getCurrentUserId();
     const attemptedKey = `strava-enrich-attempts-${userId}`;
     const attemptedStr = sessionStorage.getItem(attemptedKey) || '[]';
@@ -194,7 +194,7 @@ class StravaCacheService {
     if (eligible.length === 0) return false;
 
     // Limit to prevent hitting rate limits
-    const toEnrich = eligible.slice(0, limit);
+    const toEnrich = prioritizeForEnrichment(eligible).slice(0, limit);
     console.log(`Enriching ${toEnrich.length} recent activities in the background...`);
 
     // Add them to the attempted set immediately to prevent concurrent duplicate attempts
@@ -525,6 +525,27 @@ export const stravaCacheService = new StravaCacheService();
 export function isEnrichableActivityType(type: string | undefined): boolean {
   const t = (type || '').toLowerCase();
   return t.includes('ride') || t.includes('run');
+}
+
+const ECONOMY_LOOKBACK_DAYS = 42; // matches riderProfileService's Economy window
+const ECONOMY_MIN_DURATION_SEC = 60 * 60;
+
+/**
+ * Orders enrichment candidates so that >60min rides within the Economy lookback
+ * window (the ones that feed cardiac-decoupling convergence) are enriched first,
+ * falling back to newest-first for everything else.
+ */
+export function prioritizeForEnrichment(eligible: StravaActivity[]): StravaActivity[] {
+  const lookbackCutoff = Date.now() - ECONOMY_LOOKBACK_DAYS * 86400000;
+  const isEconomyCandidate = (a: StravaActivity) =>
+    a.moving_time >= ECONOMY_MIN_DURATION_SEC && new Date(a.start_date_local).getTime() >= lookbackCutoff;
+
+  return [...eligible].sort((a, b) => {
+    const aScore = isEconomyCandidate(a) ? 1 : 0;
+    const bScore = isEconomyCandidate(b) ? 1 : 0;
+    if (aScore !== bScore) return bScore - aScore;
+    return new Date(b.start_date_local).getTime() - new Date(a.start_date_local).getTime();
+  });
 }
 
 export function calculateNormalizedPower(watts: number[]): number {

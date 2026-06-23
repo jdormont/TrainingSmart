@@ -1,6 +1,7 @@
 import { StravaActivity } from '../types';
 import { HealthDimensionDetail } from './healthMetricsService';
 import { differenceInDays, startOfDay } from 'date-fns';
+import { buildDailyTssSeries, calculateCtlAtlSeries, DEFAULT_THRESHOLD_HR } from '../utils/dataProcessing';
 
 export interface LevelDetail {
     level: number; // 1-10
@@ -13,8 +14,8 @@ export interface RiderProfile {
     discipline: LevelDetail;
     stamina: LevelDetail;
     punch: LevelDetail;
-    capacity: LevelDetail;
-    economy: LevelDetail; // Renamed from 'form'
+    form: LevelDetail;
+    economy: LevelDetail;
 }
 
 export class RiderProfileService {
@@ -29,7 +30,7 @@ export class RiderProfileService {
             discipline: this.calculateDisciplineLevel(consistencyDetail),
             stamina: this.calculateStaminaLevel(activities),
             punch: this.calculatePunchLevel(activities, ftp),
-            capacity: this.calculateCapacityLevel(loadDetail),
+            form: this.calculateFormLevel(activities, ftp),
             economy: this.calculateEconomyLevel(activities)
         };
     }
@@ -79,32 +80,23 @@ export class RiderProfileService {
     }
 
     // 2. ECONOMY (Aerobic Decoupling) - Formerly 'Form'
-    private calculateEconomyLevel(activities: StravaActivity[]): LevelDetail {
-        // Input: Avg "Aerobic Decoupling" (Pw:HR ratio change) on rides > 60 mins.
-        // Logic: Level 10 (<2% Drift), Level 5 (~5%), Level 1 (>10%).
-        // MVP: (Avg Power / Avg HR) ratio relative to baseline?
-        // Better MVP: Trend of EF (Efficiency Factor) within rides? 
-        // Current 'Form' logic was EF Trend (Weekly vs Baseline). 
-        // New requirement says "on rides > 60 mins".
-        // Without reliable decoupling calc (needs streams), let's use the 'Stability' of EF on long rides.
-        // But we don't have streams.
-        // Let's stick to the "Weekly vs Baseline" EF but strictly for rides > 60m as a proxy for 'Decoupling' capacity?
-        // Or implement a simple "Decoupling Proxy": Compare (First Half Power/HR) vs (Second Half Power/HR)? 
-        // We don't have split data.
-        // Fallback: Use the user's suggestion: "(Avg Power / Avg HR) ratio relative to the user's baseline."
-        // BUT specifically on rides > 60 mins.
+    // Prefers real per-ride cardiac decoupling (from telemetry streams, see
+    // stravaCacheService.calculateCardiacDecoupling) when enough rides have it.
+    // Falls back to the EF-trend heuristic for riders whose long rides haven't
+    // been enriched yet (enrichment converges gradually, see prioritizeForEnrichment).
+    private static readonly MIN_REAL_DRIFT_SAMPLES = 3;
 
+    private calculateEconomyLevel(activities: StravaActivity[]): LevelDetail {
         const minDurationSec = 60 * 60;
         const today = startOfDay(new Date());
         const sixWeeksAgo = new Date(today.getTime() - (42 * 86400000)); // 6 weeks context
 
-        // Filter relevant rides
-        const relevantConfig = activities.filter(a => {
+        const relevantRides = activities.filter(a => {
             const d = new Date(a.start_date_local);
-            return d >= sixWeeksAgo && a.moving_time >= minDurationSec && (a.average_watts || a.weighted_average_watts) && a.average_heartrate;
+            return d >= sixWeeksAgo && a.moving_time >= minDurationSec;
         });
 
-        if (relevantConfig.length === 0) {
+        if (relevantRides.length === 0) {
             return {
                 level: 1,
                 currentValue: "N/A",
@@ -113,73 +105,92 @@ export class RiderProfileService {
             };
         }
 
-        // Calculate EF for each ride
+        const realDriftRides = relevantRides
+            .map(a => a.detailed_metrics?.heartrate_efficiency?.cardiac_decoupling?.drift_percentage)
+            .filter((d): d is number => typeof d === 'number');
+
+        if (realDriftRides.length >= RiderProfileService.MIN_REAL_DRIFT_SAMPLES) {
+            return this.buildEconomyFromRealDrift(realDriftRides, relevantRides.length);
+        }
+
+        return this.calculateEconomyLevelHeuristic(relevantRides, realDriftRides.length);
+    }
+
+    // Real decoupling: Level 10 (<2% Drift), Level 5 (~5%), Level 1 (>10%).
+    private buildEconomyFromRealDrift(realDriftRides: number[], totalRides: number): LevelDetail {
+        const avgDrift = realDriftRides.reduce((a, b) => a + b, 0) / realDriftRides.length;
+
+        let level = Math.round(10 - (avgDrift - 2) * (5 / 3));
+        if (level > 10) level = 10;
+        if (level < 1) level = 1;
+
+        const nextDriftTarget = Math.max(0, avgDrift - 1.5);
+
+        return {
+            level,
+            currentValue: `${avgDrift.toFixed(1)}% Drift (${realDriftRides.length}/${totalRides} rides)`,
+            nextLevelCriteria: `< ${nextDriftTarget.toFixed(1)}% Drift`,
+            prompt: avgDrift <= 2
+                ? "Rock-solid aerobic efficiency. Maintain steady Zone 2 volume."
+                : "Focus on steady Zone 2 rides to reduce cardiac drift."
+        };
+    }
+
+    // Fallback when too few rides have real decoupling data: week-over-week
+    // Efficiency Factor (Power/HR) trend, mapped onto the same "drift %" display
+    // language so the UI is consistent, but flagged as an estimate.
+    private calculateEconomyLevelHeuristic(relevantRides: StravaActivity[], realSampleCount: number): LevelDetail {
+        const today = startOfDay(new Date());
+
+        const ridesWithEF = relevantRides.filter(a => (a.average_watts || a.weighted_average_watts) && a.average_heartrate);
+
+        if (ridesWithEF.length === 0) {
+            return {
+                level: 5,
+                currentValue: `~5% Est. Drift (heuristic, ${realSampleCount} rides w/ real decoupling)`,
+                nextLevelCriteria: "< 3.5% Drift",
+                prompt: "Keep recording long rides to establish Economy baseline."
+            };
+        }
+
         const getEF = (a: StravaActivity) => {
             const power = a.weighted_average_watts || a.average_watts || 0;
             const hr = a.average_heartrate || 1;
             return power / hr;
         };
 
-        // We need to see "Decoupling". Since we can't calculate per-ride decoupling without streams,
-        // we will look at the EF Trend. Rising EF is good (more power for same HR).
-        // Wait, the prompt says "Rock solid drift < 2%". This implies per-ride drift.
-        // If we can't do that, "ratio relative to baseline".
-        // Let's assume the "baseline" is the user's best EF? No, baseline is average.
-        // If current rides have similar EF to baseline, that's "Level 5"? No, that's just "Stable".
-        // "Decoupling" means cardiac drift.
-        // Let's implement a heuristic: 
-        // Compare (Max HR - Avg HR) vs (Max Power - Avg Power)? No.
-        // Let's allow the "Simplified for MVP" via EF baseline comparison but map it to the "Drift" language visually.
-        // If EF is improving (+5%), we assume they are "efficient"/economical => Level 8-10.
-        // If EF is dropping (-5%), we assume high drift/fatigue => Level 1-3.
-
-        const efs = relevantConfig.map(a => ({ date: new Date(a.start_date_local), ef: getEF(a) }));
+        const efs = ridesWithEF.map(a => ({ date: new Date(a.start_date_local), ef: getEF(a) }));
 
         // Split into "Recent" (last 14 days) vs "Baseline" (previous 4 weeks)
         const twoWeeksAgo = new Date(today.getTime() - (14 * 86400000));
         const recentEF = efs.filter(x => x.date >= twoWeeksAgo);
         const baselineEF = efs.filter(x => x.date < twoWeeksAgo);
 
-        const avg = (arr: any[]) => arr.length ? arr.reduce((a, b) => a + b.ef, 0) / arr.length : 0;
+        const avg = (arr: { ef: number }[]) => arr.length ? arr.reduce((a, b) => a + b.ef, 0) / arr.length : 0;
 
         const recentAvg = avg(recentEF);
         const baselineAvg = avg(baselineEF);
 
-        let driftProxy = 5.0; // Assume 5% drift (average) if no data
-
-        // If we have data, we convert the EF Change into a "Drift Score"
-        // If EF increased by 5%, that's GREAT Economy. We'll map that to "0% Drift equivalent".
-        // If EF decreased by 5%, that's "10% Drift equivalent".
-        // Baseline 5% Drift (Level 5) = 0% EF change.
-
         if (baselineAvg > 0 && recentAvg > 0) {
             const efChangePct = ((recentAvg - baselineAvg) / baselineAvg) * 100;
-            // Map: 
-            // +5% EF Change -> Level 10 (Virtual 0% Drift)
-            // 0% EF Change -> Level 5 (Virtual 5% Drift)
-            // -5% EF Change -> Level 1 (Virtual 10% Drift)
-
-            // Formula: Level = 5 + efChangePct
-            // (+5 -> 10, 0 -> 5, -5 -> 0)
+            // +5% EF Change -> Level 10 (Virtual 0% Drift), 0% -> Level 5 (~5%), -5% -> Level 1 (~10%)
             let rawLevel = 5 + efChangePct;
-            driftProxy = 5 - efChangePct;
-            // Just for display logic to match "Drift" concept
+            const driftProxy = 5 - efChangePct;
 
             if (rawLevel > 10) rawLevel = 10;
             if (rawLevel < 1) rawLevel = 1;
 
             return {
                 level: Math.floor(rawLevel),
-                currentValue: `${driftProxy <= 0 ? '< 1' : driftProxy.toFixed(1)}% Est. Drift`,
+                currentValue: `${driftProxy <= 0 ? '< 1' : driftProxy.toFixed(1)}% Est. Drift (heuristic, ${realSampleCount} rides w/ real decoupling)`,
                 nextLevelCriteria: `< ${Math.max(0, driftProxy - 1.5).toFixed(1)}% Drift`,
                 prompt: "Focus on steady Zone 2 rides to reduce cardiac drift."
             };
         }
 
-        // Default/Fallback
         return {
             level: 5,
-            currentValue: "~5% Est. Drift",
+            currentValue: `~5% Est. Drift (heuristic, ${realSampleCount} rides w/ real decoupling)`,
             nextLevelCriteria: "< 3.5% Drift",
             prompt: "Keep recording long rides to establish Economy baseline."
         };
@@ -275,28 +286,34 @@ export class RiderProfileService {
         };
     }
 
-    // 5. CAPACITY (Load) - Proxy to 'Load'
-    private calculateCapacityLevel(detail: HealthDimensionDetail): LevelDetail {
-        // Metric: ACWR
-        // Level = 5 + (Ratio - 1.0) * 15
-        const ratioStr = detail.components.find(c => c.name === 'A:C Ratio')?.value.toString() || "0";
-        const ratio = parseFloat(ratioStr);
+    // 5. FORM (Training Stress Balance) - CTL - ATL
+    private calculateFormLevel(activities: StravaActivity[], ftp: number): LevelDetail {
+        const dailyTss = buildDailyTssSeries(activities, ftp, DEFAULT_THRESHOLD_HR, 90);
+        const { ctl, atl } = calculateCtlAtlSeries(dailyTss);
 
-        let level = Math.floor(5 + (ratio - 1.0 + 0.001) * 15);
+        const currentCtl = ctl[ctl.length - 1] ?? 0;
+        const currentAtl = atl[atl.length - 1] ?? 0;
+        const tsb = currentCtl - currentAtl;
 
-        // Cap for safety? If ratio > 1.5, maybe level drops?
-        // User logic said "Gamified Leveling". Usually higher is better until it breaks.
-        // Let's cap at 10.
+        // Level = round(5 + tsb/4): TSB +20 -> 10, 0 -> 5, -20 -> 1
+        let level = Math.round(5 + tsb / 4);
         if (level > 10) level = 10;
         if (level < 1) level = 1;
 
-        const nextRatio = ((level + 1 - 5) / 15) + 1.0;
+        let prompt: string;
+        if (tsb > 10) {
+            prompt = "Fresh and ready. Good window for a hard effort or race.";
+        } else if (tsb < -10) {
+            prompt = "Fatigue is high. Prioritize recovery before adding load.";
+        } else {
+            prompt = "Balanced training stress. Maintain your current rhythm.";
+        }
 
         return {
             level,
-            currentValue: ratio.toFixed(2),
-            nextLevelCriteria: nextRatio.toFixed(2),
-            prompt: level >= 10 ? "Max Growth Rate." : `Safely increase volume to ACWR ${nextRatio.toFixed(2)}.`
+            currentValue: `${tsb >= 0 ? '+' : ''}${tsb.toFixed(0)} TSB`,
+            nextLevelCriteria: `CTL ${currentCtl.toFixed(0)} / ATL ${currentAtl.toFixed(0)}`,
+            prompt
         };
     }
 

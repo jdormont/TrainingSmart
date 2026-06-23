@@ -104,7 +104,7 @@ export const useDashboardData = () => {
 
       // Background enrichment of recent activities (throttled/cached in sessionStorage to prevent loops)
       if (activitiesData.length > 0) {
-        stravaCacheService.enrichRecentActivities(activitiesData, 3)
+        stravaCacheService.enrichRecentActivities(activitiesData, 5)
           .then(didEnrich => {
             if (didEnrich) {
               console.log('Recent activities enriched. Invalidating dashboard-data query.');

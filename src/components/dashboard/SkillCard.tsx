@@ -1,6 +1,6 @@
 import React from 'react';
 import { ChevronDown, Info, Target, TrendingUp } from 'lucide-react';
-import type { LevelDetail } from '../../services/healthMetricsService';
+import type { LevelDetail } from '../../services/riderProfileService';
 
 interface SkillCardProps {
   subject: string;
