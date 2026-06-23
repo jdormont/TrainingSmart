@@ -13,7 +13,7 @@ export const RiderProfileChart: React.FC<RiderProfileChartProps> = ({ profile })
     // Map profile to array for chart
     const data = [
         { subject: 'Discipline', ...profile.discipline, fullMark: 10, key: 'discipline' },
-        { subject: 'Capacity', ...profile.capacity, fullMark: 10, key: 'capacity' },
+        { subject: 'Form', ...profile.form, fullMark: 10, key: 'form' },
         { subject: 'Stamina', ...profile.stamina, fullMark: 10, key: 'stamina' },
         { subject: 'Punch', ...profile.punch, fullMark: 10, key: 'punch' },
         { subject: 'Economy', ...profile.economy, fullMark: 10, key: 'economy' },

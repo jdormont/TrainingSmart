@@ -4,6 +4,13 @@ import {
   calculateTrainingLoad,
   getActivityTypeBreakdown,
   getRecentPerformanceTrend,
+  calculatePowerTSS,
+  estimateTSSFromPowerSummary,
+  estimateTSSFromHR,
+  estimateActivityTSS,
+  buildDailyTssSeries,
+  calculateCtlAtlSeries,
+  DEFAULT_THRESHOLD_HR,
 } from './dataProcessing';
 import type { StravaActivity } from '../types';
 
@@ -193,5 +200,134 @@ describe('getRecentPerformanceTrend', () => {
     expect(trend).toHaveProperty('pace');
     expect(trend).toHaveProperty('distance');
     expect(trend).toHaveProperty('duration');
+  });
+});
+
+describe('calculatePowerTSS', () => {
+  it('returns exactly 100 for 1 hour at NP == FTP (definitional anchor)', () => {
+    expect(calculatePowerTSS(3600, 200, 200)).toBeCloseTo(100, 5);
+  });
+
+  it('scales with duration and intensity factor', () => {
+    // 2h @ NP=250, FTP=200 -> IF=1.25 -> (7200*250*1.25)/(200*3600)*100 = 312.5
+    expect(calculatePowerTSS(7200, 250, 200)).toBeCloseTo(312.5, 5);
+  });
+
+  it('returns 0 for invalid inputs', () => {
+    expect(calculatePowerTSS(0, 200, 200)).toBe(0);
+    expect(calculatePowerTSS(3600, 0, 200)).toBe(0);
+    expect(calculatePowerTSS(3600, 200, 0)).toBe(0);
+  });
+});
+
+describe('estimateTSSFromPowerSummary', () => {
+  it('prefers weighted_average_watts over average_watts as the NP proxy', () => {
+    const tss = estimateTSSFromPowerSummary(3600, 220, 180, 200);
+    expect(tss).toBeCloseTo(calculatePowerTSS(3600, 220, 200), 5);
+  });
+
+  it('falls back to average_watts when weighted_average_watts is absent', () => {
+    const tss = estimateTSSFromPowerSummary(3600, undefined, 180, 200);
+    expect(tss).toBeCloseTo(calculatePowerTSS(3600, 180, 200), 5);
+  });
+
+  it('returns 0 when no power data is present', () => {
+    expect(estimateTSSFromPowerSummary(3600, undefined, undefined, 200)).toBe(0);
+  });
+});
+
+describe('estimateTSSFromHR', () => {
+  it('returns exactly 100 for 1 hour at avgHr == thresholdHr (definitional anchor)', () => {
+    expect(estimateTSSFromHR(3600, 170, 170)).toBeCloseTo(100, 5);
+  });
+
+  it('scales quadratically with intensity ratio', () => {
+    // 1h @ HR=150% of threshold -> ratio=1.5 -> 1 * 1.5^2 * 100 = 225
+    expect(estimateTSSFromHR(3600, 255, 170)).toBeCloseTo(225, 5);
+  });
+
+  it('returns 0 for invalid or missing inputs', () => {
+    expect(estimateTSSFromHR(3600, undefined, 170)).toBe(0);
+    expect(estimateTSSFromHR(3600, 150, 0)).toBe(0);
+    expect(estimateTSSFromHR(0, 150, 170)).toBe(0);
+  });
+});
+
+describe('estimateActivityTSS priority dispatch', () => {
+  const withDetailedNP = (np: number): StravaActivity => ({
+    ...makeActivity(todayIso(), 'Ride', 3600),
+    detailed_metrics: { normalized_power: np },
+  });
+
+  it('prefers real stream-derived NP over power-summary fields', () => {
+    const activity: StravaActivity = {
+      ...withDetailedNP(210),
+      weighted_average_watts: 180,
+      average_watts: 170,
+    };
+    const tss = estimateActivityTSS(activity, 200, DEFAULT_THRESHOLD_HR);
+    expect(tss).toBeCloseTo(calculatePowerTSS(3600, 210, 200), 5);
+  });
+
+  it('falls back to power-summary fields when no real NP exists', () => {
+    const activity: StravaActivity = {
+      ...makeActivity(todayIso(), 'Ride', 3600),
+      weighted_average_watts: 190,
+    };
+    const tss = estimateActivityTSS(activity, 200, DEFAULT_THRESHOLD_HR);
+    expect(tss).toBeCloseTo(calculatePowerTSS(3600, 190, 200), 5);
+  });
+
+  it('falls back to HR when no power data exists at all', () => {
+    const activity = makeActivity(todayIso(), 'Ride', 3600, 30000, 100, 170);
+    const tss = estimateActivityTSS(activity, 200, 170);
+    expect(tss).toBeCloseTo(estimateTSSFromHR(3600, 170, 170), 5);
+  });
+
+  it('returns 0 when neither power nor HR data exists', () => {
+    const activity: StravaActivity = { ...makeActivity(todayIso(), 'Ride', 3600), average_heartrate: undefined };
+    expect(estimateActivityTSS(activity, 200, DEFAULT_THRESHOLD_HR)).toBe(0);
+  });
+});
+
+describe('buildDailyTssSeries', () => {
+  it('fills rest days with explicit 0 entries rather than skipping them', () => {
+    const activity = { ...makeActivity(todayIso(), 'Ride', 3600), weighted_average_watts: 200 };
+    const series = buildDailyTssSeries([activity], 200, DEFAULT_THRESHOLD_HR, 7);
+    expect(series).toHaveLength(7);
+    expect(series.filter(v => v === 0)).toHaveLength(6);
+    expect(series[series.length - 1]).toBeCloseTo(100, 5);
+  });
+
+  it('returns an all-zero series for no activities', () => {
+    const series = buildDailyTssSeries([], 200, DEFAULT_THRESHOLD_HR, 10);
+    expect(series).toEqual(Array(10).fill(0));
+  });
+});
+
+describe('calculateCtlAtlSeries', () => {
+  it('keeps both series at 0 for an all-zero input', () => {
+    const { ctl, atl } = calculateCtlAtlSeries(Array(30).fill(0));
+    expect(ctl.every(v => v === 0)).toBe(true);
+    expect(atl.every(v => v === 0)).toBe(true);
+  });
+
+  it('converges both series toward a constant daily TSS, with ATL converging faster', () => {
+    const dailyTss = Array(90).fill(50);
+    const { ctl, atl } = calculateCtlAtlSeries(dailyTss);
+    const finalCtl = ctl[ctl.length - 1];
+    const finalAtl = atl[atl.length - 1];
+
+    // ATL (7d constant) should be much closer to the steady-state value of 50 than CTL (42d constant)
+    expect(Math.abs(finalAtl - 50)).toBeLessThan(Math.abs(finalCtl - 50));
+    expect(finalCtl).toBeGreaterThan(0);
+    expect(finalCtl).toBeLessThanOrEqual(50);
+  });
+
+  it('moves ATL more than CTL in response to a single isolated spike', () => {
+    const dailyTss = [...Array(30).fill(0), 200, ...Array(10).fill(0)];
+    const { ctl, atl } = calculateCtlAtlSeries(dailyTss);
+    const spikeIndex = 30;
+    expect(atl[spikeIndex]).toBeGreaterThan(ctl[spikeIndex]);
   });
 });

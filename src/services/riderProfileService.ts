@@ -1,6 +1,7 @@
 import { StravaActivity } from '../types';
 import { HealthDimensionDetail } from './healthMetricsService';
 import { differenceInDays, startOfDay } from 'date-fns';
+import { buildDailyTssSeries, calculateCtlAtlSeries, DEFAULT_THRESHOLD_HR } from '../utils/dataProcessing';
 
 export interface LevelDetail {
     level: number; // 1-10
@@ -13,8 +14,8 @@ export interface RiderProfile {
     discipline: LevelDetail;
     stamina: LevelDetail;
     punch: LevelDetail;
-    capacity: LevelDetail;
-    economy: LevelDetail; // Renamed from 'form'
+    form: LevelDetail;
+    economy: LevelDetail;
 }
 
 export class RiderProfileService {
@@ -29,7 +30,7 @@ export class RiderProfileService {
             discipline: this.calculateDisciplineLevel(consistencyDetail),
             stamina: this.calculateStaminaLevel(activities),
             punch: this.calculatePunchLevel(activities, ftp),
-            capacity: this.calculateCapacityLevel(loadDetail),
+            form: this.calculateFormLevel(activities, ftp),
             economy: this.calculateEconomyLevel(activities)
         };
     }
@@ -285,28 +286,34 @@ export class RiderProfileService {
         };
     }
 
-    // 5. CAPACITY (Load) - Proxy to 'Load'
-    private calculateCapacityLevel(detail: HealthDimensionDetail): LevelDetail {
-        // Metric: ACWR
-        // Level = 5 + (Ratio - 1.0) * 15
-        const ratioStr = detail.components.find(c => c.name === 'A:C Ratio')?.value.toString() || "0";
-        const ratio = parseFloat(ratioStr);
+    // 5. FORM (Training Stress Balance) - CTL - ATL
+    private calculateFormLevel(activities: StravaActivity[], ftp: number): LevelDetail {
+        const dailyTss = buildDailyTssSeries(activities, ftp, DEFAULT_THRESHOLD_HR, 90);
+        const { ctl, atl } = calculateCtlAtlSeries(dailyTss);
 
-        let level = Math.floor(5 + (ratio - 1.0 + 0.001) * 15);
+        const currentCtl = ctl[ctl.length - 1] ?? 0;
+        const currentAtl = atl[atl.length - 1] ?? 0;
+        const tsb = currentCtl - currentAtl;
 
-        // Cap for safety? If ratio > 1.5, maybe level drops?
-        // User logic said "Gamified Leveling". Usually higher is better until it breaks.
-        // Let's cap at 10.
+        // Level = round(5 + tsb/4): TSB +20 -> 10, 0 -> 5, -20 -> 1
+        let level = Math.round(5 + tsb / 4);
         if (level > 10) level = 10;
         if (level < 1) level = 1;
 
-        const nextRatio = ((level + 1 - 5) / 15) + 1.0;
+        let prompt: string;
+        if (tsb > 10) {
+            prompt = "Fresh and ready. Good window for a hard effort or race.";
+        } else if (tsb < -10) {
+            prompt = "Fatigue is high. Prioritize recovery before adding load.";
+        } else {
+            prompt = "Balanced training stress. Maintain your current rhythm.";
+        }
 
         return {
             level,
-            currentValue: ratio.toFixed(2),
-            nextLevelCriteria: nextRatio.toFixed(2),
-            prompt: level >= 10 ? "Max Growth Rate." : `Safely increase volume to ACWR ${nextRatio.toFixed(2)}.`
+            currentValue: `${tsb >= 0 ? '+' : ''}${tsb.toFixed(0)} TSB`,
+            nextLevelCriteria: `CTL ${currentCtl.toFixed(0)} / ATL ${currentAtl.toFixed(0)}`,
+            prompt
         };
     }
 
