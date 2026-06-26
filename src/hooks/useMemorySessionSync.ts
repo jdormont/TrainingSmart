@@ -45,9 +45,9 @@ export function useMemorySessionSync(
   dailyMetrics: DailyMetric[] = [],
 ) {
   const syncedMessageCountRef = useRef<Record<string, number>>({});
-  const latestSessionRef = useRef(activeSession);
+  const sessionSnapshotsRef = useRef<Record<string, ChatSession>>({});
   const latestDailyMetricsRef = useRef(dailyMetrics);
-  latestSessionRef.current = activeSession;
+  if (activeSession) sessionSnapshotsRef.current[activeSession.id] = activeSession;
   latestDailyMetricsRef.current = dailyMetrics;
 
   useEffect(() => {
@@ -56,8 +56,8 @@ export function useMemorySessionSync(
     const sessionId = activeSession.id;
 
     const sync = () => {
-      const session = latestSessionRef.current;
-      if (!session || session.id !== sessionId) return;
+      const session = sessionSnapshotsRef.current[sessionId];
+      if (!session) return;
 
       const lastSynced = syncedMessageCountRef.current[sessionId] ?? 0;
       const newUserMessages = session.messages.filter(m => m.role === 'user').length;
