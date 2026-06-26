@@ -131,14 +131,7 @@ describe('useMemorySessionSync', () => {
     expect(userMemoryService.updateMemoryFromSession).toHaveBeenCalledTimes(2);
   });
 
-  // NOTE: the hook's doc comment claims "session switched" is a sync trigger
-  // (alongside tab-hidden and unmount), but `latestSessionRef.current` is
-  // reassigned to the new session during render -- before the outgoing
-  // effect's cleanup runs -- so the cleanup's own `session.id !== sessionId`
-  // guard blocks the sync. Switching sessions does NOT currently sync the
-  // outgoing session's messages. This test documents that actual behavior;
-  // flagged in the PR as a likely bug worth a follow-up fix.
-  it('does not sync the outgoing session when the active session is switched', async () => {
+  it('syncs the outgoing session when the active session is switched', async () => {
     const sessionA = buildSession('a', 2);
     const sessionB = buildSession('b', 2);
     const { rerender } = renderHook(
@@ -150,7 +143,8 @@ describe('useMemorySessionSync', () => {
       rerender({ s: sessionB });
     });
 
-    expect(userMemoryService.updateMemoryFromSession).not.toHaveBeenCalled();
+    expect(userMemoryService.updateMemoryFromSession).toHaveBeenCalledTimes(1);
+    expect(userMemoryService.updateMemoryFromSession).toHaveBeenCalledWith('a', sessionA.messages, undefined);
   });
 
   it('syncs on unmount', async () => {
