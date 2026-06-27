@@ -254,11 +254,11 @@ describe('StravaCacheService Algorithms', () => {
     });
 
     it('puts >60min rides within the 6-week window ahead of shorter/older rides', () => {
-      const shortRecent = makeActivity(1, 1, 30); // 30min, 1 day ago
-      const longRecentInWindow = makeActivity(2, 10, 90); // 90min, 10 days ago
+      const shortOlder = makeActivity(1, 5, 30); // 30min, 5 days ago
+      const longRecentInWindow = makeActivity(2, 1, 90); // 90min, 1 day ago - also the most recent
       const longOldOutsideWindow = makeActivity(3, 60, 90); // 90min, 60 days ago (outside 6wk window)
 
-      const result = prioritizeForEnrichment([shortRecent, longRecentInWindow, longOldOutsideWindow]);
+      const result = prioritizeForEnrichment([shortOlder, longRecentInWindow, longOldOutsideWindow]);
 
       expect(result[0].id).toBe(2); // the qualifying long+recent ride goes first
     });
@@ -280,6 +280,15 @@ describe('StravaCacheService Algorithms', () => {
       prioritizeForEnrichment(input);
 
       expect(input).toEqual([a, b]);
+    });
+
+    it('always enriches the most recent activity first, even when it is not an Economy candidate and a backlog of qualifying long rides exists', () => {
+      const todayShortRide = makeActivity(99, 0, 20); // 20min, today - not an Economy candidate
+      const backlog = [1, 2, 3, 4, 5].map(id => makeActivity(id, id + 1, 90)); // 90min rides within the 6wk window
+
+      const result = prioritizeForEnrichment([...backlog, todayShortRide]);
+
+      expect(result[0].id).toBe(99);
     });
   });
 });
