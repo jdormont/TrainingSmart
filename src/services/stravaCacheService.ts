@@ -533,19 +533,31 @@ const ECONOMY_MIN_DURATION_SEC = 60 * 60;
 /**
  * Orders enrichment candidates so that >60min rides within the Economy lookback
  * window (the ones that feed cardiac-decoupling convergence) are enriched first,
- * falling back to newest-first for everything else.
+ * falling back to newest-first for everything else. The single most recent
+ * activity always takes the first slot regardless of Economy-candidate status,
+ * since a large backlog of qualifying long rides would otherwise starve the
+ * ride a user is most likely to be asking the coach about right now.
  */
 export function prioritizeForEnrichment(eligible: StravaActivity[]): StravaActivity[] {
   const lookbackCutoff = Date.now() - ECONOMY_LOOKBACK_DAYS * 86400000;
   const isEconomyCandidate = (a: StravaActivity) =>
     a.moving_time >= ECONOMY_MIN_DURATION_SEC && new Date(a.start_date_local).getTime() >= lookbackCutoff;
 
-  return [...eligible].sort((a, b) => {
+  const sorted = [...eligible].sort((a, b) => {
     const aScore = isEconomyCandidate(a) ? 1 : 0;
     const bScore = isEconomyCandidate(b) ? 1 : 0;
     if (aScore !== bScore) return bScore - aScore;
     return new Date(b.start_date_local).getTime() - new Date(a.start_date_local).getTime();
   });
+
+  const mostRecent = [...eligible].sort(
+    (a, b) => new Date(b.start_date_local).getTime() - new Date(a.start_date_local).getTime()
+  )[0];
+
+  if (mostRecent && sorted[0]?.id !== mostRecent.id) {
+    return [mostRecent, ...sorted.filter(a => a.id !== mostRecent.id)];
+  }
+  return sorted;
 }
 
 export function calculateNormalizedPower(watts: number[]): number {
