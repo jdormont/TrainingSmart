@@ -138,12 +138,18 @@ export const estimateTSSFromHR = (
 
 /**
  * Per-activity TSS with priority fallback: real NP (enriched rides) ->
- * power-summary fields -> HR -> 0 (e.g. rest day or unscored activity type).
+ * HR-modeled NP (rides with no power meter but enough indoor-ride history to
+ * model one) -> power-summary fields -> HR -> 0 (e.g. rest day or unscored
+ * activity type).
  */
 export const estimateActivityTSS = (activity: StravaActivity, ftp: number, thresholdHr: number): number => {
   const np = activity.detailed_metrics?.normalized_power;
   if (np && np > 0) {
     return calculatePowerTSS(activity.moving_time, np, ftp);
+  }
+  const estimatedNp = activity.detailed_metrics?.estimated_normalized_power;
+  if (estimatedNp && estimatedNp > 0) {
+    return calculatePowerTSS(activity.moving_time, estimatedNp, ftp);
   }
   if (activity.weighted_average_watts || activity.average_watts) {
     return estimateTSSFromPowerSummary(activity.moving_time, activity.weighted_average_watts, activity.average_watts, ftp);

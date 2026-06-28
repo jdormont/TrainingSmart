@@ -287,12 +287,22 @@ export const buildActivitiesTable = (activities: StravaActivity[], showPowerMetr
       const dm = a.detailed_metrics!;
       output += `\n**Activity:** "${a.name}" on ${formatDate(a.start_date_local)}\n`;
       
-      if (dm.normalized_power) {
-        output += `- **Normalized Power (NP):** ${dm.normalized_power}W (Avg Power: ${Math.round(a.average_watts || 0)}W, VI: ${dm.variability_index || 'N/A'})\n`;
-      }
-      
-      if (dm.power_curve) {
-        output += `- **Power Curve peaks:** 5s: ${dm.power_curve['5s'] || 0}W, 1m: ${dm.power_curve['1m'] || 0}W, 5m: ${dm.power_curve['5m'] || 0}W, 20m: ${dm.power_curve['20m'] || 0}W, 60m: ${dm.power_curve['60m'] || 0}W\n`;
+      if (dm.estimated_power_source === 'hr_lookup') {
+        output += `- **Estimated Power (from Heart Rate, NOT measured):** Est. NP: ${dm.estimated_normalized_power ?? 'N/A'}W. `;
+        output += `This ride had no power meter; power was modeled from this rider's personal HR-to-power relationship `;
+        output += `built from ${dm.estimated_power_model?.sample_ride_count ?? '?'} indoor power-meter rides. `;
+        output += `Treat as a rough approximation only -- do not cite as a measured number, and flag if the user asks for precise power-based analysis.\n`;
+        if (dm.estimated_power_curve) {
+          output += `- **Estimated Power Curve (modeled, not measured):** 5m: ${dm.estimated_power_curve['5m'] || 0}W, 20m: ${dm.estimated_power_curve['20m'] || 0}W\n`;
+        }
+      } else {
+        if (dm.normalized_power) {
+          output += `- **Normalized Power (NP):** ${dm.normalized_power}W (Avg Power: ${Math.round(a.average_watts || 0)}W, VI: ${dm.variability_index || 'N/A'})\n`;
+        }
+
+        if (dm.power_curve) {
+          output += `- **Power Curve peaks:** 5s: ${dm.power_curve['5s'] || 0}W, 1m: ${dm.power_curve['1m'] || 0}W, 5m: ${dm.power_curve['5m'] || 0}W, 20m: ${dm.power_curve['20m'] || 0}W, 60m: ${dm.power_curve['60m'] || 0}W\n`;
+        }
       }
 
       if (dm.time_in_zones?.power && dm.time_in_zones.power.length > 0) {

@@ -131,6 +131,19 @@ export interface DetailedWorkoutMetrics {
       drift_percentage: number;
     };
   };
+  // Power modeled from HR for rides with no power meter -- never measured.
+  // Kept separate from normalized_power/power_curve so existing consumers
+  // (TSS, rider Economy calc) must opt in explicitly rather than silently
+  // treating an estimate as ground truth.
+  estimated_power_source?: 'hr_lookup';
+  estimated_normalized_power?: number;
+  estimated_power_curve?: DetailedWorkoutMetrics['power_curve'];
+  estimated_power_model?: {
+    sample_ride_count: number;
+    total_seconds: number;
+    curve_built_at: string;
+    hr_coverage_pct: number;
+  };
 }
 
 export interface StravaZoneBucket {

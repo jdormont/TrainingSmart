@@ -2,9 +2,22 @@ import { supabase } from './supabaseClient';
 import { stravaApi } from './stravaApi';
 // import { tokenStorageService } from './tokenStorageService';
 import type { StravaAthlete, StravaActivity, DetailedWorkoutMetrics } from '../types';
+import {
+  HR_POWER_BUCKET_DEFINITIONS,
+  HR_CURVE_LOOKBACK_DAYS,
+  aggregateHrPowerCurve,
+  estimatePowerSeriesFromHr,
+  type IndoorPowerRideRow,
+  type PersonalHrPowerCurve
+} from './hrPowerEstimationService';
 
 const CACHE_DURATION_MS = 15 * 60 * 1000;
-const DETAILED_METRICS_SCHEMA_VERSION = 2;
+const DETAILED_METRICS_SCHEMA_VERSION = 3;
+const HR_POWER_CURVE_MEMO_TTL_MS = 10 * 60 * 1000;
+
+// Per-batch memo so enrichRecentActivities's loop over up to 5 activities
+// doesn't rebuild the personal HR->power curve once per activity.
+const hrPowerCurveMemo = new Map<string, { curve: PersonalHrPowerCurve | null; fetchedAt: number }>();
 
 class StravaCacheService {
   private async getCurrentUserId(): Promise<string> {
@@ -345,6 +358,28 @@ class StravaCacheService {
           };
         }
       }
+    } else if (hrData.length > 0) {
+      // No real power meter on this ride -- estimate power from this rider's
+      // own personal HR->power curve (built from their indoor power-meter
+      // rides), if they have enough data for a confident model.
+      const curve = await this.getPersonalHrPowerCurveCached(userId);
+      if (curve) {
+        const { estimatedWatts, hrCoveragePct } = estimatePowerSeriesFromHr(hrData, curve);
+        if (estimatedWatts) {
+          const np = calculateNormalizedPower(estimatedWatts);
+          if (np > 0) {
+            detailed_metrics.estimated_normalized_power = np;
+            detailed_metrics.estimated_power_curve = calculatePowerCurve(estimatedWatts) as any;
+            detailed_metrics.estimated_power_source = 'hr_lookup';
+            detailed_metrics.estimated_power_model = {
+              sample_ride_count: curve.sampleRideCount,
+              total_seconds: curve.totalSeconds,
+              curve_built_at: curve.builtAt,
+              hr_coverage_pct: hrCoveragePct
+            };
+          }
+        }
+      }
     }
 
     // 5. Per-segment elevation/grade context (sliced from activity-level streams using start/end index)
@@ -509,6 +544,47 @@ class StravaCacheService {
       athlete: { id: parseInt(userId) || 0, resource_state: 1 }
     } as unknown as StravaActivity));
   }
+
+  private async getPersonalHrPowerCurveCached(userId: string): Promise<PersonalHrPowerCurve | null> {
+    const cached = hrPowerCurveMemo.get(userId);
+    if (cached && Date.now() - cached.fetchedAt < HR_POWER_CURVE_MEMO_TTL_MS) {
+      return cached.curve;
+    }
+
+    const rows = await this.getIndoorPowerRidesForHrCurve(userId);
+    const curve = aggregateHrPowerCurve(rows);
+    hrPowerCurveMemo.set(userId, { curve, fetchedAt: Date.now() });
+    return curve;
+  }
+
+  private async getIndoorPowerRidesForHrCurve(
+    userId: string,
+    lookbackDays = HR_CURVE_LOOKBACK_DAYS
+  ): Promise<IndoorPowerRideRow[]> {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - lookbackDays);
+
+    const { data, error } = await supabase
+      .from('strava_activities_cache')
+      .select(`
+        start_date,
+        activity_data->device_watts,
+        activity_data->detailed_metrics
+      `)
+      .eq('user_id', userId)
+      .gte('start_date', startDate.toISOString());
+
+    if (error) {
+      console.error('Error fetching indoor power rides for HR curve:', error);
+      return [];
+    }
+
+    return (data || []).map((row: any) => ({
+      start_date_local: row.start_date,
+      device_watts: row.device_watts,
+      detailed_metrics: row.detailed_metrics || null
+    }));
+  }
 }
 
 export const stravaCacheService = new StravaCacheService();
@@ -635,15 +711,7 @@ export function calculateHeartRateEfficiencyBins(
     return [];
   }
 
-  const buckets = [
-    { name: '100-130W', min: 100, max: 130 },
-    { name: '130-160W', min: 130, max: 160 },
-    { name: '160-190W', min: 160, max: 190 },
-    { name: '190-220W', min: 190, max: 220 },
-    { name: '220W+', min: 220, max: 9999 }
-  ];
-
-  return buckets.map(b => {
+  return HR_POWER_BUCKET_DEFINITIONS.map(b => {
     let sumPwr = 0;
     let sumHr = 0;
     let count = 0;
