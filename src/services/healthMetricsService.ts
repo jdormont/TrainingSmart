@@ -55,10 +55,11 @@ export interface BiologicalReadiness {
 class HealthMetricsService {
   // Calculate comprehensive health metrics
   calculateHealthMetrics(
-    athlete: StravaAthlete,
+    _athlete: StravaAthlete, // Kept for signature compatibility — FTP now comes from the ftpWatts param, not the Strava athlete object
     activities: StravaActivity[],
     _sleepData: OuraSleepData[] = [],     // Kept for signature compatibility but unused for core calc now
-    _readinessData: OuraReadinessData[] = [] // Kept for signature compatibility
+    _readinessData: OuraReadinessData[] = [], // Kept for signature compatibility
+    ftpWatts?: number // Current FTP from ftpHistoryService — caller fetches, this stays a pure calculation
   ): HealthMetrics {
     console.log('Calculating dynamic health metrics...');
 
@@ -104,10 +105,7 @@ class HealthMetricsService {
     // 5. RIDER PROFILE
     // Delegate to RiderProfileService
     const riderProfileService = new RiderProfileService();
-    // Assuming FTP is available on athlete profile or passed in? default 250 for now
-    // We should ideally pass athlete.ftp if available. StravaAthlete interface might have it (ftp? or nothing?)
-    // Using default 250 or checking athlete object if extended.
-    const ftp = (athlete as any).ftp || 250;
+    const ftp = ftpWatts || 250;
     const profile = riderProfileService.calculateProfile(activities, load, consistency, ftp);
 
     return {

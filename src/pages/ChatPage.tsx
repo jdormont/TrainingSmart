@@ -19,7 +19,7 @@ import { format } from 'date-fns';
 import { analytics } from '../lib/analytics';
 import { useChatSessions } from '../hooks/useChatSessions';
 import { useDashboardData } from '../hooks/useDashboardData';
-import { useUserMemory } from '../hooks/useUserMemory';
+import { useAthleteMemory } from '../hooks/useAthleteMemory';
 import { useMemorySessionSync } from '../hooks/useMemorySessionSync';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChatSession } from '../types';
@@ -64,7 +64,7 @@ export const ChatPage: React.FC = () => {
     isLoading: dashboardLoading,
   } = useDashboardData();
 
-  const { data: userMemory } = useUserMemory();
+  const { data: athleteMemory } = useAthleteMemory();
 
   const {
     athlete,
@@ -429,7 +429,7 @@ export const ChatPage: React.FC = () => {
           fitness_mode: userProfile.fitness_mode,
           activity_mix: userProfile.activity_mix,
         } : undefined,
-        memory: userMemory
+        athleteMemory
       };
 
       const response = await openaiService.getChatResponse(
@@ -606,7 +606,7 @@ export const ChatPage: React.FC = () => {
           fitness_mode: authProfile.fitness_mode,
           activity_mix: authProfile.activity_mix as any,
         } : undefined,
-        memory: userMemory
+        athleteMemory
       };
 
       const response = await openaiService.getChatResponse(

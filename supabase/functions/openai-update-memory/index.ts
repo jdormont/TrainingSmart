@@ -11,7 +11,7 @@ import { requireArray, ValidationError } from "../_shared/validate.ts";
  * COMPLIANCE DETAILS:
  * - Chat conversation data (which may reference Strava metrics) is analyzed
  * - Data is passed to the configured LLM provider for INFERENCE ONLY
- * - Used to merge new session facts into the user's persistent coach memory
+ * - Used to merge new session facts into the user's persistent coach profile
  * - NO training, fine-tuning, or model improvement of any kind
  * - Data is processed in real-time and discarded after extraction
  *
@@ -39,25 +39,33 @@ Deno.serve(async (req: Request) => {
       }
     });
 
-    const existingMemory = body.existingMemory ?? null;
+    const existingProfile = body.existingProfile ?? null;
     const rollup = body.rollup ?? null;
+    const activeGoal = body.activeGoal ?? null;
 
     const conversationText = messages
       .map((m: ChatMessage) => `${m.role === "user" ? "User" : "Coach"}: ${m.content}`)
       .join("\n\n");
 
-    const existingMemoryText = existingMemory
-      ? JSON.stringify(existingMemory, null, 2)
-      : "(no existing memory — this is the first session being folded in)";
+    const existingProfileText = existingProfile
+      ? JSON.stringify(existingProfile, null, 2)
+      : "(no existing profile — this is the first session being folded in)";
 
     const rollupText = rollup
       ? JSON.stringify(rollup, null, 2)
       : "(no recent training/recovery rollup available)";
 
-    const mergePrompt = `You maintain a long-term memory record about an athlete for their AI coach. Merge the new chat session below into the EXISTING MEMORY, producing an updated memory record.
+    const activeGoalText = activeGoal
+      ? JSON.stringify(activeGoal, null, 2)
+      : "(no active goal set)";
 
-EXISTING MEMORY:
-${existingMemoryText}
+    const mergePrompt = `You maintain a long-term profile about an athlete for their AI coach. Merge the new chat session below into the EXISTING PROFILE, producing an updated profile record.
+
+EXISTING PROFILE (durable traits only — NOT goals):
+${existingProfileText}
+
+ACTIVE GOAL (read-only context — you may suggest narrow refinements to it, but you may NOT create, close, or retitle it):
+${activeGoalText}
 
 RECENT TRAINING/RECOVERY ROLLUP (supplementary signal, may be incomplete):
 ${rollupText}
@@ -66,39 +74,50 @@ NEW CHAT SESSION:
 ${conversationText}
 
 Instructions:
-1. Treat the NEW CHAT SESSION as authoritative when it contradicts EXISTING MEMORY (e.g. an injury that was open is now resolved, a goal changed). Drop facts that are no longer true.
-2. Keep at most 8 active goals. If there are more, retire the stalest/least relevant into the narrative as past context rather than dropping them silently.
-3. Only add to notablePatterns observations that aren't already captured as a goal/constraint/preference (e.g. "trains best in mornings", "recovery dips after back-to-back hard days").
-4. Keep "narrative" to at most 150 words — a freeform paragraph a coach could read to quickly understand this athlete.
-5. Update confidenceScores (0-100) reflecting how explicit the current goals/constraints/preferences are across BOTH existing memory and this session.
-6. Write a one-line "changeSummary" describing what changed in this update (for an audit log). If nothing meaningfully changed, say so explicitly.
+1. Treat the NEW CHAT SESSION as authoritative when it contradicts EXISTING PROFILE (e.g. an injury that was open is now resolved). Drop facts that are no longer true.
+2. This profile covers DURABLE traits only: physiology, equipment, standing training preferences, and recurring behavioral patterns. It does NOT include goals — goal creation and closure are handled by the athlete directly, not by you.
+3. Only add to notablePatterns observations that are durable and likely to recur (e.g. "trains best in mornings", "leg fatigue when strength precedes long rides by <24h"). Do not add one-off observations here — use recentActivityNotes for those instead.
+4. Keep "narrative" to at most 150 words — a freeform paragraph a coach could read to quickly understand this athlete's durable traits.
+5. Update confidenceScores (0-100) for "constraints" and "preferences" reflecting how explicit they are across BOTH the existing profile and this session.
+6. recentActivityNotes: extract short, dated, one-off observations from this session (e.g. a segment PR, "felt strong on the climb today"). These are NOT durable patterns — they are transient notes that will automatically roll off after 30 days. Only include genuinely new observations from THIS session, not things already in the profile.
+7. activeGoalPatch: if — and only if — the athlete explicitly refines a detail of their CURRENTLY ACTIVE goal in this session (e.g. "let's push the date back two weeks", "actually I want 5000ft of climbing not 4000"), return the specific field(s) that changed (targetDate, blockStartDate, blockEndDate, description). Otherwise return null. NEVER return a title or status change here — you do not have authority to create, rename, or close goals.
+8. goalCompletionSuggested: if the conversation strongly implies the active goal is done (completed, abandoned, or clearly no longer relevant), return { "reason": "..." } explaining why. This is a SUGGESTION ONLY — the athlete must confirm it themselves in Settings. If there's no active goal or no clear signal, return null.
+9. ftpReportSuggested: if the athlete mentions a specific FTP test result or a specific new FTP value in this session, return { "watts": number, "effectiveDate": "YYYY-MM-DD (best guess, use today if unspecified)", "note": "brief context" }. This is a SUGGESTION ONLY — never assume it's already recorded. If no FTP value is mentioned, return null.
+10. Write a one-line "changeSummary" describing what changed in this update (for an audit log). If nothing meaningfully changed, say so explicitly.
 
 Respond with ONLY valid JSON in this exact format:
 {
-  "goals": ["goal 1", "goal 2"],
-  "constraints": {
-    "timeAvailability": "string or null",
-    "equipment": ["item1"] or [],
-    "injuries": ["limitation1"] or [],
-    "other": ["other constraint"] or []
+  "profile": {
+    "constraints": {
+      "timeAvailability": "string or null",
+      "equipment": ["item1"] or [],
+      "injuries": ["limitation1"] or [],
+      "other": ["other constraint"] or []
+    },
+    "preferences": {
+      "workoutTypes": ["type1"] or [],
+      "intensityPreference": "string or null",
+      "trainingDays": [0, 2, 4] or []
+    },
+    "notablePatterns": [
+      { "observation": "string", "firstNoted": "string (date or relative description)", "lastConfirmed": "string (date or relative description)" }
+    ],
+    "narrative": "freeform paragraph, <=150 words",
+    "confidenceScores": { "constraints": 0, "preferences": 0 }
   },
-  "preferences": {
-    "workoutTypes": ["type1"] or [],
-    "intensityPreference": "string or null",
-    "trainingDays": [0, 2, 4] or []
-  },
-  "notablePatterns": [
-    { "observation": "string", "firstNoted": "string (date or relative description)", "lastConfirmed": "string (date or relative description)" }
+  "recentActivityNotes": [
+    { "note": "string", "noteDate": "YYYY-MM-DD" }
   ],
-  "narrative": "freeform paragraph, <=150 words",
-  "confidenceScores": { "goals": 0, "constraints": 0, "preferences": 0 },
+  "activeGoalPatch": { "targetDate": "YYYY-MM-DD", "blockStartDate": "YYYY-MM-DD", "blockEndDate": "YYYY-MM-DD", "description": "string" } or null (include only changed fields, or null entirely),
+  "goalCompletionSuggested": { "reason": "string" } or null,
+  "ftpReportSuggested": { "watts": 0, "effectiveDate": "YYYY-MM-DD", "note": "string" } or null,
   "changeSummary": "one-line description of what changed"
 }
 
 IMPORTANT: Return ONLY the JSON object, no other text.`;
 
     const content = await callAI({
-      systemPrompt: "You are an expert at maintaining structured long-term memory about an athlete from coaching conversations. Respond only with valid JSON.",
+      systemPrompt: "You are an expert at maintaining structured long-term profile data about an athlete from coaching conversations. Respond only with valid JSON.",
       messages: [{ role: "user", content: mergePrompt }],
       temperature: 0.3,
       maxTokens: 1800,
@@ -117,10 +136,10 @@ IMPORTANT: Return ONLY the JSON object, no other text.`;
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
-    console.error("Memory update error:", error);
+    console.error("Profile update error:", error);
     const status = error instanceof ValidationError ? 400 : 500;
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Failed to update memory" }),
+      JSON.stringify({ error: error instanceof Error ? error.message : "Failed to update profile" }),
       { status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }

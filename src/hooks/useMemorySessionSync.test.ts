@@ -2,12 +2,26 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useMemorySessionSync } from './useMemorySessionSync';
-import { userMemoryService } from '../services/userMemoryService';
+import { athleteProfileService } from '../services/athleteProfileService';
+import { goalsService } from '../services/goalsService';
+import { recentActivityNotesService } from '../services/recentActivityNotesService';
 import type { ChatSession } from '../types';
 
-vi.mock('../services/userMemoryService', () => ({
-  userMemoryService: {
-    updateMemoryFromSession: vi.fn(),
+vi.mock('../services/athleteProfileService', () => ({
+  athleteProfileService: {
+    mergeFromSession: vi.fn(),
+  },
+}));
+
+vi.mock('../services/goalsService', () => ({
+  goalsService: {
+    getActiveGoal: vi.fn(),
+  },
+}));
+
+vi.mock('../services/recentActivityNotesService', () => ({
+  recentActivityNotesService: {
+    pruneExpired: vi.fn(),
   },
 }));
 
@@ -30,10 +44,14 @@ function setVisibility(state: DocumentVisibilityState) {
   Object.defineProperty(document, 'visibilityState', { value: state, configurable: true });
 }
 
+const emptyMergeResult = { profile: {} as any, goalCompletionSuggested: null, ftpReportSuggested: null };
+
 describe('useMemorySessionSync', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(userMemoryService.updateMemoryFromSession).mockResolvedValue({} as any);
+    vi.mocked(athleteProfileService.mergeFromSession).mockResolvedValue(emptyMergeResult);
+    vi.mocked(goalsService.getActiveGoal).mockResolvedValue(null);
+    vi.mocked(recentActivityNotesService.pruneExpired).mockResolvedValue(undefined);
     setVisibility('visible');
   });
 
@@ -46,7 +64,7 @@ describe('useMemorySessionSync', () => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
 
-    expect(userMemoryService.updateMemoryFromSession).not.toHaveBeenCalled();
+    expect(athleteProfileService.mergeFromSession).not.toHaveBeenCalled();
   });
 
   it('does nothing when there is no active session', async () => {
@@ -57,7 +75,7 @@ describe('useMemorySessionSync', () => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
 
-    expect(userMemoryService.updateMemoryFromSession).not.toHaveBeenCalled();
+    expect(athleteProfileService.mergeFromSession).not.toHaveBeenCalled();
   });
 
   it('syncs when the tab is hidden and the new-message threshold is met', async () => {
@@ -69,8 +87,9 @@ describe('useMemorySessionSync', () => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
 
-    expect(userMemoryService.updateMemoryFromSession).toHaveBeenCalledTimes(1);
-    expect(userMemoryService.updateMemoryFromSession).toHaveBeenCalledWith('s1', session.messages, undefined);
+    expect(athleteProfileService.mergeFromSession).toHaveBeenCalledTimes(1);
+    expect(athleteProfileService.mergeFromSession).toHaveBeenCalledWith('s1', session.messages, undefined);
+    expect(recentActivityNotesService.pruneExpired).toHaveBeenCalledTimes(1);
   });
 
   it('does not sync when fewer than the minimum new user messages have arrived', async () => {
@@ -82,7 +101,7 @@ describe('useMemorySessionSync', () => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
 
-    expect(userMemoryService.updateMemoryFromSession).not.toHaveBeenCalled();
+    expect(athleteProfileService.mergeFromSession).not.toHaveBeenCalled();
   });
 
   it('does not re-sync on a second hidden event with no new user messages', async () => {
@@ -93,7 +112,7 @@ describe('useMemorySessionSync', () => {
       setVisibility('hidden');
       document.dispatchEvent(new Event('visibilitychange'));
     });
-    expect(userMemoryService.updateMemoryFromSession).toHaveBeenCalledTimes(1);
+    expect(athleteProfileService.mergeFromSession).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       setVisibility('visible');
@@ -104,7 +123,7 @@ describe('useMemorySessionSync', () => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
 
-    expect(userMemoryService.updateMemoryFromSession).toHaveBeenCalledTimes(1);
+    expect(athleteProfileService.mergeFromSession).toHaveBeenCalledTimes(1);
   });
 
   it('syncs again once enough additional user messages have arrived in the same session', async () => {
@@ -118,7 +137,7 @@ describe('useMemorySessionSync', () => {
       setVisibility('hidden');
       document.dispatchEvent(new Event('visibilitychange'));
     });
-    expect(userMemoryService.updateMemoryFromSession).toHaveBeenCalledTimes(1);
+    expect(athleteProfileService.mergeFromSession).toHaveBeenCalledTimes(1);
 
     session = buildSession('s1', 4);
     rerender({ s: session });
@@ -128,7 +147,7 @@ describe('useMemorySessionSync', () => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
 
-    expect(userMemoryService.updateMemoryFromSession).toHaveBeenCalledTimes(2);
+    expect(athleteProfileService.mergeFromSession).toHaveBeenCalledTimes(2);
   });
 
   it('syncs the outgoing session when the active session is switched', async () => {
@@ -143,8 +162,8 @@ describe('useMemorySessionSync', () => {
       rerender({ s: sessionB });
     });
 
-    expect(userMemoryService.updateMemoryFromSession).toHaveBeenCalledTimes(1);
-    expect(userMemoryService.updateMemoryFromSession).toHaveBeenCalledWith('a', sessionA.messages, undefined);
+    expect(athleteProfileService.mergeFromSession).toHaveBeenCalledTimes(1);
+    expect(athleteProfileService.mergeFromSession).toHaveBeenCalledWith('a', sessionA.messages, undefined);
   });
 
   it('syncs on unmount', async () => {
@@ -155,8 +174,8 @@ describe('useMemorySessionSync', () => {
       unmount();
     });
 
-    expect(userMemoryService.updateMemoryFromSession).toHaveBeenCalledTimes(1);
-    expect(userMemoryService.updateMemoryFromSession).toHaveBeenCalledWith('s1', session.messages, undefined);
+    expect(athleteProfileService.mergeFromSession).toHaveBeenCalledTimes(1);
+    expect(athleteProfileService.mergeFromSession).toHaveBeenCalledWith('s1', session.messages, undefined);
   });
 
   it('builds a recovery rollup from daily metrics and passes it through to the sync call', async () => {
@@ -172,10 +191,60 @@ describe('useMemorySessionSync', () => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
 
-    expect(userMemoryService.updateMemoryFromSession).toHaveBeenCalledWith(
+    expect(athleteProfileService.mergeFromSession).toHaveBeenCalledWith(
       's1',
       session.messages,
       expect.objectContaining({ periodDays: 2, avgRecoveryScore: 70 }),
     );
+  });
+
+  it('queues a pending goal-completion suggestion without closing the goal', async () => {
+    const session = buildSession('s1', 2);
+    vi.mocked(athleteProfileService.mergeFromSession).mockResolvedValue({
+      profile: {} as any,
+      goalCompletionSuggested: { reason: 'Athlete mentioned finishing the event' },
+      ftpReportSuggested: null,
+    });
+    vi.mocked(goalsService.getActiveGoal).mockResolvedValue({
+      id: 'goal-1',
+      title: 'Century ride',
+    } as any);
+
+    renderHook(() => useMemorySessionSync(session, false, []));
+
+    await act(async () => {
+      setVisibility('hidden');
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    const stored = JSON.parse(localStorage.getItem('pending_memory_suggestions') || '[]');
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({
+      type: 'goal_completion',
+      goalId: 'goal-1',
+      goalTitle: 'Century ride',
+      reason: 'Athlete mentioned finishing the event',
+    });
+  });
+
+  it('queues a pending FTP report suggestion', async () => {
+    const session = buildSession('s1', 2);
+    localStorage.clear();
+    vi.mocked(athleteProfileService.mergeFromSession).mockResolvedValue({
+      profile: {} as any,
+      goalCompletionSuggested: null,
+      ftpReportSuggested: { watts: 220, effectiveDate: '2026-08-01', note: 'Ramp test' },
+    });
+
+    renderHook(() => useMemorySessionSync(session, false, []));
+
+    await act(async () => {
+      setVisibility('hidden');
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    const stored = JSON.parse(localStorage.getItem('pending_memory_suggestions') || '[]');
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({ type: 'ftp_report', watts: 220, effectiveDate: '2026-08-01', note: 'Ramp test' });
   });
 });

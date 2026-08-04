@@ -1,5 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { userMemoryService } from '../services/userMemoryService';
+import { athleteProfileService } from '../services/athleteProfileService';
+import { goalsService } from '../services/goalsService';
+import { recentActivityNotesService } from '../services/recentActivityNotesService';
+import { addPendingSuggestion } from '../utils/pendingMemorySuggestions';
 import type { ChatSession, DailyMetric, MemoryRollupInput } from '../types';
 
 const MIN_NEW_USER_MESSAGES_TO_SYNC = 2;
@@ -35,9 +38,14 @@ function buildRollup(dailyMetrics: DailyMetric[]): MemoryRollupInput | undefined
 
 /**
  * Folds the active chat session's new messages into the user's persistent
- * coach memory whenever the session goes idle: tab hidden, session switched,
+ * athlete profile whenever the session goes idle: tab hidden, session switched,
  * or this component unmounts. No server cron exists, so this client-side
  * trigger is the only update path (mirrors useBackgroundSync's model).
+ *
+ * Any goal-completion or FTP-report suggestions the AI surfaces are queued as
+ * confirm-first pending suggestions (see utils/pendingMemorySuggestions.ts) —
+ * never applied automatically. Expired recent-activity-notes rows are pruned
+ * opportunistically in the same idle callback.
  */
 export function useMemorySessionSync(
   activeSession: ChatSession | null,
@@ -55,7 +63,7 @@ export function useMemorySessionSync(
 
     const sessionId = activeSession.id;
 
-    const sync = () => {
+    const sync = async () => {
       const session = sessionSnapshotsRef.current[sessionId];
       if (!session) return;
 
@@ -66,9 +74,35 @@ export function useMemorySessionSync(
 
       syncedMessageCountRef.current[sessionId] = newUserMessages;
 
-      userMemoryService
-        .updateMemoryFromSession(sessionId, session.messages, buildRollup(latestDailyMetricsRef.current))
-        .catch(err => console.error('Failed to sync memory for session', sessionId, err));
+      try {
+        const [result] = await Promise.all([
+          athleteProfileService.mergeFromSession(sessionId, session.messages, buildRollup(latestDailyMetricsRef.current)),
+          recentActivityNotesService.pruneExpired(),
+        ]);
+
+        if (result.goalCompletionSuggested) {
+          const activeGoal = await goalsService.getActiveGoal();
+          if (activeGoal) {
+            addPendingSuggestion({
+              type: 'goal_completion',
+              goalId: activeGoal.id,
+              goalTitle: activeGoal.title,
+              reason: result.goalCompletionSuggested.reason,
+            });
+          }
+        }
+
+        if (result.ftpReportSuggested) {
+          addPendingSuggestion({
+            type: 'ftp_report',
+            watts: result.ftpReportSuggested.watts,
+            effectiveDate: result.ftpReportSuggested.effectiveDate,
+            note: result.ftpReportSuggested.note,
+          });
+        }
+      } catch (err) {
+        console.error('Failed to sync athlete profile for session', sessionId, err);
+      }
     };
 
     const handleVisibilityChange = () => {

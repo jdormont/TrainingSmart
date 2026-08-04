@@ -32,6 +32,16 @@ interface TrainingPlanRequest {
   fitness_mode?: 'performance' | 're_engager';
   // Phase 2 — activity mix from onboarding profile
   activity_mix?: ActivityMixItem[];
+  // Athlete-memory restructure — the athlete's current structured goal, when one exists.
+  // Authoritative date source when present; eventDate/startDate remain the fallback for the freeform path.
+  activeGoal?: {
+    title: string;
+    description?: string;
+    targetDate?: string;
+    blockStartDate?: string;
+    blockEndDate?: string;
+    successCriteria?: Array<{ metric: string; target: number; unit?: string }>;
+  };
 }
 
 interface PlanReasoning {
@@ -93,6 +103,7 @@ Deno.serve(async (req: Request) => {
       coach_specialization,
       fitness_mode,
       activity_mix,
+      activeGoal,
     }: TrainingPlanRequest = body;
 
     const avgDistance = recentActivities.length > 0
@@ -190,6 +201,11 @@ Deno.serve(async (req: Request) => {
       ? `\nCOACH SPECIALIZATION: ${specializationLabels[coach_specialization] ?? coach_specialization}`
       : '';
 
+    // ── Active Goal (structured, when present) ───────────────────────────────
+    const activeGoalLine = activeGoal
+      ? `\nACTIVE GOAL: "${activeGoal.title}"${activeGoal.description ? ` — ${activeGoal.description}` : ''}${activeGoal.successCriteria && activeGoal.successCriteria.length > 0 ? `\nSUCCESS CRITERIA: ${activeGoal.successCriteria.map(c => `${c.metric} ${c.target}${c.unit ?? ''}`).join(', ')}` : ''}`
+      : '';
+
     // ── Re-Engager Constraints ───────────────────────────────────────────────
     const isReEngager = fitness_mode === 're_engager';
     const fitnessModeLine = isReEngager
@@ -211,7 +227,7 @@ CROSS-ACTIVITY RECOVERY RULES:
 - Allow 48 hours between hard strength sessions targeting the same muscle groups.
 - Swimming is low-impact and can be scheduled on recovery days after hard efforts.`;
 
-    const prompt = `Based on ${athleteName}'s data, create a detailed ${weeksAvailable}-week multi-modal training plan for: "${goal}", ending on ${eventDate}.${specializationLine}${fitnessModeLine}
+    const prompt = `Based on ${athleteName}'s data, create a detailed ${weeksAvailable}-week multi-modal training plan for: "${goal}", ending on ${eventDate}.${specializationLine}${activeGoalLine}${fitnessModeLine}
 ${activityMixSection}
 
 ${durationConstraint}

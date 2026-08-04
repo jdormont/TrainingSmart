@@ -4,6 +4,7 @@ import { supabase } from '../services/supabaseClient';
 import { stravaCacheService } from '../services/stravaCacheService';
 import { weeklyInsightService, WeeklyInsight, HealthMetrics } from '../services/weeklyInsightService';
 import { healthMetricsService } from '../services/healthMetricsService';
+import { ftpHistoryService } from '../services/ftpHistoryService';
 import { dailyMetricsService } from '../services/dailyMetricsService';
 import { trainingPlansService } from '../services/trainingPlansService';
 import { streakService, UserStreak } from '../services/streakService';
@@ -321,11 +322,13 @@ export const useDashboardData = () => {
     } catch (e) { console.warn('Insight failed', e); }
 
     try {
+      const currentFtp = await ftpHistoryService.getCurrentFtp().catch(() => null);
       healthMetrics = healthMetricsService.calculateHealthMetrics(
         athleteData,
         activitiesData,
         sleepArray,
-        readinessArray
+        readinessArray,
+        currentFtp?.ftpWatts
       );
     } catch(e) { console.warn('Health metrics failed', e); }
 

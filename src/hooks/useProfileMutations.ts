@@ -12,6 +12,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { userProfileService } from '../services/userProfileService';
 import type { UserProfile } from '../services/userProfileService';
+import { ftpHistoryService } from '../services/ftpHistoryService';
+import { FTP_HISTORY_KEY, CURRENT_FTP_KEY } from './useFtpHistory';
 
 // ---------------------------------------------------------------------------
 // Query key constants
@@ -38,10 +40,27 @@ export function useSaveUserProfile(userId?: string) {
   return useMutation({
     mutationFn: (profile: Partial<UserProfile>) =>
       userProfileService.updateUserProfile(profile),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: DASHBOARD_DATA_KEY, exact: false });
       if (userId) {
         queryClient.invalidateQueries({ queryKey: ['user-profile', userId] });
+      }
+      // Manual FTP edits in Settings are recorded as a confirmed ftp_history
+      // entry alongside the legacy user_profiles.ftp scalar, so the AI-facing
+      // trend/history data stays in sync with what the user actually set.
+      if (typeof variables.ftp === 'number' && variables.ftp > 0) {
+        ftpHistoryService
+          .recordFtp({
+            ftpWatts: variables.ftp,
+            effectiveDate: new Date().toISOString().split('T')[0],
+            source: 'manual',
+            confidence: 'confirmed',
+          })
+          .then(() => {
+            queryClient.invalidateQueries({ queryKey: FTP_HISTORY_KEY, exact: false });
+            queryClient.invalidateQueries({ queryKey: CURRENT_FTP_KEY, exact: false });
+          })
+          .catch(err => console.error('Failed to record FTP history entry:', err));
       }
     },
   });
