@@ -37,6 +37,7 @@ export const STORAGE_KEYS = {
   USER_CONTENT_PROFILE: 'user_content_profile',
   CONTENT_CACHE: 'content_cache_v2',
   CONTENT_FEEDBACK: 'content_feedback',
+  PENDING_MEMORY_SUGGESTIONS: 'pending_memory_suggestions',
 } as const;
 
 export const ACTIVITY_TYPES = {

@@ -16,6 +16,8 @@ interface PlanUserProfile {
 import { openaiService } from '../../services/openaiApi';
 import { trainingPlansService } from '../../services/trainingPlansService';
 import { supabaseChatService } from '../../services/supabaseChatService';
+import { goalsService } from '../../services/goalsService';
+import { useCurrentFtp } from '../../hooks/useFtpHistory';
 
 interface ChatContextModalProps {
   isOpen: boolean;
@@ -63,7 +65,8 @@ const TYPE_EMOJI: Record<string, string> = {
   yoga: '🧘', hiking: '🥾', rest: '😴',
 };
 
-function estimateFtp(activities: StravaActivity[]): number | null {
+/** Last-resort estimate for athletes with no recorded ftp_history entry yet. */
+function estimateFtpFallback(activities: StravaActivity[]): number | null {
   const poweredRides = activities.filter(
     a => a.average_watts && a.moving_time > 1200
   );
@@ -96,9 +99,12 @@ export const ChatContextModal: React.FC<ChatContextModalProps> = ({
   const [generatedReasoning, setGeneratedReasoning] = useState<unknown>(null);
   const [expandedWeeks, setExpandedWeeks] = useState<Set<number>>(new Set([1]));
 
+  const { data: currentFtp } = useCurrentFtp();
+
   if (!isOpen) return null;
 
-  const estimatedFtp = estimateFtp(recentActivities);
+  const ftpIsRecorded = !!currentFtp;
+  const estimatedFtp = currentFtp?.ftpWatts ?? estimateFtpFallback(recentActivities);
   const fitnessLevel = FITNESS_LEVEL_MAP[userProfile?.fitness_level || 'intermediate'] ?? 2;
   const riderProfile = { stamina: { level: fitnessLevel }, discipline: { level: fitnessLevel } };
 
@@ -171,7 +177,7 @@ export const ChatContextModal: React.FC<ChatContextModalProps> = ({
       })();
 
       const ftpLine = estimatedFtp
-        ? `\nEstimated FTP: ${estimatedFtp}w · Zone targets — Z2: ${Math.round(estimatedFtp * 0.56)}–${Math.round(estimatedFtp * 0.75)}w · Sweet spot: ${Math.round(estimatedFtp * 0.88)}–${Math.round(estimatedFtp * 0.94)}w · Threshold: ${Math.round(estimatedFtp * 0.95)}–${Math.round(estimatedFtp * 1.05)}w`
+        ? `\n${ftpIsRecorded ? 'FTP' : 'Estimated FTP'}: ${estimatedFtp}w · Zone targets — Z2: ${Math.round(estimatedFtp * 0.56)}–${Math.round(estimatedFtp * 0.75)}w · Sweet spot: ${Math.round(estimatedFtp * 0.88)}–${Math.round(estimatedFtp * 0.94)}w · Threshold: ${Math.round(estimatedFtp * 0.95)}–${Math.round(estimatedFtp * 1.05)}w`
         : '';
 
       const preferences = `
@@ -183,6 +189,8 @@ Preferred Workouts: ${context.preferences.workoutTypes?.join(', ') || 'Varied'}
 Intensity Preference: ${context.preferences.intensityPreference || 'Balanced'}${ftpLine}
       `.trim();
 
+      const activeGoal = await goalsService.getActiveGoal().catch(() => null);
+
       const { description, workouts, reasoning } = await openaiService.generateTrainingPlan(
         trainingContext,
         context.goals[0] || 'General fitness improvement',
@@ -190,7 +198,8 @@ Intensity Preference: ${context.preferences.intensityPreference || 'Balanced'}${
         startDateStr,
         riderProfile,
         preferences,
-        buildDailyAvailability()
+        buildDailyAvailability(),
+        activeGoal
       );
 
       setGeneratedWorkouts(workouts as GeneratedWorkout[]);
@@ -357,7 +366,9 @@ Intensity Preference: ${context.preferences.intensityPreference || 'Balanced'}${
                 <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-orange-500/10 border border-orange-500/25">
                   <Zap className="w-4 h-4 text-orange-400 flex-shrink-0" />
                   <p className="text-xs text-orange-300">
-                    Estimated FTP <span className="font-semibold">{estimatedFtp}w</span> from your recent rides — workouts will include zone targets.
+                    {ftpIsRecorded
+                      ? <>FTP <span className="font-semibold">{estimatedFtp}w</span> from your recorded history — workouts will include zone targets.</>
+                      : <>Estimated FTP <span className="font-semibold">{estimatedFtp}w</span> from your recent rides — workouts will include zone targets.</>}
                   </p>
                 </div>
               )}

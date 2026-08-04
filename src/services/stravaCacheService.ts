@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient';
 import { stravaApi } from './stravaApi';
 // import { tokenStorageService } from './tokenStorageService';
-import type { StravaAthlete, StravaActivity, DetailedWorkoutMetrics } from '../types';
+import type { StravaAthlete, StravaActivity, DetailedWorkoutMetrics, PowerCurveRollup } from '../types';
 import {
   HR_POWER_BUCKET_DEFINITIONS,
   HR_CURVE_LOOKBACK_DAYS,
@@ -543,6 +543,51 @@ class StravaCacheService {
       map: { id: '', summary_polyline: '', resource_state: 2 }, 
       athlete: { id: parseInt(userId) || 0, resource_state: 1 }
     } as unknown as StravaActivity));
+  }
+
+  /**
+   * Rider-level power-curve rollup, reduced live from per-activity
+   * detailed_metrics (power_curve / estimated_power_curve JSONB) — no
+   * separate stored table, so there's only one source of truth for power
+   * curve data (see stravaCacheService.enrichSingleActivity / calculatePowerCurve).
+   */
+  async getPowerCurveRollup(windowDays = 90): Promise<PowerCurveRollup> {
+    const activities = await this.getActivitiesForStats(windowDays);
+
+    const curve: Record<string, number> = {};
+    const estimatedCurve: Record<string, number> = {};
+    let activityCount = 0;
+
+    for (const activity of activities) {
+      const dm = activity.detailed_metrics;
+      if (!dm) continue;
+
+      let contributed = false;
+      if (dm.power_curve) {
+        for (const [bucket, watts] of Object.entries(dm.power_curve)) {
+          if (typeof watts === 'number' && watts > (curve[bucket] ?? 0)) {
+            curve[bucket] = watts;
+          }
+        }
+        contributed = true;
+      }
+      if (dm.estimated_power_curve) {
+        for (const [bucket, watts] of Object.entries(dm.estimated_power_curve)) {
+          if (typeof watts === 'number' && watts > (estimatedCurve[bucket] ?? 0)) {
+            estimatedCurve[bucket] = watts;
+          }
+        }
+        contributed = true;
+      }
+      if (contributed) activityCount++;
+    }
+
+    return {
+      windowDays,
+      curve,
+      estimatedCurve: Object.keys(estimatedCurve).length > 0 ? estimatedCurve : undefined,
+      activityCount,
+    };
   }
 
   private async getPersonalHrPowerCurveCached(userId: string): Promise<PersonalHrPowerCurve | null> {

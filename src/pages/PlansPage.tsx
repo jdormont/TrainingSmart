@@ -11,6 +11,7 @@ import { calculateLoad, calculateConsistency } from '../utils/profileHelpers'; /
 import { openaiService } from '../services/openaiApi';
 import { trainingPlansService } from '../services/trainingPlansService';
 import { healthMetricsService } from '../services/healthMetricsService'; // Import healthMetricsService
+import { ftpHistoryService } from '../services/ftpHistoryService';
 import type { StravaActivity, StravaAthlete, TrainingPlan, Workout, WeeklyStats } from '../types';
 import { calculateWeeklyStats } from '../utils/dataProcessing';
 
@@ -266,7 +267,8 @@ export const PlansPage: React.FC = () => {
                 
                 let acuteLoadRatio = 1.0;
                 if (freshAthlete && freshActivities.length > 0) {
-                     const metrics = healthMetricsService.calculateHealthMetrics(freshAthlete, freshActivities);
+                     const currentFtp = await ftpHistoryService.getCurrentFtp().catch(() => null);
+                     const metrics = healthMetricsService.calculateHealthMetrics(freshAthlete, freshActivities, [], [], currentFtp?.ftpWatts);
                      const ratioVal = metrics.details.load.components.find(c => c.name === 'A:C Ratio')?.value;
                      if (ratioVal) acuteLoadRatio = parseFloat(String(ratioVal));
                 }

@@ -1,8 +1,9 @@
 // OpenAI API service for training advice
 import axios from 'axios';
-import type { StravaActivity, StravaAthlete, StravaStats, ChatMessage, OuraSleepData, OuraReadinessData, Workout, DailyMetric, PlanReasoning, ActivityMixItem, UserMemory } from '../types';
+import type { StravaActivity, StravaAthlete, StravaStats, ChatMessage, OuraSleepData, OuraReadinessData, Workout, DailyMetric, PlanReasoning, ActivityMixItem, Goal, AthleteMemoryContext } from '../types';
 import { UserStreak } from './streakService';
 import { STORAGE_KEYS } from '../utils/constants';
+import { buildAthleteMemoryBlock } from './athleteContextBuilder';
 
 
 // Chat configuration — model/provider are resolved server-side via AI_PROVIDER + AI_MODEL Supabase secrets.
@@ -42,7 +43,7 @@ interface TrainingContext {
     fitness_mode?: string;
     activity_mix?: ActivityMixItem[];
   };
-  memory?: UserMemory | null;
+  athleteMemory?: AthleteMemoryContext | null;
 }
 
 const SPECIALIZATION_PREFIXES: Record<string, string> = {
@@ -469,8 +470,9 @@ RESPONSE GUIDELINES:
         .replace('{{USER_WEEKLY_DAYS}}', weeklyDays.toString())
         .replace('{{USER_SESSION_DURATION}}', sessionDuration.toString());
 
-      if (context.userProfile.ftp) {
-        basePrompt = basePrompt.replace('CURRENT USER CONTEXT:', `CURRENT USER CONTEXT:\n- **FTP:** ${context.userProfile.ftp}w`);
+      const promptFtp = context.athleteMemory?.currentFtp?.ftpWatts ?? context.userProfile.ftp;
+      if (promptFtp) {
+        basePrompt = basePrompt.replace('CURRENT USER CONTEXT:', `CURRENT USER CONTEXT:\n- **FTP:** ${promptFtp}w`);
       }
     } else {
       basePrompt = basePrompt
@@ -558,36 +560,7 @@ STREAK CONTEXT:
 `;
     }
 
-    let memoryContext = '';
-    if (context.memory) {
-      const memory = context.memory;
-      const truncatedNarrative = memory.narrative.length > 800
-        ? `${memory.narrative.slice(0, 800)}...`
-        : memory.narrative;
-
-      const goalsLine = memory.goals.length > 0 ? `\n- Goals: ${memory.goals.join('; ')}` : '';
-      const constraintsParts = [
-        memory.constraints.timeAvailability,
-        ...(memory.constraints.equipment || []),
-        ...(memory.constraints.injuries || []),
-        ...(memory.constraints.other || []),
-      ].filter(Boolean);
-      const constraintsLine = constraintsParts.length > 0 ? `\n- Constraints: ${constraintsParts.join('; ')}` : '';
-      const preferenceParts = [
-        ...(memory.preferences.workoutTypes || []),
-        memory.preferences.intensityPreference,
-      ].filter(Boolean);
-      const preferencesLine = preferenceParts.length > 0 ? `\n- Preferences: ${preferenceParts.join('; ')}` : '';
-      const patternsLine = memory.notablePatterns.length > 0
-        ? `\n- Notable patterns: ${memory.notablePatterns.map(p => p.observation).join('; ')}`
-        : '';
-
-      if (truncatedNarrative || goalsLine || constraintsLine || preferencesLine || patternsLine) {
-        memoryContext = `
-
-USER MEMORY (long-term context from past conversations and training trends):${truncatedNarrative ? `\n${truncatedNarrative}` : ''}${goalsLine}${constraintsLine}${preferencesLine}${patternsLine}`;
-      }
-    }
+    const memoryContext = buildAthleteMemoryBlock(context.athleteMemory, new Date(), context.userProfile?.ftp);
 
     const showPowerMetrics = !specialization || specialization === 'endurance';
 
@@ -684,7 +657,8 @@ Use the coaching style and personality defined above, while incorporating this r
     startDate: string,
     riderProfile: any, // { stamina: { level: number, ... }, discipline: ... }
     preferences: string,
-    dailyAvailability?: Record<string, string>
+    dailyAvailability?: Record<string, string>,
+    activeGoal?: Goal | null
   ): Promise<{ description: string; reasoning?: PlanReasoning; workouts: (Partial<Workout> & { dayOfWeek?: number; week?: number; phase?: string })[] }> {
     if (!this.supabaseUrl || !this.supabaseAnonKey) {
       throw new Error('Supabase configuration not found. Please check your environment variables.');
@@ -710,6 +684,16 @@ Use the coaching style and personality defined above, while incorporating this r
           coach_specialization: context.userProfile?.coach_specialization,
           fitness_mode: context.userProfile?.fitness_mode,
           activity_mix: context.userProfile?.activity_mix,
+          activeGoal: activeGoal
+            ? {
+                title: activeGoal.title,
+                description: activeGoal.description,
+                targetDate: activeGoal.targetDate,
+                blockStartDate: activeGoal.blockStartDate,
+                blockEndDate: activeGoal.blockEndDate,
+                successCriteria: activeGoal.successCriteria,
+              }
+            : undefined,
         },
         {
           headers: {

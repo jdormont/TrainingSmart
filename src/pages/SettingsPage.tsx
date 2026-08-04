@@ -20,13 +20,21 @@ import {
 } from '../services/userProfileService';
 import { useSaveUserProfile } from '../hooks/useProfileMutations';
 import {
-  useUserMemory,
-  useUpdateUserMemory,
-  useClearUserMemory,
-  useGenerateMemoryDraft,
-  useApplyMemoryDraft,
-} from '../hooks/useUserMemory';
-import type { MergedMemory } from '../services/userMemoryService';
+  useAthleteProfile,
+  useUpdateAthleteProfile,
+  useClearAthleteProfile,
+  useGenerateProfileDraft,
+  useApplyProfileDraft,
+} from '../hooks/useAthleteProfile';
+import type { MergedProfile } from '../services/athleteProfileService';
+import { useActiveGoal, useGoalHistory, useCreateActiveGoal, useCloseGoal, useUpdateActiveGoal } from '../hooks/useGoals';
+import { useRecordFtp } from '../hooks/useFtpHistory';
+import { computeGoalTiming } from '../utils/goalTiming';
+import {
+  getPendingSuggestions,
+  removePendingSuggestion,
+  type PendingMemorySuggestion,
+} from '../utils/pendingMemorySuggestions';
 import type { StravaAthlete } from '../types';
 import { analytics } from '../lib/analytics';
 
@@ -129,67 +137,61 @@ export const SettingsPage: React.FC = () => {
   const [copying, setCopying] = useState(false);
 
   // --- Coach Memory tab state ---
-  const { data: userMemory, isLoading: memoryLoading } = useUserMemory();
-  const updateUserMemory = useUpdateUserMemory();
-  const clearUserMemory = useClearUserMemory();
-  const generateMemoryDraft = useGenerateMemoryDraft();
-  const applyMemoryDraft = useApplyMemoryDraft();
-  const [memoryGoalsText, setMemoryGoalsText] = useState('');
+  const { data: athleteProfile, isLoading: memoryLoading } = useAthleteProfile();
+  const updateAthleteProfile = useUpdateAthleteProfile();
+  const clearAthleteProfile = useClearAthleteProfile();
+  const generateProfileDraft = useGenerateProfileDraft();
+  const applyProfileDraft = useApplyProfileDraft();
   const [memoryNarrativeText, setMemoryNarrativeText] = useState('');
   const [savingMemory, setSavingMemory] = useState(false);
   const [memorySaved, setMemorySaved] = useState(false);
-  const [memoryDraft, setMemoryDraft] = useState<MergedMemory | null>(null);
-  const [draftGoalsText, setDraftGoalsText] = useState('');
+  const [memoryDraft, setMemoryDraft] = useState<MergedProfile | null>(null);
   const [draftNarrativeText, setDraftNarrativeText] = useState('');
   const [generateDraftError, setGenerateDraftError] = useState<string | null>(null);
   const [applyingDraft, setApplyingDraft] = useState(false);
 
   useEffect(() => {
-    if (userMemory) {
-      setMemoryGoalsText(userMemory.goals.join('\n'));
-      setMemoryNarrativeText(userMemory.narrative);
+    if (athleteProfile) {
+      setMemoryNarrativeText(athleteProfile.narrative);
     }
-  }, [userMemory]);
+  }, [athleteProfile]);
 
   const handleSaveMemory = async () => {
     setSavingMemory(true);
     try {
-      await updateUserMemory.mutateAsync({
-        goals: memoryGoalsText.split('\n').map(g => g.trim()).filter(Boolean),
+      await updateAthleteProfile.mutateAsync({
         narrative: memoryNarrativeText,
       });
       setMemorySaved(true);
       setTimeout(() => setMemorySaved(false), 2000);
     } catch (error) {
-      console.error('Failed to save memory:', error);
+      console.error('Failed to save profile:', error);
     } finally {
       setSavingMemory(false);
     }
   };
 
   const handleForgetEverything = async () => {
-    if (!window.confirm('This will permanently delete everything your coach remembers about you. Continue?')) {
+    if (!window.confirm('This will permanently delete everything your coach remembers about you (not including goals or FTP history). Continue?')) {
       return;
     }
     try {
-      await clearUserMemory.mutateAsync();
-      setMemoryGoalsText('');
+      await clearAthleteProfile.mutateAsync();
       setMemoryNarrativeText('');
     } catch (error) {
-      console.error('Failed to clear memory:', error);
+      console.error('Failed to clear profile:', error);
     }
   };
 
   const handleGenerateDraft = async () => {
     setGenerateDraftError(null);
     try {
-      const draft = await generateMemoryDraft.mutateAsync();
+      const draft = await generateProfileDraft.mutateAsync();
       setMemoryDraft(draft);
-      setDraftGoalsText(draft.goals.join('\n'));
       setDraftNarrativeText(draft.narrative);
     } catch (error) {
-      console.error('Failed to generate memory draft:', error);
-      setGenerateDraftError((error as Error).message || 'Failed to generate memory from chat history');
+      console.error('Failed to generate profile draft:', error);
+      setGenerateDraftError((error as Error).message || 'Failed to generate profile from chat history');
     }
   };
 
@@ -197,15 +199,14 @@ export const SettingsPage: React.FC = () => {
     if (!memoryDraft) return;
     setApplyingDraft(true);
     try {
-      await applyMemoryDraft.mutateAsync({
+      await applyProfileDraft.mutateAsync({
         ...memoryDraft,
-        goals: draftGoalsText.split('\n').map(g => g.trim()).filter(Boolean),
         narrative: draftNarrativeText,
       });
       setMemoryDraft(null);
     } catch (error) {
-      console.error('Failed to apply memory draft:', error);
-      setGenerateDraftError((error as Error).message || 'Failed to save memory');
+      console.error('Failed to apply profile draft:', error);
+      setGenerateDraftError((error as Error).message || 'Failed to save profile');
     } finally {
       setApplyingDraft(false);
     }
@@ -214,6 +215,100 @@ export const SettingsPage: React.FC = () => {
   const handleDiscardDraft = () => {
     setMemoryDraft(null);
     setGenerateDraftError(null);
+  };
+
+  // --- Active Goal / Goal History state ---
+  const { data: activeGoal, isLoading: activeGoalLoading } = useActiveGoal();
+  const { data: goalHistory = [] } = useGoalHistory();
+  const createActiveGoal = useCreateActiveGoal();
+  const closeGoal = useCloseGoal();
+  const updateActiveGoal = useUpdateActiveGoal();
+  const recordFtp = useRecordFtp();
+  const [newGoalTitle, setNewGoalTitle] = useState('');
+  const [newGoalTargetDate, setNewGoalTargetDate] = useState('');
+  const [closingGoal, setClosingGoal] = useState(false);
+  const [showCloseGoalForm, setShowCloseGoalForm] = useState(false);
+  const [closeReason, setCloseReason] = useState('');
+  const [editedTargetDate, setEditedTargetDate] = useState('');
+  const [savingGoalDate, setSavingGoalDate] = useState(false);
+  const [pendingSuggestions, setPendingSuggestions] = useState<PendingMemorySuggestion[]>([]);
+
+  useEffect(() => {
+    setPendingSuggestions(getPendingSuggestions());
+  }, []);
+
+  useEffect(() => {
+    setEditedTargetDate(activeGoal?.targetDate ?? '');
+  }, [activeGoal?.id, activeGoal?.targetDate]);
+
+  const handleCreateGoal = async () => {
+    if (!newGoalTitle.trim()) return;
+    try {
+      await createActiveGoal.mutateAsync({
+        title: newGoalTitle.trim(),
+        targetDate: newGoalTargetDate || undefined,
+        source: 'manual',
+      });
+      setNewGoalTitle('');
+      setNewGoalTargetDate('');
+    } catch (error) {
+      console.error('Failed to create goal:', error);
+    }
+  };
+
+  const handleCloseGoal = async (status: 'completed' | 'abandoned') => {
+    if (!activeGoal) return;
+    setClosingGoal(true);
+    try {
+      await closeGoal.mutateAsync({ id: activeGoal.id, status, reason: closeReason || undefined });
+      setShowCloseGoalForm(false);
+      setCloseReason('');
+    } catch (error) {
+      console.error('Failed to close goal:', error);
+    } finally {
+      setClosingGoal(false);
+    }
+  };
+
+  const handleSaveGoalDate = async () => {
+    if (!activeGoal || !editedTargetDate) return;
+    setSavingGoalDate(true);
+    try {
+      await updateActiveGoal.mutateAsync({ id: activeGoal.id, patch: { targetDate: editedTargetDate } });
+    } catch (error) {
+      console.error('Failed to update goal target date:', error);
+    } finally {
+      setSavingGoalDate(false);
+    }
+  };
+
+  const dismissSuggestion = (id: string) => {
+    removePendingSuggestion(id);
+    setPendingSuggestions(prev => prev.filter(s => s.id !== id));
+  };
+
+  const acceptGoalCompletionSuggestion = async (suggestion: Extract<PendingMemorySuggestion, { type: 'goal_completion' }>) => {
+    try {
+      await closeGoal.mutateAsync({ id: suggestion.goalId, status: 'completed', reason: suggestion.reason });
+      dismissSuggestion(suggestion.id);
+    } catch (error) {
+      console.error('Failed to accept goal-completion suggestion:', error);
+    }
+  };
+
+  const acceptFtpSuggestion = async (suggestion: Extract<PendingMemorySuggestion, { type: 'ftp_report' }>) => {
+    try {
+      await recordFtp.mutateAsync({
+        ftpWatts: suggestion.watts,
+        effectiveDate: suggestion.effectiveDate,
+        source: 'chat_reported',
+        confidence: 'estimated',
+        note: suggestion.note,
+      });
+      dismissSuggestion(suggestion.id);
+    } catch (error) {
+      console.error('Failed to accept FTP suggestion:', error);
+    }
   };
 
   // --- Advanced tab state ---
@@ -1093,28 +1188,200 @@ export const SettingsPage: React.FC = () => {
         {/* ── Tab: Coach Memory ── */}
         {activeTab === 'memory' && (
           <div className="space-y-8">
+
+            {/* Pending AI suggestions — confirm-first, never auto-applied */}
+            {pendingSuggestions.length > 0 && (
+              <div className="space-y-3">
+                {pendingSuggestions.map(suggestion => (
+                  <div key={suggestion.id} className="bg-orange-950/20 border border-orange-500/30 rounded-lg p-4 flex items-start gap-3">
+                    <Sparkles className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      {suggestion.type === 'goal_completion' ? (
+                        <p className="text-sm text-orange-100">
+                          Your coach noticed <span className="font-semibold">"{suggestion.goalTitle}"</span> might be done: {suggestion.reason}
+                        </p>
+                      ) : (
+                        <p className="text-sm text-orange-100">
+                          Your coach picked up an FTP report from chat: <span className="font-semibold">{suggestion.watts}w</span> on {suggestion.effectiveDate}
+                          {suggestion.note ? ` — ${suggestion.note}` : ''}
+                        </p>
+                      )}
+                      <div className="flex gap-2 mt-2">
+                        <Button
+                          onClick={() => suggestion.type === 'goal_completion'
+                            ? acceptGoalCompletionSuggestion(suggestion)
+                            : acceptFtpSuggestion(suggestion)}
+                          className="text-xs px-3 py-1.5 text-white bg-orange-600 hover:bg-orange-700"
+                        >
+                          {suggestion.type === 'goal_completion' ? 'Mark Complete' : 'Record FTP'}
+                        </Button>
+                        <Button
+                          onClick={() => dismissSuggestion(suggestion.id)}
+                          variant="outline"
+                          className="text-xs px-3 py-1.5 text-slate-300 border-slate-700 hover:bg-slate-800"
+                        >
+                          Dismiss
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Active Goal */}
+            <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
+              <h2 className="text-xl font-semibold text-slate-100 mb-1 flex items-center gap-2">
+                <TrendingUp className="w-5 h-5" />
+                Active Goal
+              </h2>
+              <p className="text-slate-400 text-sm mb-4">
+                The one goal your coach treats as current. Closed goals move to history below and are never
+                presented as current again.
+              </p>
+
+              {activeGoalLoading ? (
+                <p className="text-slate-500 text-sm">Loading...</p>
+              ) : activeGoal ? (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-slate-100 font-medium">{activeGoal.title}</p>
+                    {activeGoal.description && <p className="text-slate-400 text-sm mt-0.5">{activeGoal.description}</p>}
+                    {(() => {
+                      const timing = computeGoalTiming(activeGoal);
+                      return timing ? <p className="text-orange-300 text-sm mt-1">{timing.summary}</p> : null;
+                    })()}
+                  </div>
+
+                  <div className="flex items-end gap-3">
+                    <div>
+                      <label htmlFor="goalTargetDate" className="block text-xs text-slate-400 mb-1.5">Target date</label>
+                      <input
+                        id="goalTargetDate"
+                        type="date"
+                        value={editedTargetDate}
+                        onChange={e => setEditedTargetDate(e.target.value)}
+                        className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-md text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      />
+                    </div>
+                    <Button
+                      onClick={handleSaveGoalDate}
+                      loading={savingGoalDate}
+                      disabled={!editedTargetDate || editedTargetDate === activeGoal.targetDate}
+                      variant="outline"
+                      className="text-sm text-orange-400 border-orange-500/30 hover:bg-orange-500/10"
+                    >
+                      Update
+                    </Button>
+                  </div>
+
+                  {!showCloseGoalForm ? (
+                    <Button
+                      onClick={() => setShowCloseGoalForm(true)}
+                      variant="outline"
+                      className="flex items-center text-sm text-emerald-400 border-emerald-600/40 hover:bg-emerald-500/10"
+                    >
+                      Mark Goal Complete
+                    </Button>
+                  ) : (
+                    <div className="space-y-3 pt-2 border-t border-slate-800">
+                      <label htmlFor="closeReason" className="block text-xs text-slate-400">Outcome (optional)</label>
+                      <input
+                        id="closeReason"
+                        type="text"
+                        value={closeReason}
+                        onChange={e => setCloseReason(e.target.value)}
+                        placeholder="e.g. Completed 245mi / 18,360ft over 4 days"
+                        className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      />
+                      <div className="flex gap-3">
+                        <Button
+                          onClick={() => handleCloseGoal('completed')}
+                          loading={closingGoal}
+                          className="text-sm text-white bg-emerald-600 hover:bg-emerald-700"
+                        >
+                          Completed
+                        </Button>
+                        <Button
+                          onClick={() => handleCloseGoal('abandoned')}
+                          loading={closingGoal}
+                          variant="outline"
+                          className="text-sm text-slate-300 border-slate-700 hover:bg-slate-800"
+                        >
+                          Abandoned
+                        </Button>
+                        <Button
+                          onClick={() => { setShowCloseGoalForm(false); setCloseReason(''); }}
+                          variant="outline"
+                          className="text-sm text-slate-400 border-slate-800 hover:bg-slate-800"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-slate-500 text-sm">No active goal set.</p>
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div className="flex-1 min-w-[200px]">
+                      <label htmlFor="newGoalTitle" className="block text-xs text-slate-400 mb-1.5">Goal</label>
+                      <input
+                        id="newGoalTitle"
+                        type="text"
+                        value={newGoalTitle}
+                        onChange={e => setNewGoalTitle(e.target.value)}
+                        placeholder="e.g. 100mi century with 4k elevation"
+                        className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="newGoalDate" className="block text-xs text-slate-400 mb-1.5">Target date</label>
+                      <input
+                        id="newGoalDate"
+                        type="date"
+                        value={newGoalTargetDate}
+                        onChange={e => setNewGoalTargetDate(e.target.value)}
+                        className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-md text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      />
+                    </div>
+                    <Button
+                      onClick={handleCreateGoal}
+                      loading={createActiveGoal.isPending}
+                      disabled={!newGoalTitle.trim()}
+                      className="text-sm text-white bg-orange-600 hover:bg-orange-700"
+                    >
+                      Set Goal
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Coach Memory — durable profile */}
             <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
               <h2 className="text-xl font-semibold text-slate-100 mb-1 flex items-center gap-2">
                 <Brain className="w-5 h-5" />
                 What Your Coach Remembers
               </h2>
               <p className="text-slate-400 text-sm mb-4">
-                Your coach builds up a memory of your goals, constraints, and preferences from your chats over time,
-                combined with your training and recovery trends. You can review and edit it here, or clear it entirely.
+                Your coach builds up durable traits — constraints, preferences, and behavioral patterns — from your
+                chats over time. Goals are tracked separately above. You can review and edit this here, or clear it entirely.
               </p>
 
               {memoryLoading ? (
                 <p className="text-slate-500 text-sm">Loading memory...</p>
-              ) : !userMemory && !memoryDraft ? (
+              ) : !athleteProfile && !memoryDraft ? (
                 <div className="space-y-4">
                   <p className="text-slate-500 text-sm">
                     Your coach hasn't built up any memory yet — keep chatting and it will start remembering things
-                    like your goals, constraints, and preferences. Or, generate a starting point from your past chats.
+                    like your constraints and preferences. Or, generate a starting point from your past chats.
                   </p>
                   {generateDraftError && <p className="text-red-400 text-sm">{generateDraftError}</p>}
                   <Button
                     onClick={handleGenerateDraft}
-                    loading={generateMemoryDraft.isPending}
+                    loading={generateProfileDraft.isPending}
                     variant="outline"
                     className="flex items-center text-orange-400 border-orange-500/30 hover:bg-orange-500/10"
                   >
@@ -1130,19 +1397,6 @@ export const SettingsPage: React.FC = () => {
                       Draft generated from your past chat history. Review and edit before saving — nothing has
                       been stored yet.
                     </p>
-                  </div>
-
-                  <div>
-                    <label htmlFor="draftGoals" className="block text-sm font-medium text-slate-400 mb-2">
-                      Goals (one per line)
-                    </label>
-                    <textarea
-                      id="draftGoals"
-                      value={draftGoalsText}
-                      onChange={e => setDraftGoalsText(e.target.value)}
-                      rows={4}
-                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 text-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
-                    />
                   </div>
 
                   <div>
@@ -1190,21 +1444,8 @@ export const SettingsPage: React.FC = () => {
                     </Button>
                   </div>
                 </div>
-              ) : (
+              ) : athleteProfile ? (
                 <div className="space-y-4">
-                  <div>
-                    <label htmlFor="memoryGoals" className="block text-sm font-medium text-slate-400 mb-2">
-                      Goals (one per line)
-                    </label>
-                    <textarea
-                      id="memoryGoals"
-                      value={memoryGoalsText}
-                      onChange={e => setMemoryGoalsText(e.target.value)}
-                      rows={4}
-                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 text-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
-                    />
-                  </div>
-
                   <div>
                     <label htmlFor="memoryNarrative" className="block text-sm font-medium text-slate-400 mb-2">
                       Narrative
@@ -1218,41 +1459,41 @@ export const SettingsPage: React.FC = () => {
                     />
                   </div>
 
-                  {userMemory.constraints && (
-                    Object.values(userMemory.constraints).some(v => v && (Array.isArray(v) ? v.length > 0 : true))
+                  {athleteProfile.constraints && (
+                    Object.values(athleteProfile.constraints).some(v => v && (Array.isArray(v) ? v.length > 0 : true))
                   ) && (
                     <div>
                       <h3 className="text-sm font-medium text-slate-400 mb-2">Constraints</h3>
                       <ul className="text-sm text-slate-300 space-y-1">
-                        {userMemory.constraints.timeAvailability && (
-                          <li>• {userMemory.constraints.timeAvailability}</li>
+                        {athleteProfile.constraints.timeAvailability && (
+                          <li>• {athleteProfile.constraints.timeAvailability}</li>
                         )}
-                        {(userMemory.constraints.equipment || []).map(item => <li key={item}>• {item}</li>)}
-                        {(userMemory.constraints.injuries || []).map(item => <li key={item}>• {item}</li>)}
-                        {(userMemory.constraints.other || []).map(item => <li key={item}>• {item}</li>)}
+                        {(athleteProfile.constraints.equipment || []).map(item => <li key={item}>• {item}</li>)}
+                        {(athleteProfile.constraints.injuries || []).map(item => <li key={item}>• {item}</li>)}
+                        {(athleteProfile.constraints.other || []).map(item => <li key={item}>• {item}</li>)}
                       </ul>
                     </div>
                   )}
 
-                  {userMemory.preferences && (
-                    (userMemory.preferences.workoutTypes?.length || userMemory.preferences.intensityPreference)
+                  {athleteProfile.preferences && (
+                    (athleteProfile.preferences.workoutTypes?.length || athleteProfile.preferences.intensityPreference)
                   ) && (
                     <div>
                       <h3 className="text-sm font-medium text-slate-400 mb-2">Preferences</h3>
                       <ul className="text-sm text-slate-300 space-y-1">
-                        {(userMemory.preferences.workoutTypes || []).map(item => <li key={item}>• {item}</li>)}
-                        {userMemory.preferences.intensityPreference && (
-                          <li>• {userMemory.preferences.intensityPreference}</li>
+                        {(athleteProfile.preferences.workoutTypes || []).map(item => <li key={item}>• {item}</li>)}
+                        {athleteProfile.preferences.intensityPreference && (
+                          <li>• {athleteProfile.preferences.intensityPreference}</li>
                         )}
                       </ul>
                     </div>
                   )}
 
-                  {userMemory.notablePatterns.length > 0 && (
+                  {athleteProfile.notablePatterns.length > 0 && (
                     <div>
                       <h3 className="text-sm font-medium text-slate-400 mb-2">Notable Patterns</h3>
                       <ul className="text-sm text-slate-300 space-y-1">
-                        {userMemory.notablePatterns.map(p => (
+                        {athleteProfile.notablePatterns.map(p => (
                           <li key={p.observation}>• {p.observation}</li>
                         ))}
                       </ul>
@@ -1272,7 +1513,7 @@ export const SettingsPage: React.FC = () => {
                     </Button>
                     <Button
                       onClick={handleGenerateDraft}
-                      loading={generateMemoryDraft.isPending}
+                      loading={generateProfileDraft.isPending}
                       variant="outline"
                       className="flex items-center text-orange-400 border-orange-500/30 hover:bg-orange-500/10"
                     >
@@ -1289,8 +1530,37 @@ export const SettingsPage: React.FC = () => {
                     </Button>
                   </div>
                 </div>
-              )}
+              ) : null}
             </div>
+
+            {/* Goal History — background only, read-only */}
+            {goalHistory.length > 0 && (
+              <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
+                <h2 className="text-xl font-semibold text-slate-100 mb-1 flex items-center gap-2">
+                  <ChevronDown className="w-5 h-5" />
+                  Goal History
+                </h2>
+                <p className="text-slate-400 text-sm mb-4">
+                  Closed goals — kept as background context for your coach, never presented as current.
+                </p>
+                <ul className="space-y-3">
+                  {goalHistory.map(g => (
+                    <li key={g.id} className="border border-slate-800 rounded-lg p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-slate-200 text-sm font-medium">{g.title}</p>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${g.status === 'completed' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-700 text-slate-400'}`}>
+                          {g.status === 'completed' ? 'Completed' : 'Abandoned'}
+                        </span>
+                      </div>
+                      {g.closedAt && (
+                        <p className="text-xs text-slate-500 mt-0.5">Closed {g.closedAt.toLocaleDateString()}</p>
+                      )}
+                      {g.closedReason && <p className="text-sm text-slate-400 mt-1">{g.closedReason}</p>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 

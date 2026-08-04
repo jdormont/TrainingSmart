@@ -238,9 +238,25 @@ export interface ChatContextSnapshot {
   extractedAt: Date;
 }
 
-export interface UserMemory {
+export interface MemoryRollupInput {
+  periodDays: number;
+  activityCount: number;
+  weeklyVolumeTrend?: { thisWeek: number; lastWeek: number; pctChange: number };
+  avgRecoveryScore?: number;
+  recoveryTrend?: 'improving' | 'stable' | 'declining';
+  healthMetricsSnapshot?: {
+    load: number;
+    consistency: number;
+    endurance: number;
+    intensity: number;
+    efficiency: number;
+  };
+  notableFlags?: string[];
+}
+
+/** Durable athlete traits — physiology baselines, standing preferences, behavioral patterns. Rarely changes across goal cycles. */
+export interface AthleteProfile {
   userId: string;
-  goals: string[];
   constraints: {
     timeAvailability?: string;
     equipment?: string[];
@@ -260,7 +276,6 @@ export interface UserMemory {
   narrative: string;
   previousNarrative?: string;
   confidenceScores: {
-    goals: number;
     constraints: number;
     preferences: number;
   };
@@ -269,21 +284,65 @@ export interface UserMemory {
   createdAt: Date;
 }
 
-export interface MemoryRollupInput {
-  periodDays: number;
+export type GoalStatus = 'active' | 'completed' | 'abandoned';
+export type GoalSource = 'chat' | 'manual' | 'onboarding' | 'backfill';
+
+export interface Goal {
+  id: string;
+  userId: string;
+  status: GoalStatus;
+  title: string;
+  description?: string;
+  targetDate?: string; // ISO date (YYYY-MM-DD)
+  blockStartDate?: string;
+  blockEndDate?: string;
+  eventType?: string;
+  successCriteria: Array<{ metric: string; target: number; unit?: string }>;
+  confidenceScore?: number;
+  source: GoalSource;
+  sourceSessionIds: string[];
+  closedAt?: Date;
+  closedReason?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type FtpSource = 'manual' | 'chat_reported' | 'zwift_test' | 'strava_estimate' | 'heuristic';
+export type FtpConfidence = 'confirmed' | 'estimated';
+
+export interface FtpHistoryEntry {
+  id: string;
+  ftpWatts: number;
+  effectiveDate: string; // ISO date
+  source: FtpSource;
+  confidence: FtpConfidence;
+  note?: string;
+  createdAt: Date;
+}
+
+export interface RecentActivityNote {
+  id: string;
+  note: string;
+  noteDate: string; // ISO date
+  source: 'chat' | 'system';
+  createdAt: Date;
+}
+
+export interface PowerCurveRollup {
+  windowDays: number;
+  curve: Record<string, number>; // watts per duration bucket, e.g. { "5s": 850, "1m": 320, "20m": 235 }
+  estimatedCurve?: Record<string, number>;
   activityCount: number;
-  weeklyVolumeTrend?: { thisWeek: number; lastWeek: number; pctChange: number };
-  avgRecoveryScore?: number;
-  recoveryTrend?: 'improving' | 'stable' | 'declining';
-  ftpTrend?: { current?: number; pctChange30d?: number };
-  healthMetricsSnapshot?: {
-    load: number;
-    consistency: number;
-    endurance: number;
-    intensity: number;
-    efficiency: number;
-  };
-  notableFlags?: string[];
+}
+
+/** Composed context assembled for AI prompt injection — chat, plan generation, and analysis all read from this shape. */
+export interface AthleteMemoryContext {
+  profile: AthleteProfile | null;
+  activeGoal: Goal | null;
+  goalHistory: Goal[];
+  currentFtp: FtpHistoryEntry | null;
+  powerCurve: PowerCurveRollup | null;
+  recentNotes: RecentActivityNote[];
 }
 
 export interface TrainingPlan {
