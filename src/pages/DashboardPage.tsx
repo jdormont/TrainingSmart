@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useDashboardData } from '../hooks/useDashboardData';
 
@@ -26,8 +26,6 @@ import { AnalyticsContainer } from '../components/dashboard/AnalyticsContainer';
 import { ActivityCard } from '../components/dashboard/ActivityCard';
 import { WorkoutDetailModal } from '../components/dashboard/WorkoutDetailModal';
 import { ActivityDetailModal } from '../components/dashboard/ActivityDetailModal';
-import { IntakeWizard } from '../components/onboarding/IntakeWizard'; // Import IntakeWizard
-import { getUserOnboardingStatus } from '../services/onboardingService';
 import { useAuth } from '../contexts/AuthContext';
 import type { CoachSpecialization, FitnessMode } from '../types';
 import { SmartWorkoutPreview } from '../components/dashboard/SmartWorkoutPreview';
@@ -55,7 +53,6 @@ const COACH_BADGE: Record<CoachSpecialization, { label: string; emoji: string }>
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { userProfile } = useAuth();
 
@@ -75,7 +72,6 @@ export const DashboardPage: React.FC = () => {
   const [selectedActivity, setSelectedActivity] = useState<StravaActivity | null>(null);
   const [showAllActivities, setShowAllActivities] = useState(false);
   // const [displayedActivities, setDisplayedActivities] = useState<StravaActivity[]>([]); // Removed state
-  const [showWizard, setShowWizard] = useState(false);
   const [insightLoading, setInsightLoading] = useState(false);
 
   // Smart Picker State for Dashboard
@@ -137,26 +133,6 @@ export const DashboardPage: React.FC = () => {
     return showAllActivities ? activities : activities.slice(0, INITIAL_ACTIVITIES_COUNT);
   }, [activities, showAllActivities]);
 
-  // Handle Onboarding Check (Separate side effect)
-  const isDemo = searchParams.get('demo') === 'true';
-  useEffect(() => {
-    const checkOnboarding = async () => {
-      if (isDemo || loading) return;
-
-      try {
-        const isOnboarded = await getUserOnboardingStatus();
-        setShowWizard(!isOnboarded);
-      } catch (error) {
-        console.error('Failed to check onboarding status:', error);
-      }
-    };
-    checkOnboarding();
-  }, [isDemo, loading]);
-
-  function handleWizardComplete() {
-    setShowWizard(false);
-    window.location.reload();
-  }
 
   // Note: handleEnterDemoMode is no longer needed as it is handled by URL param + Hook
 
@@ -438,11 +414,6 @@ export const DashboardPage: React.FC = () => {
             </ul>
           </div>
         </div>
-
-        {/* Intake Wizard Modal - Always render if needed */}
-        {showWizard && (
-          <IntakeWizard onComplete={handleWizardComplete} />
-        )}
       </div>
     );
   }
@@ -782,11 +753,6 @@ export const DashboardPage: React.FC = () => {
               queryClient.invalidateQueries({ queryKey: ['dashboard-data'] });
             }}
           />
-        )}
-
-        {/* Intake Wizard Modal */}
-        {showWizard && (
-          <IntakeWizard onComplete={handleWizardComplete} />
         )}
 
         {/* Smart Picker Modal */}

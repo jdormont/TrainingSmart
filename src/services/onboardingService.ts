@@ -1,6 +1,27 @@
 import { supabase } from './supabaseClient';
-import { userProfileService } from './userProfileService';
-import type { ActivityMixItem, CoachSpecialization, FitnessLevel, FitnessMode, OnboardingProfile } from '../types';
+import { goalsService } from './goalsService';
+import { athleteProfileService } from './athleteProfileService';
+import type { ActivityMixItem, ActivityType, CoachSpecialization, FitnessLevel, FitnessMode, OnboardingProfile } from '../types';
+
+export const GOAL_OPTIONS = [
+  { value: 'get_back_into_it', label: 'Get back into it', description: "I've had a break and want to rebuild consistency" },
+  { value: 'train_for_event', label: 'Train for an event', description: 'Race, competition, or a specific goal date' },
+  { value: 'build_strength', label: 'Build strength', description: 'Lift more, move better, get stronger' },
+  { value: 'stay_consistent', label: 'Stay consistent', description: 'Show up regularly and keep momentum' },
+  { value: 'explore_activities', label: 'Explore new activities', description: "I want to try things I haven't done before" },
+] as const;
+
+const ACTIVITY_LABELS: Record<ActivityType, string> = {
+  bike: 'Cycling', run: 'Running', strength: 'Strength training',
+  yoga: 'Yoga', hiking: 'Hiking', swim: 'Swimming', rest: 'Rest',
+};
+
+const FITNESS_LABELS: Record<FitnessLevel, string> = {
+  beginner: 'just getting started',
+  returning: 'getting back into it after time away',
+  intermediate: 'trains regularly and is comfortable pushing',
+  advanced: 'well-trained and performance-focused',
+};
 
 /**
  * Determines coach specialization and fitness mode from onboarding answers.
@@ -76,22 +97,57 @@ export const saveOnboardingProfile = async (
   return derived;
 };
 
-export const getUserOnboardingStatus = async (): Promise<boolean> => {
+/**
+ * Seeds the new lifecycle-tracked coach memory (an active goal + durable
+ * athlete_profile traits) from conversational onboarding answers, so a new
+ * user's stated goal/constraints/preferences get the same structured
+ * treatment the AI coach gives goals created later via chat or Settings.
+ *
+ * Best-effort: onboarding completion itself (saveOnboardingProfile) must
+ * already have succeeded before this runs, and a failure here should never
+ * block the user from reaching their dashboard — errors are logged, not thrown.
+ */
+export const seedCoachMemoryFromOnboarding = async (answers: {
+  primary_goal: string;
+  optional_event: string;
+  activity_mix: ActivityMixItem[];
+  weekly_availability_days: number;
+  weekly_availability_duration: number;
+  fitness_level: FitnessLevel;
+}): Promise<void> => {
+  const goalOption = GOAL_OPTIONS.find(o => o.value === answers.primary_goal);
+  const goalTitle = goalOption?.label ?? answers.primary_goal;
+
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return true; // Treat unauthenticated as "no onboarding needed" for now to avoid blocking
-
-    // Check if user has specific onboarding flag or profile data
-    // Fetch profile and check for critical onboarding fields
-    const profile = await userProfileService.getUserProfile();
-    
-    // Check if profile exists AND has key onboarding fields populated
-    // We check training_goal or coach_persona as indicators of completed wizard
-    if (!profile) return false;
-
-    return !!(profile.training_goal || profile.coach_persona);
+    await goalsService.createActiveGoal({
+      title: goalTitle,
+      description: answers.optional_event || undefined,
+      source: 'onboarding',
+    });
   } catch (error) {
-    console.warn('Error checking onboarding status:', error);
-    return true; // Default to onboarded to avoid blocking on error
+    console.error('Failed to create active goal from onboarding:', error);
+  }
+
+  const workoutTypes = [...answers.activity_mix]
+    .sort((a, b) => a.priority - b.priority)
+    .map(a => ACTIVITY_LABELS[a.type] ?? a.type);
+  const topActivities = workoutTypes.slice(0, 2).join(' and ');
+  const fitnessDescription = FITNESS_LABELS[answers.fitness_level] ?? answers.fitness_level;
+
+  const narrative = `New TrainingSmart user, ${fitnessDescription}. Trains ${answers.weekly_availability_days}x/week, `
+    + `~${answers.weekly_availability_duration} min/session${topActivities ? `, prioritizing ${topActivities}` : ''}.`;
+
+  try {
+    await athleteProfileService.editProfile({
+      constraints: {
+        timeAvailability: `${answers.weekly_availability_days} days/week, ${answers.weekly_availability_duration} min/session`,
+      },
+      preferences: {
+        workoutTypes,
+      },
+      narrative,
+    });
+  } catch (error) {
+    console.error('Failed to seed athlete profile from onboarding:', error);
   }
 };

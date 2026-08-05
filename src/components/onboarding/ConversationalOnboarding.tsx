@@ -1,19 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { saveOnboardingProfile } from '../../services/onboardingService';
+import { saveOnboardingProfile, seedCoachMemoryFromOnboarding, GOAL_OPTIONS } from '../../services/onboardingService';
 import type { ActivityType, ActivityMixItem, FitnessLevel, CoachSpecialization } from '../../types';
 import { ROUTES } from '../../utils/constants';
 
 // ── Data ─────────────────────────────────────────────────────────────────────
-
-const GOAL_OPTIONS = [
-  { value: 'get_back_into_it', label: 'Get back into it', description: "I've had a break and want to rebuild consistency" },
-  { value: 'train_for_event', label: 'Train for an event', description: 'Race, competition, or a specific goal date' },
-  { value: 'build_strength', label: 'Build strength', description: 'Lift more, move better, get stronger' },
-  { value: 'stay_consistent', label: 'Stay consistent', description: 'Show up regularly and keep momentum' },
-  { value: 'explore_activities', label: 'Explore new activities', description: "I want to try things I haven't done before" },
-] as const;
 
 const ACTIVITY_OPTIONS: { type: ActivityType; label: string; emoji: string }[] = [
   { type: 'bike', label: 'Cycling', emoji: '🚴' },
@@ -153,6 +145,18 @@ export const ConversationalOnboarding: React.FC = () => {
         weekly_availability_duration: form.weekly_availability_duration,
         fitness_level: form.fitness_level as FitnessLevel,
       });
+
+      // Best-effort: seeds the lifecycle-tracked goal + durable athlete_profile
+      // traits from these answers. Never blocks onboarding completion.
+      await seedCoachMemoryFromOnboarding({
+        primary_goal: form.primary_goal,
+        optional_event: form.optional_event,
+        activity_mix: form.activity_mix,
+        weekly_availability_days: form.weekly_availability_days,
+        weekly_availability_duration: form.weekly_availability_duration,
+        fitness_level: form.fitness_level as FitnessLevel,
+      });
+
       setAssignedCoach(coach_specialization);
       setStep(TOTAL_STEPS); // advance to completion screen
     } catch (err) {
