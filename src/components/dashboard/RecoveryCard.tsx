@@ -2,6 +2,7 @@ import React from 'react';
 import { Moon, Heart, Activity, Wind, AlertCircle, CheckCircle2, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { OuraSleepData, OuraReadinessData, DailyMetric } from '../../types';
 import { healthMetricsService } from '../../services/healthMetricsService';
+import { readinessService } from '../../services/readinessService';
 
 
 interface RecoveryCardProps {
@@ -123,35 +124,21 @@ export const RecoveryCard: React.FC<RecoveryCardProps> = ({
 
   // Fallback for non-Oura (e.g. Manual/Apple Watch)
   const isOura = !!sleepData;
-  
-  // PRIMARY SCORE LOGIC:
-  // 1. Use Oura Readiness Score if available (User Expectation)
-  // 2. Use Calculated Biological Readiness (Custom Logic)
-  // 3. Fallback to raw DailyMetric score
-  let score = dailyMetric?.recovery_score || 0;
-  
-  if (readinessData?.score && readinessData.score > 0) {
-      score = readinessData.score;
-  } else if (biologicalReadiness) {
-      score = biologicalReadiness.score;
-  }
 
-  // STATUS LOGIC:
-  // Map score to status label.
-  // >= 80: Prime (Green)
-  // 50-79: Good (Yellow)
-  // < 50: Rest Required (Red)
-  // Override status if Biological Readiness detected a specific 'Rest Required' tripwire (e.g. fever)
-  let status = score >= 80 ? 'Prime' : score >= 50 ? 'Good' : 'Rest Required';
-  
-  if (biologicalReadiness?.status === 'Rest Required') {
-      // Respect the sickness tripwire even if score is high
-      status = 'Rest Required'; 
-  }
-  
+  // Canonical score/status resolution, shared with the rest of the dashboard
+  // (readiness callouts, adjustment chips, weekly insight) via readinessService.
+  const verdict = readinessService.getReadinessVerdict({
+    dailyMetric,
+    readinessData,
+    sleepData,
+    sleepHistory,
+  });
+  const score = verdict.score;
+  const status = verdict.statusLabel;
+
   // Status Message
   let statusMessage = "Recover well to perform better.";
-  if (biologicalReadiness?.details.temperature.isElevated) {
+  if (verdict.isSick) {
       statusMessage = "Elevated Temp detected (+0.8°C). Focus on rest.";
   } else if (status === 'Prime') {
       statusMessage = "CNS is primed. Green light for intensity.";

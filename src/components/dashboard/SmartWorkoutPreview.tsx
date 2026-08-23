@@ -20,8 +20,9 @@ export const SmartWorkoutPreview: React.FC<SmartWorkoutPreviewProps> = ({
 }) => {
     const navigate = useNavigate();
 
-    // This card only renders the planned-workout state. The "no workout" surface
-    // is owned by TodaysFocusCard; callers gate this with {nextWorkout && ...}.
+    // This card only renders the planned-workout state; callers gate the
+    // "no workout" case themselves. Only used by the marketing HomePage now —
+    // the real dashboard uses TodayCard, which absorbed this component's logic.
     if (!nextWorkout) return null;
 
     {

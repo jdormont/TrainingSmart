@@ -419,12 +419,20 @@ Generate a JSON response with:
     activities: StravaActivity[],
     sleepData: OuraSleepData[] = [],
     readinessData: OuraReadinessData[] = [],
-    dailyMetrics: DailyMetric[] = []
+    dailyMetrics: DailyMetric[] = [],
+    canonicalReadinessScore?: number
   ): Promise<WeeklyInsight> {
     console.log('Generating weekly insight...');
 
-    // Analyze current Bio-Aware metrics first to get latest scores for cache validation
+    // Analyze current Bio-Aware metrics first to get latest scores for cache validation.
+    // The Fresh/Fatigued/Balanced *trend* classification stays local to this service
+    // (it's a distinct signal from "today's" score), but the displayed number is
+    // pinned to the app-wide canonical readiness score when one is provided, so this
+    // card never shows a different number than the rest of the dashboard.
     const recoveryStatus = this.analyzeRecoveryStatus(dailyMetrics, readinessData);
+    if (canonicalReadinessScore !== undefined) {
+      recoveryStatus.score = canonicalReadinessScore;
+    }
     const pacingStatus = this.analyzePacingStatus(activities);
 
     const cached = this.getCachedInsight(

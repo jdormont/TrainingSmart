@@ -4,6 +4,7 @@ import { supabase } from '../services/supabaseClient';
 import { stravaCacheService } from '../services/stravaCacheService';
 import { weeklyInsightService, WeeklyInsight, HealthMetrics } from '../services/weeklyInsightService';
 import { healthMetricsService } from '../services/healthMetricsService';
+import { readinessService, ReadinessVerdict } from '../services/readinessService';
 import { ftpHistoryService } from '../services/ftpHistoryService';
 import { dailyMetricsService } from '../services/dailyMetricsService';
 import { trainingPlansService } from '../services/trainingPlansService';
@@ -34,6 +35,7 @@ interface DashboardData {
   dailyMetrics: DailyMetric[];
   weeklyInsight: WeeklyInsight | null;
   healthMetrics: HealthMetrics | null;
+  readinessVerdict: ReadinessVerdict | null;
   nextWorkout: Workout | null;
   pendingSuggestions: Workout[];
   userStreak: UserStreak | null;
@@ -61,6 +63,12 @@ export const useDashboardData = () => {
         dailyMetrics: [MOCK_DAILY_METRIC],
         weeklyInsight: MOCK_WEEKLY_INSIGHT,
         healthMetrics: MOCK_HEALTH_METRICS,
+        readinessVerdict: readinessService.getReadinessVerdict({
+          dailyMetric: MOCK_DAILY_METRIC,
+          readinessData: MOCK_READINESS_DATA,
+          sleepData: MOCK_SLEEP_DATA,
+          sleepHistory: Array(30).fill(MOCK_SLEEP_DATA),
+        }),
         nextWorkout: MOCK_NEXT_WORKOUT,
         pendingSuggestions: [],
         userStreak: {
@@ -121,7 +129,7 @@ export const useDashboardData = () => {
         // Return mostly empty data structure for disconnected state
         return {
            athlete: null, activities: [], weeklyStats: null, sleepData: null, sleepHistory: [], readinessData: null,
-           dailyMetric: null, dailyMetrics: [], weeklyInsight: null, healthMetrics: null, nextWorkout: null,
+           dailyMetric: null, dailyMetrics: [], weeklyInsight: null, healthMetrics: null, readinessVerdict: null, nextWorkout: null,
            pendingSuggestions: [],
            userStreak: null, isStravaConnected: false, isDemoMode: false, currentUserId: user.id
         };
@@ -277,11 +285,10 @@ export const useDashboardData = () => {
       console.error('Failed to fetch/sync recovery data', e);
     }
 
-
     // 5. Insights & Health Metrics (Remaining Logic)
     let weeklyInsight: WeeklyInsight | null = null;
     let healthMetrics: HealthMetrics | null = null;
-    
+
     // We construct arrays from dailyMetrics for calculation
     // This allows insights to work offline using stored data
     const sleepArray: OuraSleepData[] = recentMetrics
@@ -310,6 +317,15 @@ export const useDashboardData = () => {
             temperature_trend_deviation: 0, timestamp: '', contributors: {}
         }));
 
+    // Canonical "today's readiness" verdict — computed once, shared by the
+    // weekly insight, the today card, and the recovery tab so they always
+    // agree on the same score/status instead of each re-deriving their own.
+    const readinessVerdict = readinessService.getReadinessVerdict({
+      dailyMetric,
+      readinessData,
+      sleepData,
+      sleepHistory: sleepArray,
+    });
 
     try {
       weeklyInsight = await weeklyInsightService.generateWeeklyInsight(
@@ -317,7 +333,8 @@ export const useDashboardData = () => {
         activitiesData,
         sleepArray,
         readinessArray,
-        recentMetrics
+        recentMetrics,
+        readinessVerdict.score
       );
     } catch (e) { console.warn('Insight failed', e); }
 
@@ -345,7 +362,6 @@ export const useDashboardData = () => {
       pendingSuggestions = suggestions;
     } catch(e) { console.warn('Next workout / suggestions failed', e); }
 
-
     return {
       athlete: athleteData,
       activities: activitiesData,
@@ -357,6 +373,7 @@ export const useDashboardData = () => {
       dailyMetrics: recentMetrics,
       weeklyInsight,
       healthMetrics,
+      readinessVerdict,
       nextWorkout,
       pendingSuggestions,
       userStreak: streakData,
