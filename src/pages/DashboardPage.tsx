@@ -28,8 +28,7 @@ import { WorkoutDetailModal } from '../components/dashboard/WorkoutDetailModal';
 import { ActivityDetailModal } from '../components/dashboard/ActivityDetailModal';
 import { useAuth } from '../contexts/AuthContext';
 import type { CoachSpecialization, FitnessMode } from '../types';
-import { SmartWorkoutPreview } from '../components/dashboard/SmartWorkoutPreview';
-import { TodaysFocusCard } from '../components/dashboard/TodaysFocusCard';
+import { TodayCard } from '../components/dashboard/TodayCard';
 import { ConsistencyHeatmap } from '../components/dashboard/ConsistencyHeatmap';
 import { DashboardSkeleton } from '../components/skeletons/DashboardSkeleton';
 import { ROUTES } from '../utils/constants';
@@ -40,7 +39,6 @@ import { StreakWidget } from '../components/dashboard/StreakWidget';
 import { LevelUpModal } from '../components/common/LevelUpModal';
 import { milestoneService } from '../services/milestoneService';
 import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
-import { WorkoutAdjustmentChips } from '../components/dashboard/WorkoutAdjustmentChips';
 
 
 
@@ -116,6 +114,7 @@ export const DashboardPage: React.FC = () => {
     dailyMetrics = [],
     weeklyInsight = null,
     healthMetrics = null,
+    readinessVerdict = null,
     nextWorkout = null,
     pendingSuggestions = [],
     userStreak = null,
@@ -523,28 +522,16 @@ export const DashboardPage: React.FC = () => {
             {/* Main column */}
             <div className="lg:col-span-2 space-y-6">
               {/* Today's workout */}
-              {nextWorkout && (
-                <SmartWorkoutPreview
-                  nextWorkout={nextWorkout}
-                  dailyMetrics={dailyMetric}
-                  onViewDetails={setSelectedWorkout}
-                  onOpenPicker={handleOpenPicker}
-                />
-              )}
-              <TodaysFocusCard 
+              <TodayCard
+                nextWorkout={nextWorkout}
                 dailyMetric={dailyMetric}
+                readinessVerdict={readinessVerdict}
                 coachSpecialization={coachSpecialization}
                 isDemoMode={isDemoMode}
-                nextWorkout={nextWorkout}
+                onViewDetails={setSelectedWorkout}
                 onOpenPicker={handleOpenPicker}
+                onWorkoutUpdated={refreshNextWorkout}
               />
-              {nextWorkout && (
-                <WorkoutAdjustmentChips
-                  workout={nextWorkout}
-                  onWorkoutUpdated={refreshNextWorkout}
-                  recoveryScore={dailyMetric?.recovery_score ?? undefined}
-                />
-              )}
 
               {/* Consistency Heatmap */}
               <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
@@ -605,28 +592,16 @@ export const DashboardPage: React.FC = () => {
           {/* Main Stage (Left/Top) */}
           <div className="lg:col-span-2 space-y-6">
               <div className="lg:hidden mb-6">
-                {nextWorkout && (
-                  <SmartWorkoutPreview
-                    nextWorkout={nextWorkout}
-                    dailyMetrics={dailyMetric}
-                    onViewDetails={setSelectedWorkout}
-                    onOpenPicker={handleOpenPicker}
-                  />
-                )}
-                <TodaysFocusCard
+                <TodayCard
+                  nextWorkout={nextWorkout}
                   dailyMetric={dailyMetric}
+                  readinessVerdict={readinessVerdict}
                   coachSpecialization={coachSpecialization}
                   isDemoMode={isDemoMode}
-                  nextWorkout={nextWorkout}
+                  onViewDetails={setSelectedWorkout}
                   onOpenPicker={handleOpenPicker}
+                  onWorkoutUpdated={refreshNextWorkout}
                 />
-                {nextWorkout && (
-                  <WorkoutAdjustmentChips
-                    workout={nextWorkout}
-                    onWorkoutUpdated={refreshNextWorkout}
-                    recoveryScore={dailyMetric?.recovery_score ?? undefined}
-                  />
-                )}
               </div>
               <DashboardHero
                 athlete={athlete}
@@ -655,28 +630,16 @@ export const DashboardPage: React.FC = () => {
           {/* Right Rail (Recent Activities) */}
           <div className="lg:col-span-1 space-y-4">
             <div className="hidden lg:block">
-              {nextWorkout && (
-                <SmartWorkoutPreview
-                  nextWorkout={nextWorkout}
-                  dailyMetrics={dailyMetric}
-                  onViewDetails={setSelectedWorkout}
-                  onOpenPicker={handleOpenPicker}
-                />
-              )}
-              <TodaysFocusCard 
+              <TodayCard
+                nextWorkout={nextWorkout}
                 dailyMetric={dailyMetric}
+                readinessVerdict={readinessVerdict}
                 coachSpecialization={coachSpecialization}
                 isDemoMode={isDemoMode}
-                nextWorkout={nextWorkout}
+                onViewDetails={setSelectedWorkout}
                 onOpenPicker={handleOpenPicker}
+                onWorkoutUpdated={refreshNextWorkout}
               />
-              {nextWorkout && (
-                <WorkoutAdjustmentChips
-                  workout={nextWorkout}
-                  onWorkoutUpdated={refreshNextWorkout}
-                  recoveryScore={dailyMetric?.recovery_score ?? undefined}
-                />
-              )}
             </div>
 
             <div className="sticky top-4 space-y-4">
