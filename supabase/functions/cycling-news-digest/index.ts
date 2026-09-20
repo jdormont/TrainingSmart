@@ -34,6 +34,82 @@ function getJaccardSimilarity(title1: string, title2: string): number {
   return intersection.size / union.size;
 }
 
+// Fetch with a hard timeout so one slow/hanging feed can't stall the whole digest.
+async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      }
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Attempt to salvage a usable object out of a truncated JSON response (e.g. the
+// model's output was cut off after hitting max_tokens mid-array). Walks the text
+// tracking bracket depth (ignoring string contents) to find the longest prefix that
+// ends right after a complete array element, then closes out any still-open
+// containers and reparses. Returns null if no valid prefix can be recovered.
+function repairTruncatedJson(text: string): unknown | null {
+  const cutPoints: number[] = [];
+  const stack: string[] = [];
+  let inString = false;
+  let escapeNext = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escapeNext) escapeNext = false;
+      else if (ch === "\\") escapeNext = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === "{" || ch === "[") {
+      stack.push(ch);
+    } else if (ch === "}" || ch === "]") {
+      stack.pop();
+      if (stack.length > 0 && stack[stack.length - 1] === "[") {
+        cutPoints.push(i + 1);
+      }
+    }
+  }
+
+  for (let idx = cutPoints.length - 1; idx >= 0; idx--) {
+    const prefix = text.slice(0, cutPoints[idx]);
+
+    const closeStack: string[] = [];
+    let s = false, esc = false;
+    for (let i = 0; i < prefix.length; i++) {
+      const ch = prefix[i];
+      if (s) {
+        if (esc) esc = false;
+        else if (ch === "\\") esc = true;
+        else if (ch === '"') s = false;
+        continue;
+      }
+      if (ch === '"') { s = true; continue; }
+      if (ch === "{" || ch === "[") closeStack.push(ch);
+      else if (ch === "}" || ch === "]") closeStack.pop();
+    }
+
+    const closing = closeStack.reverse().map((c) => (c === "{" ? "}" : "]")).join("");
+
+    try {
+      return JSON.parse(prefix + closing);
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight (OPTIONS)
   if (req.method === "OPTIONS") return handleOptions(req);
@@ -100,28 +176,24 @@ Deno.serve(async (req: Request) => {
     ];
 
     const parser = new Parser();
-    const allArticles: RawArticle[] = [];
+    const FEED_TIMEOUT_MS = 8000;
 
-    for (const feed of feeds) {
-      try {
+    // Fetch all feeds concurrently (each bounded by its own timeout) instead of
+    // sequentially — a single slow/hanging feed used to stall the whole request.
+    const feedResults = await Promise.allSettled(
+      feeds.map(async (feed) => {
         console.log(`Fetching RSS feed: ${feed.url}`);
-        const res = await fetch(feed.url, {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-          }
-        });
-
+        const res = await fetchWithTimeout(feed.url, FEED_TIMEOUT_MS);
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}`);
         }
-
         const xmlText = await res.text();
         const parsedFeed = await parser.parseString(xmlText);
-
+        const articles: RawArticle[] = [];
         if (parsedFeed.items) {
           for (const item of parsedFeed.items) {
             if (item.title && item.link) {
-              allArticles.push({
+              articles.push({
                 title: item.title.trim(),
                 description: (item.contentSnippet || item.content || "").trim(),
                 link: item.link.trim(),
@@ -130,10 +202,18 @@ Deno.serve(async (req: Request) => {
             }
           }
         }
-      } catch (err) {
-        console.warn(`Failed to fetch/parse feed ${feed.url}:`, err.message);
+        return articles;
+      })
+    );
+
+    const allArticles: RawArticle[] = [];
+    feedResults.forEach((result, i) => {
+      if (result.status === "fulfilled") {
+        allArticles.push(...result.value);
+      } else {
+        console.warn(`Failed to fetch/parse feed ${feeds[i].url}:`, result.reason?.message ?? result.reason);
       }
-    }
+    });
 
     // If no articles could be loaded at all, return empty state instead of failing
     if (allArticles.length === 0) {
@@ -165,8 +245,17 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Take top ~20 items
-    const itemsToSummarize = uniqueArticles.slice(0, 20);
+    // Take top ~16 items. Also cap each description length — full RSS descriptions
+    // can run to several hundred words, which bloats the prompt and pushes the
+    // model's output (which echoes/derives from them) closer to the max_tokens
+    // ceiling, raising the risk of a mid-response truncation.
+    const MAX_DESCRIPTION_CHARS = 300;
+    const itemsToSummarize = uniqueArticles.slice(0, 16).map((art) => ({
+      ...art,
+      description: art.description.length > MAX_DESCRIPTION_CHARS
+        ? `${art.description.slice(0, MAX_DESCRIPTION_CHARS)}...`
+        : art.description
+    }));
 
     // 5. Call Claude to synthesize digest
     const systemPrompt = `You are a cycling sports editor. Based on the recent articles provided, produce a structured daily digest covering WorldTour, Classics, gravel, and women's events. 
@@ -198,9 +287,11 @@ Return JSON only, no markdown, in this shape:
 Rules:
 1. For each item in 'headlines', 'sourceUrl' MUST exactly match the Source URL of the article it summarizes.
 2. If there are no major active races happening according to the articles, return an empty array [] for 'activeRaces'.
-3. In 'activeRaces', include 2-3 detailed updates in 'keyUpdates' (e.g. Stage Action, The Standings, Today's Stage, or Team News/Attrition specific to the race).
-4. CRITICAL: Any double quotes (") inside the JSON string values (like 'title', 'summary', 'oneLiner', 'overview', or 'text') MUST be escaped as \\" (e.g. \\"not good news for the Tour\\") so that the JSON parser doesn't break. Double check this.
-5. Do not wrap JSON in markdown blocks (e.g. do not use \`\`\`json).`;
+3. In 'activeRaces', include at most 3 races and 2-3 detailed updates in 'keyUpdates' per race (e.g. Stage Action, The Standings, Today's Stage, or Team News/Attrition specific to the race).
+4. Keep every 'summary', 'overview', and 'text' field concise — 1-2 sentences. Do not pad with extra detail.
+5. CRITICAL: Any double quotes (") inside the JSON string values (like 'title', 'summary', 'oneLiner', 'overview', or 'text') MUST be escaped as \\" (e.g. \\"not good news for the Tour\\") so that the JSON parser doesn't break. Double check this.
+6. Do not wrap JSON in markdown blocks (e.g. do not use \`\`\`json).
+7. CRITICAL: Output ONLY the complete, well-formed JSON object described above — never truncate or cut off mid-array. If space is limited, include fewer headlines/races rather than leaving the JSON incomplete.`;
 
     const promptText = `Here are the latest cycling news articles:
 
@@ -217,30 +308,45 @@ Based on the above articles, output the structured daily news digest in valid JS
     const responseText = await callAI({
       systemPrompt,
       messages: [{ role: "user", content: promptText }],
-      maxTokens: 3000,
+      maxTokens: 4096,
       temperature: 0.25,
       jsonMode: true
     });
 
-    let payload;
+    let payload: any;
+    let cleanResponse = responseText.trim();
+    const firstBrace = cleanResponse.indexOf("{");
+    const lastBrace = cleanResponse.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleanResponse = cleanResponse.slice(firstBrace, lastBrace + 1);
+    }
+
     try {
-      let cleanResponse = responseText.trim();
-      const firstBrace = cleanResponse.indexOf("{");
-      const lastBrace = cleanResponse.lastIndexOf("}");
-      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        cleanResponse = cleanResponse.slice(firstBrace, lastBrace + 1);
-      }
       payload = JSON.parse(cleanResponse);
     } catch (err) {
-      console.error("JSON parsing error on AI response:", responseText, err);
-      return new Response(
-        JSON.stringify({ 
-          error: `AI response parsing failed: ${err.message}`,
-          rawResponse: responseText 
-        }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      // The response is likely truncated mid-array (e.g. hit max_tokens). Rather
+      // than fail the whole request, try to salvage the complete items that were
+      // generated before the cutoff.
+      console.warn("Initial JSON parse failed, attempting repair:", err.message);
+      const repaired = repairTruncatedJson(cleanResponse);
+      if (repaired && typeof repaired === "object") {
+        console.warn("Recovered partial digest via JSON repair (response was likely truncated)");
+        payload = repaired;
+      } else {
+        console.error("JSON parsing error on AI response:", responseText, err);
+        return new Response(
+          JSON.stringify({
+            error: `AI response parsing failed: ${err.message}`,
+            rawResponse: responseText
+          }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
+
+    // Normalize shape in case of a repaired/partial payload
+    if (!Array.isArray(payload.headlines)) payload.headlines = [];
+    if (!Array.isArray(payload.activeRaces)) payload.activeRaces = [];
 
     // Set generatedAt in payload
     payload.generatedAt = nowIso;

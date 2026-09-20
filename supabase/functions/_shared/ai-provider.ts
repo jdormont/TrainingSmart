@@ -102,7 +102,11 @@ async function callOpenAI({
   }
 
   const data = await response.json();
-  return data.choices[0].message.content as string;
+  const choice = data.choices[0];
+  if (choice.finish_reason === "length") {
+    console.warn(`[AI] OpenAI response was truncated (hit max_tokens=${maxTokens})`);
+  }
+  return choice.message.content as string;
 }
 
 async function callAnthropic({
@@ -165,6 +169,9 @@ async function callAnthropic({
   }
 
   const data = await response.json();
+  if (data.stop_reason === "max_tokens") {
+    console.warn(`[AI] Anthropic response was truncated (hit max_tokens=${Math.min(maxTokens, ANTHROPIC_MAX_TOKENS)})`);
+  }
   return data.content[0].text as string;
 }
 
