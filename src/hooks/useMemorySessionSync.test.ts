@@ -5,6 +5,7 @@ import { useMemorySessionSync } from './useMemorySessionSync';
 import { athleteProfileService } from '../services/athleteProfileService';
 import { goalsService } from '../services/goalsService';
 import { recentActivityNotesService } from '../services/recentActivityNotesService';
+import { memoryRollupService } from '../services/memoryRollupService';
 import type { ChatSession } from '../types';
 
 vi.mock('../services/athleteProfileService', () => ({
@@ -22,6 +23,12 @@ vi.mock('../services/goalsService', () => ({
 vi.mock('../services/recentActivityNotesService', () => ({
   recentActivityNotesService: {
     pruneExpired: vi.fn(),
+  },
+}));
+
+vi.mock('../services/memoryRollupService', () => ({
+  memoryRollupService: {
+    buildRollup: vi.fn(),
   },
 }));
 
@@ -52,6 +59,7 @@ describe('useMemorySessionSync', () => {
     vi.mocked(athleteProfileService.mergeFromSession).mockResolvedValue(emptyMergeResult);
     vi.mocked(goalsService.getActiveGoal).mockResolvedValue(null);
     vi.mocked(recentActivityNotesService.pruneExpired).mockResolvedValue(undefined);
+    vi.mocked(memoryRollupService.buildRollup).mockResolvedValue(undefined);
     setVisibility('visible');
   });
 
@@ -178,12 +186,15 @@ describe('useMemorySessionSync', () => {
     expect(athleteProfileService.mergeFromSession).toHaveBeenCalledWith('s1', session.messages, undefined);
   });
 
-  it('builds a recovery rollup from daily metrics and passes it through to the sync call', async () => {
+  it('builds the memory rollup from the latest daily metrics and passes the result through to the sync call', async () => {
     const session = buildSession('s1', 2);
     const dailyMetrics = [
       { user_id: 'u1', date: '2026-06-20', recovery_score: 80 },
       { user_id: 'u1', date: '2026-06-21', recovery_score: 60 },
     ];
+    const rollup = { periodDays: 2, activityCount: 5, avgRecoveryScore: 70, recoveryTrend: 'stable' as const };
+    vi.mocked(memoryRollupService.buildRollup).mockResolvedValue(rollup);
+
     renderHook(() => useMemorySessionSync(session, false, dailyMetrics as any));
 
     await act(async () => {
@@ -191,11 +202,8 @@ describe('useMemorySessionSync', () => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
 
-    expect(athleteProfileService.mergeFromSession).toHaveBeenCalledWith(
-      's1',
-      session.messages,
-      expect.objectContaining({ periodDays: 2, avgRecoveryScore: 70 }),
-    );
+    expect(memoryRollupService.buildRollup).toHaveBeenCalledWith(dailyMetrics);
+    expect(athleteProfileService.mergeFromSession).toHaveBeenCalledWith('s1', session.messages, rollup);
   });
 
   it('queues a pending goal-completion suggestion without closing the goal', async () => {

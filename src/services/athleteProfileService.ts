@@ -3,6 +3,7 @@ import { supabaseChatService } from './supabaseChatService';
 import { dailyMetricsService } from './dailyMetricsService';
 import { goalsService } from './goalsService';
 import { recentActivityNotesService } from './recentActivityNotesService';
+import { memoryRollupService } from './memoryRollupService';
 import type { AthleteProfile, ChatMessage, Goal, MemoryRollupInput } from '../types';
 
 const HISTORY_BACKFILL_MESSAGE_CAP = 200;
@@ -219,35 +220,6 @@ class AthleteProfileService {
     };
   }
 
-  private buildRollupFromMetrics(dailyMetrics: { recovery_score?: number | null }[]): MemoryRollupInput | undefined {
-    if (dailyMetrics.length === 0) return undefined;
-
-    const recoveryScores = dailyMetrics
-      .map(m => m.recovery_score)
-      .filter((s): s is number => typeof s === 'number');
-
-    if (recoveryScores.length === 0) {
-      return { periodDays: dailyMetrics.length, activityCount: 0 };
-    }
-
-    const avgRecoveryScore = Math.round(
-      recoveryScores.reduce((sum, s) => sum + s, 0) / recoveryScores.length,
-    );
-
-    const half = Math.floor(recoveryScores.length / 2);
-    const recentAvg = recoveryScores.slice(0, half).reduce((s, v) => s + v, 0) / Math.max(half, 1);
-    const olderAvg = recoveryScores.slice(half).reduce((s, v) => s + v, 0) / Math.max(recoveryScores.length - half, 1);
-    const recoveryTrend: MemoryRollupInput['recoveryTrend'] =
-      recentAvg - olderAvg > 5 ? 'improving' : olderAvg - recentAvg > 5 ? 'declining' : 'stable';
-
-    return {
-      periodDays: dailyMetrics.length,
-      activityCount: 0,
-      avgRecoveryScore,
-      recoveryTrend,
-    };
-  }
-
   /**
    * Builds a one-time draft profile from the user's full chat history plus a
    * recent recovery rollup, without persisting anything. The caller (Settings
@@ -273,7 +245,8 @@ class AthleteProfileService {
       dailyMetricsService.getRecentMetrics(HISTORY_BACKFILL_ROLLUP_DAYS).catch(() => []),
     ]);
 
-    const merged = await this.mergeWithAI(allMessages, existingProfile, activeGoal, this.buildRollupFromMetrics(dailyMetrics));
+    const rollup = await memoryRollupService.buildRollup(dailyMetrics, HISTORY_BACKFILL_ROLLUP_DAYS);
+    const merged = await this.mergeWithAI(allMessages, existingProfile, activeGoal, rollup);
     return merged.profile;
   }
 
