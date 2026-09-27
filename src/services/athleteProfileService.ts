@@ -4,6 +4,7 @@ import { dailyMetricsService } from './dailyMetricsService';
 import { goalsService } from './goalsService';
 import { recentActivityNotesService } from './recentActivityNotesService';
 import { memoryRollupService } from './memoryRollupService';
+import { chatMemorySyncStateService } from './chatMemorySyncStateService';
 import type { AthleteProfile, ChatMessage, Goal, MemoryRollupInput } from '../types';
 
 const HISTORY_BACKFILL_MESSAGE_CAP = 200;
@@ -196,6 +197,14 @@ class AthleteProfileService {
     if (auditError) {
       console.error('Error inserting profile audit row:', auditError);
     }
+
+    // Only recorded once the merge above has actually succeeded, so a failed
+    // merge leaves the previous watermark in place for the caller to retry —
+    // see chatMemorySyncStateService for why this can't be advanced up front.
+    const syncedUserMessageCount = messages.filter(m => m.role === 'user').length;
+    await chatMemorySyncStateService.setSyncedMessageCount(sessionId, syncedUserMessageCount).catch(err =>
+      console.error('Error persisting memory sync watermark:', err),
+    );
 
     if (merged.recentActivityNotes && merged.recentActivityNotes.length > 0) {
       await Promise.all(

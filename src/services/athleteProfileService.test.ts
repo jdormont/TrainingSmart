@@ -3,6 +3,7 @@ import { athleteProfileService } from './athleteProfileService';
 import { supabase } from './supabaseClient';
 import { goalsService } from './goalsService';
 import { recentActivityNotesService } from './recentActivityNotesService';
+import { chatMemorySyncStateService } from './chatMemorySyncStateService';
 import type { ChatMessage } from '../types';
 
 const mockChain = {
@@ -32,6 +33,12 @@ vi.mock('./goalsService', () => ({
 vi.mock('./recentActivityNotesService', () => ({
   recentActivityNotesService: {
     add: vi.fn(),
+  },
+}));
+
+vi.mock('./chatMemorySyncStateService', () => ({
+  chatMemorySyncStateService: {
+    setSyncedMessageCount: vi.fn(),
   },
 }));
 
@@ -90,6 +97,7 @@ describe('athleteProfileService', () => {
       error: null,
     } as any);
     vi.mocked(goalsService.getActiveGoal).mockResolvedValue(null);
+    vi.mocked(chatMemorySyncStateService.setSyncedMessageCount).mockResolvedValue(undefined);
   });
 
   describe('getProfile', () => {
@@ -135,6 +143,21 @@ describe('athleteProfileService', () => {
       expect(result.goalCompletionSuggested).toBeNull();
       expect(result.ftpReportSuggested).toBeNull();
       expect(goalsService.updateActiveGoal).not.toHaveBeenCalled();
+
+      // Watermark persisted to the count of *user* messages folded in, so the
+      // next activation can tell exactly how much backlog (if any) remains.
+      expect(chatMemorySyncStateService.setSyncedMessageCount).toHaveBeenCalledWith('session-2', userMessages.length);
+    });
+
+    it('does not persist the sync watermark when the edge function call fails, leaving the backlog for retry', async () => {
+      mockChain.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
+      mockFetch.mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'Profile update failed' }) });
+
+      await expect(
+        athleteProfileService.mergeFromSession('session-2', userMessages),
+      ).rejects.toThrow('Profile update failed');
+
+      expect(chatMemorySyncStateService.setSyncedMessageCount).not.toHaveBeenCalled();
     });
 
     it('never closes or creates a goal itself — only surfaces goalCompletionSuggested for user confirmation', async () => {
