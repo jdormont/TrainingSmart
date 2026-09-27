@@ -251,6 +251,12 @@ export interface MemoryRollupInput {
     intensity: number;
     efficiency: number;
   };
+  planAdherence?: {
+    scheduledCount: number;
+    completedCount: number;
+    skippedCount: number;
+    adherencePct: number;
+  };
   notableFlags?: string[];
 }
 
