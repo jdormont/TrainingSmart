@@ -24,6 +24,69 @@ interface ChatMessage {
   content: string;
 }
 
+// Attempt to salvage a usable object out of a truncated JSON response (e.g. the
+// model's output was cut off after hitting max_tokens mid-array — most likely on
+// generateDraftFromHistory's full-history backfill, which sends up to 200 messages
+// and so produces a much larger response than the routine per-session merge). Walks
+// the text tracking bracket depth (ignoring string contents) to find the longest
+// prefix that ends right after a complete array element, then closes out any still-
+// open containers and reparses. Returns null if no valid prefix can be recovered.
+// (Mirrors cycling-news-digest's helper of the same name/shape.)
+function repairTruncatedJson(text: string): unknown | null {
+  const cutPoints: number[] = [];
+  const stack: string[] = [];
+  let inString = false;
+  let escapeNext = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escapeNext) escapeNext = false;
+      else if (ch === "\\") escapeNext = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === "{" || ch === "[") {
+      stack.push(ch);
+    } else if (ch === "}" || ch === "]") {
+      stack.pop();
+      if (stack.length > 0 && stack[stack.length - 1] === "[") {
+        cutPoints.push(i + 1);
+      }
+    }
+  }
+
+  for (let idx = cutPoints.length - 1; idx >= 0; idx--) {
+    const prefix = text.slice(0, cutPoints[idx]);
+
+    const closeStack: string[] = [];
+    let s = false, esc = false;
+    for (let i = 0; i < prefix.length; i++) {
+      const ch = prefix[i];
+      if (s) {
+        if (esc) esc = false;
+        else if (ch === "\\") esc = true;
+        else if (ch === '"') s = false;
+        continue;
+      }
+      if (ch === '"') { s = true; continue; }
+      if (ch === "{" || ch === "[") closeStack.push(ch);
+      else if (ch === "}" || ch === "]") closeStack.pop();
+    }
+
+    const closing = closeStack.reverse().map((c) => (c === "{" ? "}" : "]")).join("");
+
+    try {
+      return JSON.parse(prefix + closing);
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return handleOptions(req);
 
@@ -120,7 +183,7 @@ IMPORTANT: Return ONLY the JSON object, no other text.`;
       systemPrompt: "You are an expert at maintaining structured long-term profile data about an athlete from coaching conversations. Respond only with valid JSON.",
       messages: [{ role: "user", content: mergePrompt }],
       temperature: 0.3,
-      maxTokens: 1800,
+      maxTokens: 4096,
       jsonMode: true,
     });
 
@@ -129,7 +192,22 @@ IMPORTANT: Return ONLY the JSON object, no other text.`;
       throw new Error("Failed to extract JSON from AI response");
     }
 
-    const merged = JSON.parse(jsonMatch[0]);
+    let merged: unknown;
+    try {
+      merged = JSON.parse(jsonMatch[0]);
+    } catch (err) {
+      // Likely truncated mid-array (hit max_tokens on a large history backfill).
+      // Try to salvage the complete fields generated before the cutoff rather
+      // than failing the whole request.
+      console.warn("Initial JSON parse failed, attempting repair:", err instanceof Error ? err.message : err);
+      const repaired = repairTruncatedJson(jsonMatch[0]);
+      if (repaired && typeof repaired === "object") {
+        console.warn("Recovered a partial profile update via JSON repair (response was likely truncated)");
+        merged = repaired;
+      } else {
+        throw new Error(`Failed to parse AI response as JSON: ${err instanceof Error ? err.message : "unknown error"}`);
+      }
+    }
 
     return new Response(
       JSON.stringify(merged),
