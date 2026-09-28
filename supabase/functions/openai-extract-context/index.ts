@@ -102,7 +102,7 @@ IMPORTANT:
 - Set isGoalOriented to true if the user has discussed training goals, false otherwise
 - Use actual message IDs from the conversation when possible`;
 
-    const content = await callAI({
+    const { content } = await callAI({
       systemPrompt: "You are an expert at analyzing training conversations and extracting structured planning information. Respond only with valid JSON.",
       messages: [{ role: "user", content: extractionPrompt }],
       temperature: 0.3,

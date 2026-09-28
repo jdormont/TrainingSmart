@@ -341,6 +341,18 @@ export interface PowerCurveRollup {
   activityCount: number;
 }
 
+export interface DecouplingTrendResult {
+  windowDays: number;
+  /** Average cardiac-decoupling drift %, most-recent half of rides with decoupling data. Null if insufficient data. */
+  recentAvgDriftPct: number | null;
+  /** Average drift %, the older half of the same window. Null if insufficient data. */
+  priorAvgDriftPct: number | null;
+  /** 'improving' = drift falling (better aerobic efficiency), 'worsening' = drift rising. */
+  trend: 'improving' | 'stable' | 'worsening' | 'insufficient_data';
+  /** Number of rides in the window that had usable power+HR data to compute decoupling. */
+  rideCount: number;
+}
+
 /** Composed context assembled for AI prompt injection — chat, plan generation, and analysis all read from this shape. */
 export interface AthleteMemoryContext {
   profile: AthleteProfile | null;

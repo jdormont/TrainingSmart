@@ -4,6 +4,7 @@ import type { StravaActivity, StravaAthlete, StravaStats, ChatMessage, OuraSleep
 import { UserStreak } from './streakService';
 import { STORAGE_KEYS } from '../utils/constants';
 import { buildAthleteMemoryBlock } from './athleteContextBuilder';
+import { COACHING_TOOLS, executeCoachingTool, type CoachingToolCall } from './coachingTools';
 
 
 // Chat configuration — model/provider are resolved server-side via AI_PROVIDER + AI_MODEL Supabase secrets.
@@ -11,6 +12,19 @@ const OPENAI_CONFIG = {
   MAX_TOKENS: 4096,
   TEMPERATURE: 0.7,
 } as const;
+
+// Tool calls execute client-side (see coachingTools.ts) and each round costs
+// an extra model call, so this bounds both cost and worst-case latency —
+// three real tool round-trips is already generous for a single chat turn.
+const MAX_TOOL_ROUNDS = 3;
+
+interface ChatPayloadMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  imageUrls?: string[];
+  toolCalls?: CoachingToolCall[];
+  toolResults?: { toolCallId: string; content: string }[];
+}
 
 interface TrainingContext {
   athlete: StravaAthlete;
@@ -435,6 +449,8 @@ CORE COACHING PROTOCOLS:
    - Adhere to the 10% rule (don't increase volume by >10% weekly).
    - If the user reports pain, immediately switch to "Physio Mode" and recommend rest or medical consultation.
 
+4. **Live Training-Data Functions:** You have function-calling access to get_load_ratio, get_power_curve, and get_decoupling_trend — each queries this athlete's actual recent training data on demand. Call the relevant one before making a claim about their acute:chronic training load, their power at a given duration, or whether their aerobic efficiency is improving or declining, rather than inferring it from the conversation alone.
+
 CONTENT & VIDEO RECOMMENDATIONS (CRITICAL):
 You have access to a tool to search YouTube. **DO NOT hallucinate video URLs.**
 When recommending exercises or deep dives, you MUST use the provided tool to find a *real* video URL before displaying it.
@@ -591,6 +607,40 @@ ${buildMilestonesSummary(context.recentActivities, showPowerMetrics)}${recoveryC
 Use the coaching style and personality defined above, while incorporating this real-time training data into your responses.`;
   }
 
+  private async postChat(
+    payloadMessages: ChatPayloadMessage[],
+    systemPrompt: string,
+    tools?: typeof COACHING_TOOLS
+  ): Promise<{ content: string; toolCalls?: CoachingToolCall[] }> {
+    const response = await axios.post(
+      `${this.supabaseUrl}/functions/v1/openai-chat`,
+      {
+        messages: payloadMessages,
+        systemPrompt,
+        maxTokens: OPENAI_CONFIG.MAX_TOKENS,
+        temperature: OPENAI_CONFIG.TEMPERATURE,
+        tools,
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${this.supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 60000, // 60s timeout for chat response
+      }
+    );
+
+    return response.data;
+  }
+
+  /**
+   * Sends the conversation to the AI coach, executing any tool calls the
+   * model requests along the way (see coachingTools.ts for why that
+   * execution happens here on the client rather than in the edge function).
+   * Loops until the model returns a final text answer or MAX_TOOL_ROUNDS is
+   * exhausted, at which point one last call without tools forces a text
+   * response from whatever the model already has.
+   */
   async getChatResponse(
     messages: ChatMessage[],
     context: TrainingContext
@@ -602,30 +652,33 @@ Use the coaching style and personality defined above, while incorporating this r
     const systemPrompt = this.buildSystemPrompt(context);
 
     try {
-      const payloadMessages = messages.map(msg => ({
+      const conversation: ChatPayloadMessage[] = messages.map(msg => ({
         role: msg.role,
         content: msg.content,
         imageUrls: msg.image_urls || []
       }));
 
-      const response = await axios.post(
-        `${this.supabaseUrl}/functions/v1/openai-chat`,
-        {
-          messages: payloadMessages,
-          systemPrompt,
-          maxTokens: OPENAI_CONFIG.MAX_TOKENS,
-          temperature: OPENAI_CONFIG.TEMPERATURE,
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${this.supabaseAnonKey}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: 60000, // 60s timeout for chat response
-        }
-      );
+      for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+        const result = await this.postChat(conversation, systemPrompt, COACHING_TOOLS);
 
-      return response.data.content;
+        if (!result.toolCalls || result.toolCalls.length === 0) {
+          return result.content;
+        }
+
+        conversation.push({ role: 'assistant', content: result.content, toolCalls: result.toolCalls });
+
+        const toolResults = await Promise.all(
+          result.toolCalls.map(async toolCall => ({
+            toolCallId: toolCall.id,
+            content: await executeCoachingTool(toolCall),
+          }))
+        );
+
+        conversation.push({ role: 'user', content: '', toolResults });
+      }
+
+      const final = await this.postChat(conversation, systemPrompt, undefined);
+      return final.content;
     } catch (error) {
       console.error('OpenAI API error:', error);
 

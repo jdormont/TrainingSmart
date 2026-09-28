@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient';
 import { stravaApi } from './stravaApi';
 // import { tokenStorageService } from './tokenStorageService';
-import type { StravaAthlete, StravaActivity, DetailedWorkoutMetrics, PowerCurveRollup } from '../types';
+import type { StravaAthlete, StravaActivity, DetailedWorkoutMetrics, PowerCurveRollup, DecouplingTrendResult } from '../types';
 import {
   HR_POWER_BUCKET_DEFINITIONS,
   HR_CURVE_LOOKBACK_DAYS,
@@ -14,6 +14,8 @@ import {
 const CACHE_DURATION_MS = 15 * 60 * 1000;
 const DETAILED_METRICS_SCHEMA_VERSION = 3;
 const HR_POWER_CURVE_MEMO_TTL_MS = 10 * 60 * 1000;
+const MIN_RIDES_FOR_DECOUPLING_TREND = 4;
+const DECOUPLING_TREND_THRESHOLD_PCT = 1.5;
 
 // Per-batch memo so enrichRecentActivities's loop over up to 5 activities
 // doesn't rebuild the personal HR->power curve once per activity.
@@ -588,6 +590,41 @@ class StravaCacheService {
       estimatedCurve: Object.keys(estimatedCurve).length > 0 ? estimatedCurve : undefined,
       activityCount,
     };
+  }
+
+  /**
+   * Aerobic-decoupling trend across recent rides — the same per-activity
+   * cardiac_decoupling.drift_percentage already computed in enrichSingleActivity,
+   * rolled up by comparing the most recent half of rides with usable data
+   * against the older half. Lower drift is better aerobic efficiency, so a
+   * falling average is 'improving' and a rising one is 'worsening'.
+   */
+  async getDecouplingTrend(windowDays = 60): Promise<DecouplingTrendResult> {
+    const activities = await this.getActivitiesForStats(windowDays);
+
+    // getActivitiesForStats orders newest-first, so this stays newest-first too.
+    const driftPoints = activities
+      .map(a => a.detailed_metrics?.heartrate_efficiency?.cardiac_decoupling?.drift_percentage)
+      .filter((d): d is number => typeof d === 'number');
+
+    if (driftPoints.length < MIN_RIDES_FOR_DECOUPLING_TREND) {
+      return { windowDays, recentAvgDriftPct: null, priorAvgDriftPct: null, trend: 'insufficient_data', rideCount: driftPoints.length };
+    }
+
+    const half = Math.floor(driftPoints.length / 2);
+    const recent = driftPoints.slice(0, half);
+    const prior = driftPoints.slice(half);
+    const avg = (values: number[]) => values.reduce((sum, v) => sum + v, 0) / values.length;
+
+    const recentAvgDriftPct = Math.round(avg(recent) * 10) / 10;
+    const priorAvgDriftPct = Math.round(avg(prior) * 10) / 10;
+    const delta = recentAvgDriftPct - priorAvgDriftPct;
+    const trend: DecouplingTrendResult['trend'] =
+      delta > DECOUPLING_TREND_THRESHOLD_PCT ? 'worsening'
+        : delta < -DECOUPLING_TREND_THRESHOLD_PCT ? 'improving'
+          : 'stable';
+
+    return { windowDays, recentAvgDriftPct, priorAvgDriftPct, trend, rideCount: driftPoints.length };
   }
 
   private async getPersonalHrPowerCurveCached(userId: string): Promise<PersonalHrPowerCurve | null> {

@@ -305,7 +305,7 @@ Description: ${art.description || "(No description provided)"}
 Based on the above articles, output the structured daily news digest in valid JSON.`;
 
     console.log(`Calling Claude to synthesize ${itemsToSummarize.length} articles`);
-    const responseText = await callAI({
+    const { content: responseText } = await callAI({
       systemPrompt,
       messages: [{ role: "user", content: promptText }],
       maxTokens: 4096,

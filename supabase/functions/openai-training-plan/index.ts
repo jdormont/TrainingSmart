@@ -314,7 +314,7 @@ Generate ${numWorkouts} days of plan coverage (workouts + implied rest days) by 
 
     console.log(`Generating multi-modal training plan (${weeksAvailable} weeks, specialization: ${coach_specialization ?? 'none'}, mode: ${fitness_mode ?? 'performance'})...`);
 
-    const content = await callAI({
+    const { content } = await callAI({
       systemPrompt: `You are an expert multi-modal fitness coach creating personalized training plans. You coach across cycling, running, strength training, yoga, and hiking.
 You output strictly valid JSON only.
 Include YouTube video links in workout descriptions using this format: [Video Title](https://youtube.com/watch?v=VIDEO_ID) by Creator Name.

@@ -277,7 +277,8 @@ class HealthMetricsService {
   // ==========================================
   // 1. LOAD (ACWR) - "The Growth Tax"
   // ==========================================
-  private calculateLoad(activities: StravaActivity[]): HealthDimensionDetail {
+  /** Public: also used directly by coachingTools' get_load_ratio tool. */
+  calculateLoad(activities: StravaActivity[]): HealthDimensionDetail {
     // Acute: Last 7 days duration
     // Chronic: Last 42 days daily average duration * 7
     // Metrics: Duration (moving_time) in minutes.

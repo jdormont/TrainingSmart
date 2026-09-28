@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   calculateNormalizedPower,
   calculatePowerCurve,
@@ -6,9 +6,46 @@ import {
   calculateCardiacDecoupling,
   calculateElevationPowerProfile,
   isEnrichableActivityType,
-  prioritizeForEnrichment
+  prioritizeForEnrichment,
+  stravaCacheService
 } from './stravaCacheService';
+import { supabase } from './supabaseClient';
 import type { StravaActivity } from '../types';
+
+const mockChain = {
+  select: vi.fn().mockReturnThis(),
+  eq: vi.fn().mockReturnThis(),
+  gte: vi.fn(),
+  order: vi.fn(),
+};
+
+vi.mock('./supabaseClient', () => ({
+  supabase: {
+    from: vi.fn(() => mockChain),
+    auth: { getUser: vi.fn() },
+  },
+}));
+
+function activityRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 1,
+    start_date: new Date().toISOString(),
+    activity_type: 'Ride',
+    distance: 30000,
+    moving_time: 3600,
+    detailed_metrics: null,
+    ...overrides,
+  };
+}
+
+function driftRow(driftPct: number, daysAgo: number) {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  return activityRow({
+    start_date: d.toISOString(),
+    detailed_metrics: { heartrate_efficiency: { cardiac_decoupling: { drift_percentage: driftPct } } },
+  });
+}
 
 describe('StravaCacheService Algorithms', () => {
   describe('calculateNormalizedPower', () => {
@@ -290,5 +327,90 @@ describe('StravaCacheService Algorithms', () => {
 
       expect(result[0].id).toBe(99);
     });
+  });
+});
+
+describe('StravaCacheService.getDecouplingTrend', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockChain.select.mockReturnValue(mockChain);
+    mockChain.eq.mockReturnValue(mockChain);
+    vi.mocked(supabase.auth.getUser).mockResolvedValue({
+      data: { user: { id: 'user-123' } },
+      error: null,
+    } as any);
+  });
+
+  it('reports insufficient_data when fewer than 4 rides have decoupling data', async () => {
+    mockChain.gte.mockReturnValue(mockChain);
+    mockChain.order.mockResolvedValueOnce({
+      data: [driftRow(5, 1), driftRow(6, 3), activityRow()],
+      error: null,
+    });
+
+    const result = await stravaCacheService.getDecouplingTrend(60);
+
+    expect(result).toEqual({
+      windowDays: 60,
+      recentAvgDriftPct: null,
+      priorAvgDriftPct: null,
+      trend: 'insufficient_data',
+      rideCount: 2,
+    });
+  });
+
+  it('reports a worsening trend when recent drift is meaningfully higher than prior', async () => {
+    mockChain.gte.mockReturnValue(mockChain);
+    // Newest-first, as the real SQL ORDER BY would return.
+    mockChain.order.mockResolvedValueOnce({
+      data: [driftRow(9, 1), driftRow(8, 3), driftRow(3, 20), driftRow(4, 25)],
+      error: null,
+    });
+
+    const result = await stravaCacheService.getDecouplingTrend(60);
+
+    expect(result).toEqual({
+      windowDays: 60,
+      recentAvgDriftPct: 8.5,
+      priorAvgDriftPct: 3.5,
+      trend: 'worsening',
+      rideCount: 4,
+    });
+  });
+
+  it('reports an improving trend when recent drift is meaningfully lower than prior', async () => {
+    mockChain.gte.mockReturnValue(mockChain);
+    mockChain.order.mockResolvedValueOnce({
+      data: [driftRow(2, 1), driftRow(3, 3), driftRow(9, 20), driftRow(8, 25)],
+      error: null,
+    });
+
+    const result = await stravaCacheService.getDecouplingTrend(60);
+
+    expect(result.trend).toBe('improving');
+  });
+
+  it('reports a stable trend when the two halves are close', async () => {
+    mockChain.gte.mockReturnValue(mockChain);
+    mockChain.order.mockResolvedValueOnce({
+      data: [driftRow(5, 1), driftRow(5.5, 3), driftRow(5, 20), driftRow(5.2, 25)],
+      error: null,
+    });
+
+    const result = await stravaCacheService.getDecouplingTrend(60);
+
+    expect(result.trend).toBe('stable');
+  });
+
+  it('ignores rides with no usable decoupling data when counting rideCount', async () => {
+    mockChain.gte.mockReturnValue(mockChain);
+    mockChain.order.mockResolvedValueOnce({
+      data: [driftRow(5, 1), activityRow(), driftRow(6, 3), activityRow(), driftRow(4, 20), driftRow(7, 25)],
+      error: null,
+    });
+
+    const result = await stravaCacheService.getDecouplingTrend(60);
+
+    expect(result.rideCount).toBe(4);
   });
 });

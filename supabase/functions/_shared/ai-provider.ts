@@ -19,10 +19,38 @@ const PROVIDER_DEFAULTS: Record<string, string> = {
 // Anthropic max output cap — claude-sonnet-4-6 supports 8192 output tokens.
 const ANTHROPIC_MAX_TOKENS = 8192;
 
+export interface AIToolDefinition {
+  name: string;
+  description: string;
+  /** JSON Schema (object type) describing the tool's input. */
+  inputSchema: Record<string, unknown>;
+}
+
+export interface AIToolCall {
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+export interface AIToolResultMessage {
+  toolCallId: string;
+  content: string;
+}
+
 export interface AIMessage {
   role: "user" | "assistant";
   content: string;
   imageUrls?: string[];
+  /** Set on an assistant message that requested tool call(s) in a prior round. */
+  toolCalls?: AIToolCall[];
+  /** Set on a message carrying the results of previously-requested tool call(s) back to the model. */
+  toolResults?: AIToolResultMessage[];
+}
+
+export interface AIResponse {
+  content: string;
+  /** Present when the model wants to call tool(s) before it can finish responding. */
+  toolCalls?: AIToolCall[];
 }
 
 export interface AICallOptions {
@@ -36,9 +64,11 @@ export interface AICallOptions {
    * Anthropic: no-op — Claude follows JSON instructions in the system prompt reliably.
    */
   jsonMode?: boolean;
+  /** Tool definitions the model may call. Omit or pass [] for a plain text-only call. */
+  tools?: AIToolDefinition[];
 }
 
-export async function callAI(options: AICallOptions): Promise<string> {
+export async function callAI(options: AICallOptions): Promise<AIResponse> {
   const provider = Deno.env.get("AI_PROVIDER") ?? "openai";
 
   if (provider === "anthropic") {
@@ -47,19 +77,30 @@ export async function callAI(options: AICallOptions): Promise<string> {
   return callOpenAI(options);
 }
 
-async function callOpenAI({
-  systemPrompt,
-  messages,
-  maxTokens = 1000,
-  temperature = 0.7,
-  jsonMode = false,
-}: AICallOptions): Promise<string> {
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
+function formatOpenAIMessages(messages: AIMessage[]): any[] {
+  const formatted: any[] = [];
 
-  const model = Deno.env.get("AI_MODEL") ?? PROVIDER_DEFAULTS.openai;
+  for (const msg of messages) {
+    if (msg.toolCalls && msg.toolCalls.length > 0) {
+      formatted.push({
+        role: "assistant",
+        content: msg.content || null,
+        tool_calls: msg.toolCalls.map(tc => ({
+          id: tc.id,
+          type: "function",
+          function: { name: tc.name, arguments: JSON.stringify(tc.input) },
+        })),
+      });
+      continue;
+    }
 
-  const formattedMessages = messages.map(msg => {
+    if (msg.toolResults && msg.toolResults.length > 0) {
+      for (const result of msg.toolResults) {
+        formatted.push({ role: "tool", tool_call_id: result.toolCallId, content: result.content });
+      }
+      continue;
+    }
+
     if (msg.imageUrls && msg.imageUrls.length > 0) {
       const contentParts: any[] = [{ type: "text", text: msg.content }];
       msg.imageUrls.forEach(url => {
@@ -68,16 +109,34 @@ async function callOpenAI({
           image_url: { url }
         });
       });
-      return { role: msg.role, content: contentParts };
+      formatted.push({ role: msg.role, content: contentParts });
+      continue;
     }
-    return { role: msg.role, content: msg.content };
-  });
+
+    formatted.push({ role: msg.role, content: msg.content });
+  }
+
+  return formatted;
+}
+
+async function callOpenAI({
+  systemPrompt,
+  messages,
+  maxTokens = 1000,
+  temperature = 0.7,
+  jsonMode = false,
+  tools,
+}: AICallOptions): Promise<AIResponse> {
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
+
+  const model = Deno.env.get("AI_MODEL") ?? PROVIDER_DEFAULTS.openai;
 
   const body: Record<string, unknown> = {
     model,
     messages: [
       { role: "system", content: systemPrompt },
-      ...formattedMessages,
+      ...formatOpenAIMessages(messages),
     ],
     max_tokens: maxTokens,
     temperature,
@@ -85,6 +144,13 @@ async function callOpenAI({
 
   if (jsonMode) {
     body.response_format = { type: "json_object" };
+  }
+
+  if (tools && tools.length > 0) {
+    body.tools = tools.map(t => ({
+      type: "function",
+      function: { name: t.name, description: t.description, parameters: t.inputSchema },
+    }));
   }
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -106,23 +172,45 @@ async function callOpenAI({
   if (choice.finish_reason === "length") {
     console.warn(`[AI] OpenAI response was truncated (hit max_tokens=${maxTokens})`);
   }
-  return choice.message.content as string;
+
+  const message = choice.message;
+  const toolCalls: AIToolCall[] | undefined = message.tool_calls && message.tool_calls.length > 0
+    ? message.tool_calls.map((tc: any) => ({
+        id: tc.id,
+        name: tc.function.name,
+        input: JSON.parse(tc.function.arguments || "{}"),
+      }))
+    : undefined;
+
+  return { content: message.content ?? "", toolCalls };
 }
 
-async function callAnthropic({
-  systemPrompt,
-  messages,
-  maxTokens = 1000,
-  temperature = 0.7,
-}: AICallOptions): Promise<string> {
-  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured");
+async function formatAnthropicMessages(messages: AIMessage[]): Promise<any[]> {
+  const formatted: any[] = [];
 
-  const model = Deno.env.get("AI_MODEL") ?? PROVIDER_DEFAULTS.anthropic;
-
-  // Map messages to support base64 image blocks for Anthropic
-  const formattedMessages: any[] = [];
   for (const msg of messages) {
+    if (msg.toolCalls && msg.toolCalls.length > 0) {
+      const blocks: any[] = [];
+      if (msg.content) blocks.push({ type: "text", text: msg.content });
+      for (const tc of msg.toolCalls) {
+        blocks.push({ type: "tool_use", id: tc.id, name: tc.name, input: tc.input });
+      }
+      formatted.push({ role: "assistant", content: blocks });
+      continue;
+    }
+
+    if (msg.toolResults && msg.toolResults.length > 0) {
+      formatted.push({
+        role: "user",
+        content: msg.toolResults.map(result => ({
+          type: "tool_result",
+          tool_use_id: result.toolCallId,
+          content: result.content,
+        })),
+      });
+      continue;
+    }
+
     if (msg.imageUrls && msg.imageUrls.length > 0) {
       const contentParts: any[] = [];
       for (const url of msg.imageUrls) {
@@ -141,10 +229,44 @@ async function callAnthropic({
         }
       }
       contentParts.push({ type: "text", text: msg.content });
-      formattedMessages.push({ role: msg.role, content: contentParts });
-    } else {
-      formattedMessages.push({ role: msg.role, content: msg.content });
+      formatted.push({ role: msg.role, content: contentParts });
+      continue;
     }
+
+    formatted.push({ role: msg.role, content: msg.content });
+  }
+
+  return formatted;
+}
+
+async function callAnthropic({
+  systemPrompt,
+  messages,
+  maxTokens = 1000,
+  temperature = 0.7,
+  tools,
+}: AICallOptions): Promise<AIResponse> {
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured");
+
+  const model = Deno.env.get("AI_MODEL") ?? PROVIDER_DEFAULTS.anthropic;
+
+  const formattedMessages = await formatAnthropicMessages(messages);
+
+  const body: Record<string, unknown> = {
+    model,
+    system: systemPrompt,
+    messages: formattedMessages,
+    max_tokens: Math.min(maxTokens, ANTHROPIC_MAX_TOKENS),
+    temperature,
+  };
+
+  if (tools && tools.length > 0) {
+    body.tools = tools.map(t => ({
+      name: t.name,
+      description: t.description,
+      input_schema: t.inputSchema,
+    }));
   }
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -154,13 +276,7 @@ async function callAnthropic({
       "anthropic-version": "2023-06-01",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      model,
-      system: systemPrompt,
-      messages: formattedMessages,
-      max_tokens: Math.min(maxTokens, ANTHROPIC_MAX_TOKENS),
-      temperature,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -172,7 +288,18 @@ async function callAnthropic({
   if (data.stop_reason === "max_tokens") {
     console.warn(`[AI] Anthropic response was truncated (hit max_tokens=${Math.min(maxTokens, ANTHROPIC_MAX_TOKENS)})`);
   }
-  return data.content[0].text as string;
+
+  const content = (data.content as any[])
+    .filter(block => block.type === "text")
+    .map(block => block.text)
+    .join("");
+
+  const toolUseBlocks = (data.content as any[]).filter(block => block.type === "tool_use");
+  const toolCalls: AIToolCall[] | undefined = toolUseBlocks.length > 0
+    ? toolUseBlocks.map(block => ({ id: block.id, name: block.name, input: block.input }))
+    : undefined;
+
+  return { content, toolCalls };
 }
 
 // Helper to download image and encode as base64 in Deno environment
@@ -183,13 +310,13 @@ async function fetchImageAsBase64(url: string): Promise<{ data: string; mediaTyp
   }
   const arrayBuffer = await response.arrayBuffer();
   const uint8Array = new Uint8Array(arrayBuffer);
-  
+
   let binary = "";
   for (let i = 0; i < uint8Array.byteLength; i++) {
     binary += String.fromCharCode(uint8Array[i]);
   }
   const base64Data = btoa(binary);
   const mediaType = response.headers.get("content-type") ?? "image/jpeg";
-  
+
   return { data: base64Data, mediaType };
 }

@@ -1,7 +1,52 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { callAI } from "../_shared/ai-provider.ts";
+import { callAI, type AIToolDefinition, type AIToolCall, type AIToolResultMessage } from "../_shared/ai-provider.ts";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { requireArray, requireString, optionalNumber, ValidationError } from "../_shared/validate.ts";
+
+const MAX_TOOLS = 10;
+
+function parseTools(val: unknown): AIToolDefinition[] | undefined {
+  if (val === undefined || val === null) return undefined;
+  if (!Array.isArray(val)) throw new ValidationError("'tools' must be an array");
+  if (val.length > MAX_TOOLS) throw new ValidationError(`'tools' exceeds the maximum of ${MAX_TOOLS} items`);
+
+  return val.map((t, i) => {
+    if (typeof t?.name !== "string" || t.name.trim().length === 0) {
+      throw new ValidationError(`tools[${i}].name must be a non-empty string`);
+    }
+    if (typeof t?.description !== "string" || t.description.trim().length === 0) {
+      throw new ValidationError(`tools[${i}].description must be a non-empty string`);
+    }
+    if (typeof t?.inputSchema !== "object" || t.inputSchema === null || Array.isArray(t.inputSchema)) {
+      throw new ValidationError(`tools[${i}].inputSchema must be an object`);
+    }
+    return { name: t.name, description: t.description, inputSchema: t.inputSchema };
+  });
+}
+
+function parseToolCalls(val: unknown, field: string): AIToolCall[] | undefined {
+  if (val === undefined || val === null) return undefined;
+  if (!Array.isArray(val)) throw new ValidationError(`'${field}' must be an array`);
+
+  return val.map((tc, i) => {
+    if (typeof tc?.id !== "string" || typeof tc?.name !== "string" || typeof tc?.input !== "object" || tc.input === null) {
+      throw new ValidationError(`${field}[${i}] must have string 'id', string 'name', and object 'input'`);
+    }
+    return { id: tc.id, name: tc.name, input: tc.input };
+  });
+}
+
+function parseToolResults(val: unknown, field: string): AIToolResultMessage[] | undefined {
+  if (val === undefined || val === null) return undefined;
+  if (!Array.isArray(val)) throw new ValidationError(`'${field}' must be an array`);
+
+  return val.map((tr, i) => {
+    if (typeof tr?.toolCallId !== "string" || typeof tr?.content !== "string") {
+      throw new ValidationError(`${field}[${i}] must have string 'toolCallId' and string 'content'`);
+    }
+    return { toolCallId: tr.toolCallId, content: tr.content };
+  });
+}
 
 /*
  * STRAVA API COMPLIANCE - AI/ML Usage
@@ -53,13 +98,20 @@ Deno.serve(async (req: Request) => {
       throw new ValidationError("Request body must be valid JSON");
     });
 
-    const messages = requireArray(body.messages, "messages", 100) as Array<{ role: string; content: string; imageUrls?: string[] }>;
+    const rawMessages = requireArray(body.messages, "messages", 100) as Array<{
+      role: string;
+      content: string;
+      imageUrls?: string[];
+      toolCalls?: unknown;
+      toolResults?: unknown;
+    }>;
     const systemPrompt = requireString(body.systemPrompt, "systemPrompt", 20_000);
     const maxTokens = optionalNumber(body.maxTokens, "maxTokens", 1, 8192, 1000);
     const temperature = optionalNumber(body.temperature, "temperature", 0, 2, 0.7);
+    const tools = parseTools(body.tools);
 
     // Validate each message in the array
-    messages.forEach((msg, i) => {
+    rawMessages.forEach((msg, i) => {
       if (typeof msg?.role !== "string" || typeof msg?.content !== "string") {
         throw new ValidationError(`messages[${i}] must have string 'role' and 'content' fields`);
       }
@@ -78,6 +130,14 @@ Deno.serve(async (req: Request) => {
       }
     });
 
+    const messages = rawMessages.map(msg => ({
+      role: msg.role as "user" | "assistant",
+      content: msg.content,
+      imageUrls: msg.imageUrls,
+      toolCalls: parseToolCalls(msg.toolCalls, 'messages[].toolCalls'),
+      toolResults: parseToolResults(msg.toolResults, 'messages[].toolResults'),
+    }));
+
     // Rate limit by IP (no auth on this endpoint in the current setup)
     const clientIp = req.headers.get("x-forwarded-for") ?? req.headers.get("cf-connecting-ip") ?? "unknown";
     if (!checkRateLimit(clientIp)) {
@@ -87,21 +147,18 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    console.log(`Processing chat request with ${messages.length} messages`);
+    console.log(`Processing chat request with ${messages.length} messages${tools ? ` and ${tools.length} tools` : ""}`);
 
-    const content = await callAI({
+    const { content, toolCalls } = await callAI({
       systemPrompt,
-      messages: messages.map(msg => ({ 
-        role: msg.role as "user" | "assistant", 
-        content: msg.content,
-        imageUrls: msg.imageUrls 
-      })),
+      messages,
       maxTokens,
       temperature,
+      tools,
     });
 
     return new Response(
-      JSON.stringify({ content }),
+      JSON.stringify({ content, toolCalls }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {

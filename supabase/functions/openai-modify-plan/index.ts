@@ -80,7 +80,7 @@ Respond with the complete modified workout array for this week.`;
 
     console.log("Modifying training plan...");
 
-    const content = await callAI({
+    const { content } = await callAI({
       systemPrompt: `You are an expert cycling coach modifying training plans.
 
 CRITICAL: Respond with ONLY a JSON array of modified workouts wrapped in \`\`\`json code block.

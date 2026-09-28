@@ -116,7 +116,7 @@ Respond with ONLY valid JSON in this exact format:
 
 IMPORTANT: Return ONLY the JSON object, no other text.`;
 
-    const content = await callAI({
+    const { content } = await callAI({
       systemPrompt: "You are an expert at maintaining structured long-term profile data about an athlete from coaching conversations. Respond only with valid JSON.",
       messages: [{ role: "user", content: mergePrompt }],
       temperature: 0.3,
