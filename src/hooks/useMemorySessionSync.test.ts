@@ -6,6 +6,7 @@ import { athleteProfileService } from '../services/athleteProfileService';
 import { goalsService } from '../services/goalsService';
 import { recentActivityNotesService } from '../services/recentActivityNotesService';
 import { memoryRollupService } from '../services/memoryRollupService';
+import { chatMemorySyncStateService } from '../services/chatMemorySyncStateService';
 import type { ChatSession } from '../types';
 
 vi.mock('../services/athleteProfileService', () => ({
@@ -32,6 +33,12 @@ vi.mock('../services/memoryRollupService', () => ({
   },
 }));
 
+vi.mock('../services/chatMemorySyncStateService', () => ({
+  chatMemorySyncStateService: {
+    getSyncedMessageCount: vi.fn(),
+  },
+}));
+
 function buildSession(id: string, userMessageCount: number): ChatSession {
   return {
     id,
@@ -53,6 +60,17 @@ function setVisibility(state: DocumentVisibilityState) {
 
 const emptyMergeResult = { profile: {} as any, goalCompletionSuggested: null, ftpReportSuggested: null };
 
+// Renders the hook and flushes the async on-activation catch-up check
+// (chatMemorySyncStateService.getSyncedMessageCount + a possible sync) that
+// now fires on mount, so subsequent assertions see a settled state.
+async function renderAndFlush(...args: Parameters<typeof useMemorySessionSync>) {
+  const result = renderHook(({ a }: { a: Parameters<typeof useMemorySessionSync> }) => useMemorySessionSync(...a), {
+    initialProps: { a: args },
+  });
+  await act(async () => {});
+  return result;
+}
+
 describe('useMemorySessionSync', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -60,12 +78,25 @@ describe('useMemorySessionSync', () => {
     vi.mocked(goalsService.getActiveGoal).mockResolvedValue(null);
     vi.mocked(recentActivityNotesService.pruneExpired).mockResolvedValue(undefined);
     vi.mocked(memoryRollupService.buildRollup).mockResolvedValue(undefined);
+    vi.mocked(chatMemorySyncStateService.getSyncedMessageCount).mockResolvedValue(0);
     setVisibility('visible');
   });
 
   it('does nothing in demo mode', async () => {
     const session = buildSession('s1', 3);
-    renderHook(() => useMemorySessionSync(session, true, []));
+    await renderAndFlush(session, true, []);
+
+    await act(async () => {
+      setVisibility('hidden');
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    expect(athleteProfileService.mergeFromSession).not.toHaveBeenCalled();
+    expect(chatMemorySyncStateService.getSyncedMessageCount).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when there is no active session', async () => {
+    await renderAndFlush(null, false, []);
 
     await act(async () => {
       setVisibility('hidden');
@@ -75,25 +106,38 @@ describe('useMemorySessionSync', () => {
     expect(athleteProfileService.mergeFromSession).not.toHaveBeenCalled();
   });
 
-  it('does nothing when there is no active session', async () => {
-    renderHook(() => useMemorySessionSync(null, false, []));
+  it('catches up immediately on activation when the session already has an unsynced backlog', async () => {
+    const session = buildSession('s1', 2);
 
-    await act(async () => {
-      setVisibility('hidden');
-      document.dispatchEvent(new Event('visibilitychange'));
-    });
+    await renderAndFlush(session, false, []);
 
+    expect(chatMemorySyncStateService.getSyncedMessageCount).toHaveBeenCalledWith('s1');
+    expect(athleteProfileService.mergeFromSession).toHaveBeenCalledTimes(1);
+    expect(athleteProfileService.mergeFromSession).toHaveBeenCalledWith('s1', session.messages, undefined);
+  });
+
+  it('does not catch up on activation when the persisted watermark already covers the session', async () => {
+    vi.mocked(chatMemorySyncStateService.getSyncedMessageCount).mockResolvedValue(2);
+    const session = buildSession('s1', 2);
+
+    await renderAndFlush(session, false, []);
+
+    expect(athleteProfileService.mergeFromSession).not.toHaveBeenCalled();
+  });
+
+  it('catches up on only the backlog beyond a partially-persisted watermark', async () => {
+    vi.mocked(chatMemorySyncStateService.getSyncedMessageCount).mockResolvedValue(1);
+    const session = buildSession('s1', 2);
+
+    await renderAndFlush(session, false, []);
+
+    // 2 total - 1 already synced = 1 new message, below the threshold of 2.
     expect(athleteProfileService.mergeFromSession).not.toHaveBeenCalled();
   });
 
   it('syncs when the tab is hidden and the new-message threshold is met', async () => {
     const session = buildSession('s1', 2);
-    renderHook(() => useMemorySessionSync(session, false, []));
-
-    await act(async () => {
-      setVisibility('hidden');
-      document.dispatchEvent(new Event('visibilitychange'));
-    });
+    await renderAndFlush(session, false, []);
 
     expect(athleteProfileService.mergeFromSession).toHaveBeenCalledTimes(1);
     expect(athleteProfileService.mergeFromSession).toHaveBeenCalledWith('s1', session.messages, undefined);
@@ -102,7 +146,7 @@ describe('useMemorySessionSync', () => {
 
   it('does not sync when fewer than the minimum new user messages have arrived', async () => {
     const session = buildSession('s1', 1);
-    renderHook(() => useMemorySessionSync(session, false, []));
+    await renderAndFlush(session, false, []);
 
     await act(async () => {
       setVisibility('hidden');
@@ -114,12 +158,7 @@ describe('useMemorySessionSync', () => {
 
   it('does not re-sync on a second hidden event with no new user messages', async () => {
     const session = buildSession('s1', 2);
-    renderHook(() => useMemorySessionSync(session, false, []));
-
-    await act(async () => {
-      setVisibility('hidden');
-      document.dispatchEvent(new Event('visibilitychange'));
-    });
+    await renderAndFlush(session, false, []);
     expect(athleteProfileService.mergeFromSession).toHaveBeenCalledTimes(1);
 
     await act(async () => {
@@ -134,21 +173,31 @@ describe('useMemorySessionSync', () => {
     expect(athleteProfileService.mergeFromSession).toHaveBeenCalledTimes(1);
   });
 
-  it('syncs again once enough additional user messages have arrived in the same session', async () => {
-    let session = buildSession('s1', 2);
-    const { rerender } = renderHook(
-      ({ s }: { s: ChatSession }) => useMemorySessionSync(s, false, []),
-      { initialProps: { s: session } },
-    );
+  it('does not advance the watermark when the merge fails, so the backlog is retried on the next trigger', async () => {
+    const session = buildSession('s1', 2);
+    vi.mocked(athleteProfileService.mergeFromSession).mockRejectedValueOnce(new Error('edge function failed'));
+
+    await renderAndFlush(session, false, []);
+    expect(athleteProfileService.mergeFromSession).toHaveBeenCalledTimes(1);
+
+    vi.mocked(athleteProfileService.mergeFromSession).mockResolvedValue(emptyMergeResult);
 
     await act(async () => {
       setVisibility('hidden');
       document.dispatchEvent(new Event('visibilitychange'));
     });
+
+    // Same 2 messages, still unsynced after the failure — retried, not skipped.
+    expect(athleteProfileService.mergeFromSession).toHaveBeenCalledTimes(2);
+  });
+
+  it('syncs again once enough additional user messages have arrived in the same session', async () => {
+    let session = buildSession('s1', 2);
+    const { rerender } = await renderAndFlush(session, false, []);
     expect(athleteProfileService.mergeFromSession).toHaveBeenCalledTimes(1);
 
     session = buildSession('s1', 4);
-    rerender({ s: session });
+    rerender({ a: [session, false, []] });
 
     await act(async () => {
       setVisibility('hidden');
@@ -160,23 +209,41 @@ describe('useMemorySessionSync', () => {
 
   it('syncs the outgoing session when the active session is switched', async () => {
     const sessionA = buildSession('a', 2);
-    const sessionB = buildSession('b', 2);
-    const { rerender } = renderHook(
-      ({ s }: { s: ChatSession }) => useMemorySessionSync(s, false, []),
-      { initialProps: { s: sessionA } },
-    );
+    // Below the sync threshold so switching to it doesn't independently
+    // trigger its own activation catch-up, keeping this test focused on the
+    // outgoing session's flush-on-switch behavior.
+    const sessionB = buildSession('b', 1);
+    const { rerender } = await renderAndFlush(sessionA, false, []);
+    expect(athleteProfileService.mergeFromSession).toHaveBeenCalledTimes(1);
+    vi.mocked(athleteProfileService.mergeFromSession).mockClear();
 
     await act(async () => {
-      rerender({ s: sessionB });
+      rerender({ a: [sessionB, false, []] });
     });
 
-    expect(athleteProfileService.mergeFromSession).toHaveBeenCalledTimes(1);
-    expect(athleteProfileService.mergeFromSession).toHaveBeenCalledWith('a', sessionA.messages, undefined);
+    expect(athleteProfileService.mergeFromSession).not.toHaveBeenCalled();
   });
 
   it('syncs on unmount', async () => {
     const session = buildSession('s1', 2);
-    const { unmount } = renderHook(() => useMemorySessionSync(session, false, []));
+    const { unmount } = await renderAndFlush(session, false, []);
+    expect(athleteProfileService.mergeFromSession).toHaveBeenCalledTimes(1);
+    vi.mocked(athleteProfileService.mergeFromSession).mockClear();
+
+    await act(async () => {
+      unmount();
+    });
+
+    // Already fully synced by the activation catch-up — unmount finds nothing new.
+    expect(athleteProfileService.mergeFromSession).not.toHaveBeenCalled();
+  });
+
+  it('syncs on unmount when messages arrived after the activation catch-up settled', async () => {
+    let session = buildSession('s1', 0);
+    const { rerender, unmount } = await renderAndFlush(session, false, []);
+
+    session = buildSession('s1', 2);
+    rerender({ a: [session, false, []] });
 
     await act(async () => {
       unmount();
@@ -195,12 +262,7 @@ describe('useMemorySessionSync', () => {
     const rollup = { periodDays: 2, activityCount: 5, avgRecoveryScore: 70, recoveryTrend: 'stable' as const };
     vi.mocked(memoryRollupService.buildRollup).mockResolvedValue(rollup);
 
-    renderHook(() => useMemorySessionSync(session, false, dailyMetrics as any));
-
-    await act(async () => {
-      setVisibility('hidden');
-      document.dispatchEvent(new Event('visibilitychange'));
-    });
+    await renderAndFlush(session, false, dailyMetrics as any);
 
     expect(memoryRollupService.buildRollup).toHaveBeenCalledWith(dailyMetrics);
     expect(athleteProfileService.mergeFromSession).toHaveBeenCalledWith('s1', session.messages, rollup);
@@ -218,12 +280,7 @@ describe('useMemorySessionSync', () => {
       title: 'Century ride',
     } as any);
 
-    renderHook(() => useMemorySessionSync(session, false, []));
-
-    await act(async () => {
-      setVisibility('hidden');
-      document.dispatchEvent(new Event('visibilitychange'));
-    });
+    await renderAndFlush(session, false, []);
 
     const stored = JSON.parse(localStorage.getItem('pending_memory_suggestions') || '[]');
     expect(stored).toHaveLength(1);
@@ -244,12 +301,7 @@ describe('useMemorySessionSync', () => {
       ftpReportSuggested: { watts: 220, effectiveDate: '2026-08-01', note: 'Ramp test' },
     });
 
-    renderHook(() => useMemorySessionSync(session, false, []));
-
-    await act(async () => {
-      setVisibility('hidden');
-      document.dispatchEvent(new Event('visibilitychange'));
-    });
+    await renderAndFlush(session, false, []);
 
     const stored = JSON.parse(localStorage.getItem('pending_memory_suggestions') || '[]');
     expect(stored).toHaveLength(1);
