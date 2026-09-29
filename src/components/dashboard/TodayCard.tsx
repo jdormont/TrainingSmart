@@ -89,7 +89,7 @@ export const TodayCard: React.FC<TodayCardProps> = ({
           .lt('scheduled_date', today)
           .order('scheduled_date', { ascending: false })
           .limit(1)
-          .single();
+          .maybeSingle();
 
         if (data) {
           setRecentWorkout({

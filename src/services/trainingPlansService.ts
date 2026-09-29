@@ -722,12 +722,9 @@ class TrainingPlansService {
         .order('scheduled_date', { ascending: true })
         .order('created_at', { ascending: true })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (error) {
-        if (error.code === 'PGRST116') { // No rows found
-          return null;
-        }
         console.error('Error fetching next workout:', error);
         return null;
       }
