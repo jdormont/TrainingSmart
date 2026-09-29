@@ -54,7 +54,7 @@ Deno.serve(async (req: Request) => {
     });
 
     const messages = requireArray(body.messages, "messages", 100) as Array<{ role: string; content: string; imageUrls?: string[] }>;
-    const systemPrompt = requireString(body.systemPrompt, "systemPrompt", 20_000);
+    const systemPrompt = requireString(body.systemPrompt, "systemPrompt", 100_000);
     const maxTokens = optionalNumber(body.maxTokens, "maxTokens", 1, 8192, 1000);
     const temperature = optionalNumber(body.temperature, "temperature", 0, 2, 0.7);
 

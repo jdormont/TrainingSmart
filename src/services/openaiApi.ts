@@ -642,7 +642,8 @@ Use the coaching style and personality defined above, while incorporating this r
         }
 
         const status = error.response?.status;
-        const message = error.response?.data?.error?.message || error.message;
+        const errData = error.response?.data?.error;
+        const message = (typeof errData === 'string' ? errData : errData?.message) || error.message;
         throw new Error(`OpenAI API error (${status}): ${message}`);
       }
 
