@@ -621,7 +621,7 @@ Use the coaching style and personality defined above, while incorporating this r
             'Authorization': `Bearer ${this.supabaseAnonKey}`,
             'Content-Type': 'application/json',
           },
-          timeout: 60000, // 60s timeout for chat response
+          timeout: 140000, // long replies (e.g. full plans) can take >60s; Supabase edge limit is 150s
         }
       );
 
