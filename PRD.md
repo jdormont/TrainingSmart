@@ -1,6 +1,6 @@
 # TrainingSmart AI — Product Requirements Document (PRD)
 
-_Last updated: 2026-11-19 (previous revision: 2026-06-12)._
+_Last updated: 2026-11-19 (previous revision: 2026-06-12). See `PLAN-weekly-review.md` for the Weekly Review build plan._
 
 ## 1. Project Overview
 
@@ -90,6 +90,7 @@ Consistent notation is used to represent current development status.
 - `[x] COMPLETE` - Form (TSS/CTL/ATL/TSB) rider-profile metric, replacing ACWR-based Capacity.
 - `[x] COMPLETE` - HR-to-power estimation for outdoor rides without a power meter.
 - `[x] COMPLETE` - Consolidated readiness/recovery insights via `readinessService` and unified `TodayCard`.
+- `[x] COMPLETE` - Weekly Review: forgiving, minutes-based adherence score (deterministic, `adherenceService`) plus a ~120-word coach-voiced recap, generated lazily on the first load after each Monday-Sunday week ends and cached in `weekly_reviews`; dashboard `WeeklyReviewCard` with past-reviews drawer. Level-Up now triggers on weekly consistency (3 of the last 4 scored weeks at 70+), with the legacy streak rule as a fallback until 4 scored weeks exist.
 
 ### 3.5. AI Chat Interface & Curation Loop
 - `[x] COMPLETE` - Message history maintenance and context snapshot storage.

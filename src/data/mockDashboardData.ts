@@ -1,4 +1,4 @@
-import { StravaAthlete, StravaActivity, WeeklyStats, OuraSleepData, OuraReadinessData, DailyMetric, Workout } from '../types';
+import { StravaAthlete, StravaActivity, WeeklyStats, OuraSleepData, OuraReadinessData, DailyMetric, Workout, WeeklyReview } from '../types';
 import { WeeklyInsight, HealthMetrics } from '../services/weeklyInsightService';
 import { subDays } from 'date-fns';
 
@@ -246,3 +246,46 @@ export const MOCK_HEALTH_METRICS: HealthMetrics = {
 } as unknown as HealthMetrics;
 
 export const MOCK_NEXT_WORKOUT: Workout | null = null;
+
+// ── Weekly review (demo mode) ───────────────────────────────────────────────
+const demoWeekStart = (weeksAgo: number): string => {
+  const d = new Date();
+  const sinceMonday = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - sinceMonday - 7 * weeksAgo);
+  return d.toISOString().slice(0, 10);
+};
+
+/** Newest first. Index 0 is the most recently completed week. */
+export const MOCK_WEEKLY_REVIEWS: WeeklyReview[] = [
+  {
+    id: 'demo-review-1',
+    userId: 'demo',
+    weekStart: demoWeekStart(1),
+    adherenceScore: 82,
+    stats: { score: 82, workoutsPlanned: 4, workoutsCompleted: 3, workoutsSkipped: 1, workoutsExcused: 0, plannedMinutes: 220, completedMinutes: 180, avgRpe: 3 },
+    reviewText:
+      'You showed up for three of your four sessions, and your Saturday ride was a real highlight. ' +
+      'Midweek was the tricky spot; a missed session is just useful information about how busy that day gets. ' +
+      'Next week, try moving Wednesday to a short 30-minute spin earlier in the day so it fits around your schedule. ' +
+      'Small and steady wins.',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'demo-review-2',
+    userId: 'demo',
+    weekStart: demoWeekStart(2),
+    adherenceScore: 74,
+    stats: { score: 74, workoutsPlanned: 4, workoutsCompleted: 3, workoutsSkipped: 1, workoutsExcused: 0, plannedMinutes: 200, completedMinutes: 150 },
+    reviewText: 'A solid week: three sessions done and a steady rhythm building. Keep the easy days easy and protect your long ride.',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'demo-review-3',
+    userId: 'demo',
+    weekStart: demoWeekStart(3),
+    adherenceScore: 90,
+    stats: { score: 90, workoutsPlanned: 3, workoutsCompleted: 3, workoutsSkipped: 0, workoutsExcused: 0, plannedMinutes: 150, completedMinutes: 145 },
+    reviewText: 'Every planned session done. That consistency is exactly what builds fitness over time.',
+    createdAt: new Date().toISOString(),
+  },
+];
