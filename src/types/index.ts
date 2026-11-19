@@ -575,6 +575,7 @@ export interface UserProfile {
   conversational_onboarding_completed: boolean;
   conversational_onboarding_completed_at?: string;
   cycling_digest_filters?: string[];
+  timezone?: string;
   created_at: string;
   updated_at: string;
 }
@@ -644,3 +645,31 @@ export interface CyclingDigestPayload {
   activeRaces: ActiveRace[];
 }
 
+
+// ── Weekly review & adherence ──────────────────────────────────────────────
+
+/** Deterministic weekly adherence numbers. Safe to send to the LLM: aggregates only. */
+export interface AdherenceStats {
+  /** 0-100, or null when nothing was scheduled in the (non-excused) week. */
+  score: number | null;
+  workoutsPlanned: number;
+  workoutsCompleted: number;
+  workoutsSkipped: number;
+  workoutsExcused: number;
+  plannedMinutes: number;
+  completedMinutes: number;
+  /** Mean post-workout RPE (1 easy, 3 as planned, 5 tough) across the week, when any were logged. */
+  avgRpe?: number;
+}
+
+export interface WeeklyReview {
+  id: string;
+  userId: string;
+  /** Monday of the reviewed week, YYYY-MM-DD in the user's timezone. */
+  weekStart: string;
+  adherenceScore: number | null;
+  stats: AdherenceStats;
+  /** Null until text generation succeeds. */
+  reviewText: string | null;
+  createdAt: string;
+}

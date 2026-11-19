@@ -38,6 +38,8 @@ import { StreakWidget } from '../components/dashboard/StreakWidget';
 // import { StreakCelebration } from '../components/dashboard/StreakCelebration';
 import { LevelUpModal } from '../components/common/LevelUpModal';
 import { milestoneService } from '../services/milestoneService';
+import { WeeklyReviewCard } from '../components/dashboard/WeeklyReviewCard';
+import { useWeeklyReview } from '../hooks/useWeeklyReview';
 import { NetworkErrorBanner } from '../components/common/NetworkErrorBanner';
 
 
@@ -64,6 +66,7 @@ export const DashboardPage: React.FC = () => {
     isLoading: loading,
     error: queryError
   } = useDashboardData();
+  const { latest: weeklyReview, reviews: weeklyReviews, isLoading: weeklyReviewLoading } = useWeeklyReview();
 
   // Local UI state
   const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
@@ -239,7 +242,8 @@ export const DashboardPage: React.FC = () => {
   // Check level-up milestone whenever streak or fitness mode changes
   useEffect(() => {
     if (!isReEngager) return;
-    const status = milestoneService.checkLevelUp(userStreak, userProfile?.fitness_mode);
+    // null while reviews load, so the prompt is not decided on the legacy rule prematurely
+    const status = milestoneService.checkLevelUp(userStreak, userProfile?.fitness_mode, weeklyReviewLoading ? null : weeklyReviews);
     if (status.eligible) {
       analytics.track('level_up_prompt_shown', {
         weeks_consistent: status.weeksConsistent,
@@ -247,7 +251,7 @@ export const DashboardPage: React.FC = () => {
       });
     }
     setLevelUpStatus(status);
-  }, [userStreak, userProfile?.fitness_mode, isReEngager]);
+  }, [userStreak, userProfile?.fitness_mode, isReEngager, weeklyReviews, weeklyReviewLoading]);
 
   // Visibility handling for refetch
   useEffect(() => {
@@ -533,6 +537,8 @@ export const DashboardPage: React.FC = () => {
                 onWorkoutUpdated={refreshNextWorkout}
               />
 
+              <WeeklyReviewCard review={weeklyReview} pastReviews={weeklyReviews} isLoading={weeklyReviewLoading} />
+
               {/* Consistency Heatmap */}
               <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
                 <ConsistencyHeatmap 
@@ -610,6 +616,8 @@ export const DashboardPage: React.FC = () => {
                 onRefreshInsight={handleRefreshInner}
                 insightLoading={insightLoading}
               />
+
+              <WeeklyReviewCard review={weeklyReview} pastReviews={weeklyReviews} isLoading={weeklyReviewLoading} />
 
              <AnalyticsContainer
               activities={activities}

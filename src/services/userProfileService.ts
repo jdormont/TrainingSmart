@@ -23,6 +23,7 @@ export interface UserProfile {
   conversational_onboarding_completed?: boolean;
   conversational_onboarding_completed_at?: string;
   cycling_digest_filters?: string[];
+  timezone?: string;
 }
 export interface ContentProfile {
   interests: string[];
